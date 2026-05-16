@@ -37,8 +37,8 @@ def solve_revenue(state, prev, historic, config):
         state.revenue = macro_rev
         return state
 
-    # 3. OLS regression on macro factor (read from YAML once)
-    revenue_factor = _get_revenue_factor(historic.company_id)
+    # 3. OLS regression on macro factor (from config)
+    revenue_factor = getattr(config, 'revenue_macro_factor', None)
     if revenue_factor:
         factor_series = historic.macro_forecasts.get(revenue_factor, {})
         if factor_series:
@@ -69,24 +69,6 @@ def solve_revenue(state, prev, historic, config):
     # 5. Fallback
     state.revenue = prev.revenue * 1.02
     return state
-
-
-def _get_revenue_factor(company_id: str):
-    """Read revenue macro_factor from project.yaml (one-time per run)."""
-    try:
-        import yaml
-        from engine import ROOT
-        cfg_path = ROOT / "companies" / company_id / "configs" / "project.yaml"
-        if cfg_path.exists():
-            with open(cfg_path) as f:
-                raw = yaml.safe_load(f) or {}
-            mode = raw.get("model", {}).get("mode", "standard")
-            rev_cfg = raw.get("model", {}).get(mode, {}).get("revenue", {})
-            return rev_cfg.get("macro_factor") or \
-                   (rev_cfg.get("macro_factors") or [None])[0]
-    except Exception:
-        pass
-    return None
 
 
 def _get_beta(betas: dict, factor_name: str) -> float:

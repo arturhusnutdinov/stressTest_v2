@@ -323,6 +323,13 @@ class ModelInputLoader:
             is_income_sign=str(
                 cfg.get("accounting_conventions", {}).get("is_income_sign", "credit_negative")
             ),
+            # Macro factor config (from YAML → passed to blocks, no re-read)
+            revenue_macro_factor=(
+                mode_cfg.get("revenue", {}).get("macro_factor") or
+                (mode_cfg.get("revenue", {}).get("macro_factors") or [None])[0]
+            ),
+            cogs_revenue_factor=mode_cfg.get("cogs", {}).get("revenue_factor"),
+            cogs_cost_factor=mode_cfg.get("cogs", {}).get("cost_factor"),
             # Solver параметры
             max_iter=int(cfg.get("solver", {}).get("max_iter", 10)),
             tol=float(cfg.get("solver", {}).get("tol", 1000.0)),

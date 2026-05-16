@@ -468,6 +468,11 @@ class ModelConfig:
     #   "natural"         — доход как положительное (IFRS / RUSAL)
     is_income_sign: str = "credit_negative"
 
+    # Macro factor configuration (from YAML, used by blocks instead of re-reading YAML)
+    revenue_macro_factor: Optional[str] = None
+    cogs_revenue_factor: Optional[str] = None
+    cogs_cost_factor: Optional[str] = None
+
     @property
     def nol_enabled(self) -> bool:
         """True if NOL carryforward is active (opening balance > 0)."""

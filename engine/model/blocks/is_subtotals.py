@@ -2,11 +2,12 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from ..inputs import YearState, HistoricState
+    from ..inputs import YearState, ModelConfig
 
-def solve_is_subtotals(state, historic):
-    # type: (YearState, HistoricState) -> YearState
-    da_in_cogs = _read_da_in_cogs(historic.company_id)
+
+def solve_is_subtotals(state, config):
+    # type: (YearState, ModelConfig) -> YearState
+    da_in_cogs = getattr(config, 'da_in_cogs', True)
     if da_in_cogs:
         state.ebit = state.gross_profit + state.sga
         state.ebitda = state.ebit + state.total_da
@@ -26,17 +27,3 @@ def solve_is_subtotals(state, historic):
         - state.loss_on_debt_extinguishment
     )
     return state
-
-
-def _read_da_in_cogs(company_id: str) -> bool:
-    try:
-        import yaml
-        from engine import ROOT
-        cfg_path = ROOT / "companies" / company_id / "configs" / "project.yaml"
-        if cfg_path.exists():
-            with open(cfg_path) as fh:
-                return (yaml.safe_load(fh) or {}).get(
-                    'accounting_conventions', {}).get('da_in_cogs', True)
-    except Exception:
-        pass
-    return True

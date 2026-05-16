@@ -634,7 +634,7 @@ class ThreeStatementModel:
 
     def _solve_is_subtotals(self, state: YearState) -> YearState:
         from .blocks.is_subtotals import solve_is_subtotals
-        return solve_is_subtotals(state, self._h)
+        return solve_is_subtotals(state, self._c)
 
     def _solve_tax_block(self, state: YearState, prev: YearState) -> YearState:
         """Tax через TaxBlock: NOL, DTA/DTL, taxes_payable, taxes_paid_cf."""
