@@ -1,0 +1,119 @@
+{
+  "page": 57,
+  "cats": [
+    "restoration",
+    "legal",
+    "claims",
+    "total"
+  ],
+  "data": {
+    "provisions": {
+      "2023": {
+        "provisions_made": {
+          "restoration": 9.0,
+          "legal": 0.0,
+          "claims": 2.0,
+          "total": 11.0
+        },
+        "provisions_reversed": {
+          "restoration": -5.0,
+          "legal": 0.0,
+          "claims": 0.0,
+          "total": -5.0
+        },
+        "utilised": {
+          "restoration": -4.0,
+          "legal": 0.0,
+          "claims": -2.0,
+          "total": -6.0
+        },
+        "fx": {
+          "restoration": -8.0,
+          "legal": -9.0,
+          "claims": 0.0,
+          "total": -17.0
+        },
+        "time_passage": {
+          "restoration": 0.0,
+          "legal": 11.0,
+          "claims": 0.0,
+          "total": 11.0
+        },
+        "inflation": {
+          "restoration": 0.0,
+          "legal": -2.0,
+          "claims": 0.0,
+          "total": -2.0
+        },
+        "discount": {
+          "restoration": 0.0,
+          "legal": -7.0,
+          "claims": 0.0,
+          "total": -7.0
+        },
+        "closing": {
+          "restoration": 47.0,
+          "legal": 324.0,
+          "claims": 12.0,
+          "total": 383.0
+        }
+      },
+      "2024": {
+        "provisions_made": {
+          "restoration": 7.0,
+          "legal": 0.0,
+          "claims": 0.0,
+          "total": 7.0
+        },
+        "provisions_reversed": {
+          "restoration": 0.0,
+          "legal": 0.0,
+          "claims": -4.0,
+          "total": -4.0
+        },
+        "actuarial": {
+          "restoration": 11.0,
+          "legal": 0.0,
+          "claims": 0.0,
+          "total": 11.0
+        },
+        "utilised": {
+          "restoration": -4.0,
+          "legal": 0.0,
+          "claims": 0.0,
+          "total": -4.0
+        },
+        "fx": {
+          "restoration": -8.0,
+          "legal": -13.0,
+          "claims": 0.0,
+          "total": -21.0
+        },
+        "time_passage": {
+          "restoration": 0.0,
+          "legal": -2.0,
+          "claims": 0.0,
+          "total": -2.0
+        },
+        "inflation": {
+          "restoration": 0.0,
+          "legal": -4.0,
+          "claims": 0.0,
+          "total": -4.0
+        },
+        "discount": {
+          "restoration": 0.0,
+          "legal": -27.0,
+          "claims": 0.0,
+          "total": -27.0
+        },
+        "closing": {
+          "restoration": 53.0,
+          "legal": 278.0,
+          "claims": 8.0,
+          "total": 339.0
+        }
+      }
+    }
+  }
+}

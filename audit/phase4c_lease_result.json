@@ -1,0 +1,17 @@
+{
+  "page": 38,
+  "cats": [
+    "equipment",
+    "total"
+  ],
+  "data": {
+    "rou_assets": {
+      "2024": {
+        "closing": {
+          "equipment": 27.0,
+          "total": 45.0
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "section": "IS",
+  "pdf": "RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+  "page_used": 9,
+  "years_detected": [
+    2024,
+    2023
+  ],
+  "metrics": {
+    "revenue": {
+      "2024": 12082.0,
+      "2023": 12213.0
+    },
+    "cogs": {
+      "2024": -9261.0,
+      "2023": -10445.0
+    },
+    "gross_profit": {
+      "2024": 2821.0,
+      "2023": 1768.0
+    },
+    "distribution_expenses": {
+      "2024": -848.0,
+      "2023": -755.0
+    },
+    "sga": {
+      "2024": -695.0,
+      "2023": -603.0
+    },
+    "asset_impairment": {
+      "2024": -580.0,
+      "2023": -321.0
+    },
+    "expected_credit_losses": {
+      "2024": -44.0,
+      "2023": -1.0
+    },
+    "other_operating_expenses": {
+      "2024": -286.0,
+      "2023": -167.0
+    },
+    "ebit": {
+      "2024": 368.0,
+      "2023": -79.0
+    },
+    "interest_income": {
+      "2024": 457.0,
+      "2023": 144.0
+    },
+    "interest_expense": {
+      "2024": -531.0,
+      "2023": -573.0
+    },
+    "earnings_from_investees": {
+      "2024": 564.0,
+      "2023": 752.0
+    },
+    "ebt": {
+      "2024": 858.0,
+      "2023": 244.0
+    },
+    "tax_expense": {
+      "2024": -55.0,
+      "2023": 38.0
+    },
+    "net_income": {
+      "2024": 803.0,
+      "2023": 282.0
+    },
+    "ebitda": {
+      "2024": 1494.0,
+      "2023": 786.0
+    }
+  },
+  "unmatched_rows": [
+    "Note USD m",
+    "Current incom e tax expens e 8",
+    "Deferred incom e tax credit 8",
+    "Attributable to Shareholder s of the Company",
+    "Profit for the year",
+    "Earnings per share",
+    "Basic and dilut ed earnings per share (USD) 12",
+    "The consolidat ed statement of income is to be read in conjunction with the notes to, an",
+    "financial statem ents set out on pages 14 to 74."
+  ],
+  "warnings": []
+}

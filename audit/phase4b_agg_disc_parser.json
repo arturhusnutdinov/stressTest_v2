@@ -1,0 +1,141 @@
+{
+  "section": "BS",
+  "page_used": 11,
+  "years_detected": [
+    2025,
+    2024,
+    2023
+  ],
+  "metrics": {
+    "ppe_net": {
+      "2025": 13.0,
+      "2024": 6005.0,
+      "2023": 5806.0
+    },
+    "intangibles": {
+      "2025": 14.0,
+      "2024": 2201.0,
+      "2023": 2337.0
+    },
+    "investments_in_associates": {
+      "2025": 15.0,
+      "2024": 4868.0,
+      "2023": 4521.0
+    },
+    "dta": {
+      "2025": 8.0,
+      "2024": 328.0,
+      "2023": 229.0
+    },
+    "other_nca": {
+      "2025": 17.0,
+      "2024": 221.0,
+      "2023": 277.0
+    },
+    "total_nca": {
+      "2024": 13840.0,
+      "2023": 13522.0
+    },
+    "inventory": {
+      "2025": 16.0,
+      "2024": 4477.0,
+      "2023": 3599.0
+    },
+    "accounts_receivable": {
+      "2025": 17.0,
+      "2024": 1470.0,
+      "2023": 1154.0
+    },
+    "cash": {
+      "2025": 17.0,
+      "2024": 1503.0,
+      "2023": 2087.0
+    },
+    "total_ca": {
+      "2024": 8361.0,
+      "2023": 7942.0
+    },
+    "total_assets": {
+      "2024": 22201.0,
+      "2023": 21464.0
+    },
+    "share_capital": {
+      "2024": 152.0,
+      "2023": 152.0
+    },
+    "apic": {
+      "2024": 15786.0,
+      "2023": 15786.0
+    },
+    "retained_earnings": {
+      "2024": 3627.0,
+      "2023": 3002.0
+    },
+    "total_equity": {
+      "2024": 11216.0,
+      "2023": 11016.0
+    },
+    "long_term_debt": {
+      "2025": 19.0,
+      "2024": 3398.0,
+      "2023": 5900.0
+    },
+    "dtl": {
+      "2025": 8.0,
+      "2024": 466.0,
+      "2023": 405.0
+    },
+    "other_ncl": {
+      "2024": 119.0,
+      "2023": 155.0
+    },
+    "total_ncl": {
+      "2024": 4226.0,
+      "2023": 6729.0
+    },
+    "short_term_debt": {
+      "2025": 19.0,
+      "2024": 4520.0,
+      "2023": 1966.0
+    },
+    "accounts_payable": {
+      "2025": 17.0,
+      "2024": 1535.0,
+      "2023": 1183.0
+    },
+    "total_cl": {
+      "2024": 6759.0,
+      "2023": 3719.0
+    }
+  },
+  "unmatched_rows": [
+    "Assets",
+    "Derivative fina ncial assets",
+    "Investments in equity securities measured at f air value through",
+    "profit and los s",
+    "Short-term inv estments",
+    "Prepayments a nd input VAT",
+    "Current incom e tax receivables",
+    "Dividends rece ivable",
+    "Derivative fina ncial assets",
+    "Equity",
+    "Other reserves",
+    "Currency trans lation reserve",
+    "Provisions",
+    "Advances recei ved",
+    "Other tax paya ble",
+    "Dividends pay able",
+    "Derivative fina ncial liabilities",
+    "Provisions",
+    "Total liabilitie s",
+    "Total equity a nd liabilities",
+    "Net current as sets",
+    "Total assets le ss current liabilities",
+    "Preliminary reviewed, approved and authorised for issue by",
+    "Evgenii V. Nikitin",
+    "General Dir ector",
+    "The consolid ated statement of financial position is to be read in",
+    "the consolida ted financial statements set out on pages 14 to 74."
+  ],
+  "warnings": []
+}

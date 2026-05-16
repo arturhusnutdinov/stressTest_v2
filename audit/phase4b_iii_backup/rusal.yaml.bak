@@ -1,0 +1,301 @@
+# Rusal — PDF Parser Adapter (v2)
+# Language: EN (primary), RU (Phase 4c)
+
+meta:
+  company_id: rusal
+  reporting_unit: mUSD
+  decimal_separator: "."
+  thousands_separator: ","
+  negative_style: parens
+
+sections:
+
+  IS:
+    page_triggers:
+      - "Consolidated Statement of Income"
+      - "Consolidated Statement of Comprehensive Income"
+      - "Consolidated Statement of Profit or Loss"
+      - "Consolidated Income Statement"
+    page_anti_triggers:
+      - "Table of Contents"
+      - "Contents"
+      - "Index"
+    columns:
+      metric_col: 0
+      note_col: 3
+      year_cols_from: 4
+      expected_year_count: 2
+
+    rows:
+      revenue:
+        patterns:
+          - "^revenue"
+          - "^totalrevenue"
+      cogs:
+        patterns:
+          - "^costofsales"
+          - "^costofgoodssold"
+          - "^costofrevenue"
+      gross_profit:
+        patterns:
+          - "^grossprofit"
+      distribution_expenses:
+        patterns:
+          - "^distributionexpenses"
+          - "^selling.*distribution"
+      sga:
+        patterns:
+          - "^administrativeexpenses"
+          - "^generalandadministrative"
+      asset_impairment:
+        patterns:
+          - "^impairment.*non.?currentassets"
+          - "^impairmentofproperty"
+          - "^reversalofimpairment"
+      earnings_from_investees:
+        patterns:
+          - "^shareof(profit|results).*associates"
+          - "^shareof(profit|results).*joint"
+      expected_credit_losses:
+        patterns:
+          - "^expectedcreditloss"
+          - "^impairmentlossontrade"
+      other_operating_expenses:
+        patterns:
+          - "^netotheroperating"
+          - "^otheroperating"
+          - "^other(losses|gains).*net"
+      ebit:
+        patterns:
+          - "^resultsfromoperatingactivities"
+          - "^operatingprofit"
+          - "^profitfromoperations"
+      interest_income:
+        patterns:
+          - "^financeincome"
+          - "^interestincome"
+      interest_expense:
+        patterns:
+          - "^finance(expense|costs)"
+          - "^financeexpenses"
+      ebt:
+        patterns:
+          - "^profit.*beforetax"
+          - "^loss.*beforetax"
+          - "^profitbeforetax"
+      tax_expense:
+        patterns:
+          - "^incometaxexpense"
+          - "^incometax"
+          - "^taxation"
+      net_income:
+        patterns:
+          - "^profitfortheyear"
+          - "^lossfortheyear"
+          - "^netprofitforthe"
+          - "^\\(loss\\)/profitforthe"
+      ebitda:
+        patterns:
+          - "^adjustedebitda"
+          - "^ebitda"
+
+    notes_only:
+      - dep_ppe
+      - amort_intangibles
+      - total_da
+      - current_tax
+      - deferred_tax
+
+  BS:
+    page_triggers:
+      - "Consolidated Statement of Financial Position"
+      - "Consolidated Balance Sheet"
+    page_anti_triggers:
+      - "Table of Contents"
+      - "Contents"
+    section_anchors:
+      - "Total assets"
+      - "Total equity"
+    section_markers:
+      non_current_assets:
+        - "non-currentassets"
+      current_assets:
+        - "currentassets"
+      equity:
+        - "equityandliabilities"
+      non_current_liab:
+        - "non-currentliabilities"
+      current_liab:
+        - "currentliabilities"
+    rows:
+      ppe_net:
+        patterns:
+          - "^property,?plantandequipment"
+        sections: [non_current_assets]
+      intangibles:
+        patterns:
+          - "^intangibleassets"
+        sections: [non_current_assets]
+      investments_in_associates:
+        patterns:
+          - "^interestsinassociatesandjoint"
+        sections: [non_current_assets]
+      dta:
+        patterns:
+          - "^deferredtaxassets"
+        sections: [non_current_assets]
+      other_nca:
+        patterns:
+          - "^othernon-currentassets"
+        sections: [non_current_assets]
+      total_nca:
+        patterns:
+          - "^totalnon-currentassets"
+      inventory:
+        patterns:
+          - "^inventories"
+        sections: [current_assets]
+      accounts_receivable:
+        patterns:
+          - "^tradeandotherreceivables"
+        sections: [current_assets]
+      cash:
+        patterns:
+          - "^cashandcashequivalents"
+        sections: [current_assets]
+      total_ca:
+        patterns:
+          - "^totalcurrentassets"
+      total_assets:
+        patterns:
+          - "^totalassets"
+      share_capital:
+        patterns:
+          - "^sharecapital"
+        sections: [equity]
+      apic:
+        patterns:
+          - "^sharepremium"
+        sections: [equity]
+      retained_earnings:
+        patterns:
+          - "^retainedearnings"
+        sections: [equity]
+      total_equity:
+        patterns:
+          - "^totalequity"
+      long_term_debt:
+        patterns:
+          - "^loansandborrowings"
+        sections: [non_current_liab]
+      dtl:
+        patterns:
+          - "^deferredtaxliabilities"
+        sections: [non_current_liab]
+      total_ncl:
+        patterns:
+          - "^totalnon-currentliabilities"
+      short_term_debt:
+        patterns:
+          - "^loansandborrowings"
+        sections: [current_liab]
+      accounts_payable:
+        patterns:
+          - "^tradeandotherpayables"
+        sections: [current_liab]
+      total_cl:
+        patterns:
+          - "^totalcurrentliabilities"
+
+      # ─── Phase 4b-ii-agg: direct rows ──────────────────────────
+      aoci:
+        patterns:
+          - "^currencytranslationreserve"
+        sections: [equity]
+      nci:
+        patterns:
+          - "^otherreserves"
+        sections: [equity]
+      other_ca_tax:
+        patterns:
+          - "^currentincom.*taxreceivables"
+        sections: [current_assets]
+      taxes_payable:
+        patterns:
+          - "^othertaxpaya"
+        sections: [current_liab]
+      dividends_payable:
+        patterns:
+          - "^dividendspay"
+        sections: [current_liab]
+
+      # ─── Phase 4b-ii-agg: helper rows (prefix _) ───────────────
+      _short_term_investments:
+        patterns:
+          - "^short-?terminv"
+        sections: [current_assets]
+      _prepayments_vat:
+        patterns:
+          - "^prepayments"
+        sections: [current_assets]
+      _dividends_receivable:
+        patterns:
+          - "^dividendsrece"
+        sections: [current_assets]
+      _derivative_assets_ca:
+        patterns:
+          - "^derivativefina.*assets"
+        sections: [current_assets]
+      _advances_received:
+        patterns:
+          - "^advancesrece"
+        sections: [current_liab]
+      _derivative_liab_cl:
+        patterns:
+          - "^derivativefina.*liabilities"
+        sections: [current_liab]
+      _provisions_cl:
+        patterns:
+          - "^provisions"
+        sections: [current_liab]
+      _provisions_ncl:
+        patterns:
+          - "^provisions"
+        sections: [non_current_liab]
+      _other_ncl_line:
+        patterns:
+          - "^othernon-currentliabilities"
+        sections: [non_current_liab]
+
+      # ─── Phase 4b-ii-agg: aggregates (combine_from) ────────────
+      other_ca:
+        combine_from:
+          - _short_term_investments
+          - _prepayments_vat
+          - _dividends_receivable
+          - _derivative_assets_ca
+      other_cl:
+        combine_from:
+          - _advances_received
+          - _derivative_liab_cl
+          - _provisions_cl
+      other_ncl:
+        combine_from:
+          - _provisions_ncl
+          - _other_ncl_line
+
+    notes_only:
+      # Helper rows (internal, used by combine_from aggregates)
+      - _short_term_investments
+      - _prepayments_vat
+      - _dividends_receivable
+      - _derivative_assets_ca
+      - _advances_received
+      - _derivative_liab_cl
+      - _provisions_cl
+      - _provisions_ncl
+      - _other_ncl_line
+      # DB-incompatible (sign convention or no DB counterpart)
+      - taxes_payable
+      - dividends_payable
+  CF: null

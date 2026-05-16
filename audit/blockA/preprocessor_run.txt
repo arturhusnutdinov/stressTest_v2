@@ -1,0 +1,4 @@
+WARNING:engine.macro.runner:macro_ecm.yaml не найден: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest_v2/companies/rusal/configs/macro_ecm.yaml
+WARNING:engine.orchestrator:  ⚠ Макро: ['macro_ecm.yaml не найден: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest_v2/companies/rusal/configs/macro_ecm.yaml']
+BS: 0.000004
+COMPLETED OK

@@ -1,0 +1,59 @@
+{
+  "section": "NOTE_16_INVENTORY",
+  "pdf": "RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+  "page_used": 47,
+  "years_detected": [
+    2024,
+    2023
+  ],
+  "metrics": {
+    "inventory_raw_materials": {
+      "2024": 1447.0,
+      "2023": 1333.0
+    },
+    "inventory_wip": {
+      "2024": 848.0,
+      "2023": 766.0
+    },
+    "inventory_fg": {
+      "2024": 2182.0,
+      "2023": 1500.0
+    }
+  },
+  "unmatched_rows": [
+    "USD million USD million",
+    "Inventories as at 31 December 2024 and 31 December 2023 are stated at the lower of cost and net realizable",
+    "value.",
+    "There were no inventories pledged as at 31 December 2024 and 31 December",
+    "The analysis of the amount of inventories recognised as an expense is as follows:",
+    "Year ended 31 December",
+    "USD million USD million",
+    "Carrying amount of inventories sold",
+    "Partial reversal of provision of inventories to net realisable value)",
+    "17 Non-derivative financial instruments",
+    "Accounting policies",
+    "Non-derivative financial instruments comprise investments in securities, trade and other receivables",
+    "(excluding prepayments and tax assets), cash and cash equivalents, loans and borrowings and trade and other",
+    "payables (excluding advances received and tax liabilities).",
+    "Non-derivative financial instruments except for trade and other receivables are recognised initially at fair value",
+    "plus any directly attributable transaction costs. Trade and other receivables are recognised at transaction price.",
+    "(i) Non-derivative financial assets",
+    "A financial instrument is recognised when the Group becomes a party to the contractual provisions of the",
+    "instrument. Financial assets are derecognised if the Group\u2019s contractual rights to the cash flows from the",
+    "financial assets expire or if the Group transfers the financial asset to another party without retaining control",
+    "or substantially all risks and rewards of the asset. Financial assets and financial liabilities are offset and the",
+    "net amount is reported in the consolidated statement of financial position if there is a currently enforceable",
+    "legal right to offset the recognised amounts and there is an intention to settle on a net basis, to realise the",
+    "assets and settle the liabilities simultaneously.",
+    "(ii) Non-derivative financial liabilities",
+    "The Group initially recognises debt securities issued and liabilities on the date that they are originated.",
+    "All other financial liabilities are recognised initially on the trade date at which the Group becomes a party to",
+    "the contractual provisions of the instrument.",
+    "The Group derecognises a financial liability when its contractual obligations are discharged or cancelled or",
+    "expire.",
+    "IFRS 9 Financial Instruments sets out requirements for recognising and measuring financial assets, financial",
+    "liabilities and some contracts to buy or sell non-financial items. The details of significant accounting policies",
+    "are set out below."
+  ],
+  "warnings": []
+}

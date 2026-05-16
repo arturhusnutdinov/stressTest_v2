@@ -1,0 +1,31 @@
+=== REMOVED ===
+history_is: row 29 metric=eps_diluted
+history_is: row 28 metric=eps_basic
+history_is: row 25 metric=other_expense
+history_is: row 24 metric=other_income
+history_is: row 23 metric=gain_loss_on_disposal
+history_is: row 22 metric=lease_expense_operating
+history_is: row 21 metric=dep_rou_operating
+history_is: row 20 metric=dep_rou_finance
+history_is: row 19 metric=lease_interest_operating
+history_is: row 18 metric=lease_interest_finance
+history_is: row 17 metric=lease_interest
+history_is: row 11 metric=amortization
+history_is: row 10 metric=depreciation_rou
+history_is: row 9 metric=depreciation_owned
+history_is: row 8 metric=rnd
+
+=== FLIPPED SIGN ===
+(none)
+
+=== ADDED ===
+history_is: +row 25 metric=ebitda_standard
+history_bs: +row 41 metric=investments_in_associates
+
+=== FLIPPED SIGN (re-applied) ===
+2015: -9733 -> 9733
+2016: -9588 -> 9588
+2018: -10436 -> 10436
+2019: -11229 -> 11229
+2022: -12794 -> 12794
+2023: -10708 -> 10708

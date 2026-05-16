@@ -1,0 +1,36 @@
+=== All defs in parser.py ===
+21:class ParseResult:
+31:class PDFParser:
+34:    def __init__(self, adapter_path: Path):
+42:    def _normalize(s) -> str:
+50:    def parse_section(self, pdf_path: Path, section: str) -> ParseResult:
+117:    def _build_text_table(page_text: str) -> list:
+163:    def _find_target_page(self, pdf, sec_cfg) -> Optional[int]:
+199:    def _detect_year_columns(self, table, page_text: str = '') -> list:
+288:    def _map_rows(self, table, sec_cfg, year_cols):
+412:    def _parse_number(self, raw) -> Optional[float]:
+
+=== Line count per method ===
+method                                         start    end  lines
+  class ParseResult                               21     30     10
+  def __init__                                    34     41      8
+  def _normalize                                  42     49      8
+  def parse_section                               50    116     67
+  def _build_text_table                          117    162     46
+  def _find_target_page                          163    198     36
+  def _detect_year_columns                       199    287     89
+  def _map_rows                                  288    411    124
+  def _parse_number                              412    431     20
+
+=== Keywords suggesting fallbacks / strategies ===
+65:            # Try default extraction first, then text strategy
+69:                    "vertical_strategy": "text",
+70:                    "horizontal_strategy": "text",
+79:            # Pass page text for year detection fallback
+83:            # Text-line fallback: if table gives <=1 year but page text has 2+,
+92:                    vt = self._build_text_table(page_text)
+117:    def _build_text_table(page_text: str) -> list:
+120:        Used as fallback when pdfplumber splits columns badly (Notes pages)."""
+265:        # Strategy 3: fallback from yaml columns hint
+426:        try:
+428:        except ValueError:

@@ -1,0 +1,173 @@
+{
+  "section": "CF",
+  "pdf": "RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+  "page_used": 13,
+  "years_detected": [
+    2024,
+    2023,
+    2023
+  ],
+  "metrics": {
+    "cfo_net_income": {
+      "2024": 803.0,
+      "2023": 282.0
+    },
+    "depreciation": {
+      "2024": 512.0,
+      "2023": 521.0
+    },
+    "amortization": {
+      "2024": 26.0,
+      "2023": 19.0
+    },
+    "impairment_noncash": {
+      "2024": 580.0,
+      "2023": 321.0
+    },
+    "fx_noncash": {
+      "2024": -283.0,
+      "2023": -51.0
+    },
+    "interest_noncash": {
+      "2024": 417.0,
+      "2023": 380.0
+    },
+    "interest_income_noncash": {
+      "2024": -121.0,
+      "2023": -68.0
+    },
+    "tax_noncash": {
+      "2024": 55.0,
+      "2023": -38.0
+    },
+    "share_associates_noncash": {
+      "2024": -564.0,
+      "2023": -752.0
+    },
+    "cfo_before_wc": {
+      "2024": 1533.0,
+      "2023": 781.0
+    },
+    "wc_inventory": {
+      "2024": -841.0,
+      "2023": 923.0
+    },
+    "wc_receivables": {
+      "2024": -551.0,
+      "2023": 393.0
+    },
+    "wc_payables": {
+      "2024": 474.0,
+      "2023": -208.0
+    },
+    "wc_provisions": {
+      "2024": -5.0,
+      "2023": -8.0
+    },
+    "cfo_before_tax": {
+      "2024": 610.0,
+      "2023": 1885.0
+    },
+    "cfo_income_tax_paid": {
+      "2024": -127.0,
+      "2023": -125.0
+    },
+    "cfo_total": {
+      "2024": 483.0,
+      "2023": 1760.0
+    },
+    "proceeds_ppe_disposal": {
+      "2024": 14.0,
+      "2023": 10.0
+    },
+    "interest_received": {
+      "2024": 116.0,
+      "2023": 61.0
+    },
+    "capex": {
+      "2024": -1332.0,
+      "2023": -1022.0
+    },
+    "acquisitions": {
+      "2024": -303.0
+    },
+    "dividends_from_associates": {
+      "2024": 416.0
+    },
+    "capex_intangibles": {
+      "2024": -34.0,
+      "2023": -34.0
+    },
+    "cfi_other": {
+      "2024": 45.0,
+      "2023": -49.0
+    },
+    "cfi_total": {
+      "2024": -1078.0,
+      "2023": -1030.0
+    },
+    "cff_lt_debt_issuance": {
+      "2024": 2628.0,
+      "2023": 3521.0
+    },
+    "cff_lt_debt_repayment": {
+      "2024": -2069.0,
+      "2023": -4814.0
+    },
+    "refinancing_fees": {
+      "2024": -15.0,
+      "2023": -30.0
+    },
+    "interest_paid": {
+      "2024": -494.0,
+      "2023": -422.0
+    },
+    "cff_total": {
+      "2024": 113.0,
+      "2023": -1747.0
+    },
+    "net_change_cash": {
+      "2024": -482.0,
+      "2023": -1017.0
+    },
+    "cash_opening": {
+      "2024": 2085.0,
+      "2023": 3193.0
+    },
+    "fx_effect_cash": {
+      "2024": -102.0,
+      "2023": -91.0
+    },
+    "cash_closing": {
+      "2024": 1501.0,
+      "2023": 2085.0
+    }
+  },
+  "unmatched_rows": [
+    "Note USD mil",
+    "Adjustments for:",
+    "Impairment of trade a nd other recei vables 6(b)",
+    "Partial reversal of pro vision of inve ntories to net realisabl e value 16",
+    "Pension provision 2 0, 6(c)",
+    "(Reversal of)/provisio n for legal cla ims 20",
+    "Change in fair value o f derivative fi nancial instr uments 7",
+    "Loss on disposal of p roperty, plant a nd equipme nt 6(b)",
+    "Dividends from other investments",
+    "Revaluation of invest ments measure d at fair valu e through profit",
+    "and loss 17(g)",
+    "Cash from operating activities bef ore changes",
+    "Decrease in other ass ets",
+    "Increase/(decrease) in trade and oth er payables a nd advan ces",
+    "Prepayment for acqui sition of a join t venture 15",
+    "Dividends from other investments",
+    "Cash paid for investm ents in equity securities m easured at fair value",
+    "through profit and l oss",
+    "Change in restricted c ash",
+    "Settlement of derivati ve financial in struments",
+    "Restricted cash a mounted to USD2 mill ion and USD2 milli on at 31 Decem ber",
+    "respectively.",
+    "The consolidated s tatement of cash flows is to b e read in c onjunction with t he",
+    "the consolidated fin ancial statem ents set out on page s 14 to 74."
+  ],
+  "warnings": []
+}

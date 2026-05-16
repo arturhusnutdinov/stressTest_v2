@@ -1,0 +1,331 @@
+"""PDF parser for company financial reports. Generic engine + YAML adapters.
+
+v2 (Phase 4b-i):
+- Auto-detected year columns (no more hardcoded year_cols_from)
+- Multi-column metric text merge (handles pdfplumber word-wrap)
+- Section-aware row iteration (Operating/Investing/Financing, Non-current/Current)
+- Anchor-metric page filter (skips Notes pages that match page_triggers)
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import pdfplumber
+import yaml
+
+
+@dataclass
+class ParseResult:
+    section: str
+    pdf_path: str
+    page_used: Optional[int]
+    years_detected: list
+    metrics: dict
+    unmatched_rows: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
+
+
+class PDFParser:
+    """Generic PDF parser. Adapter yaml provides company-specific layout."""
+
+    def __init__(self, adapter_path: Path):
+        self.adapter_path = Path(adapter_path)
+        with open(self.adapter_path) as f:
+            self.adapter = yaml.safe_load(f)
+        self.meta = self.adapter.get('meta', {})
+        self.thousands = self.meta.get('thousands_separator', ',')
+
+    @staticmethod
+    def _normalize(s) -> str:
+        """Strip all whitespace and lowercase for robust matching."""
+        if s is None:
+            return ''
+        return re.sub(r'\s+', '', str(s).lower())
+
+    # ─── Section dispatch ─────────────────────────────────────────
+
+    def parse_section(self, pdf_path: Path, section: str) -> ParseResult:
+        pdf_path = Path(pdf_path)
+        sec_cfg = (self.adapter.get('sections') or {}).get(section)
+        if sec_cfg is None:
+            return ParseResult(section, str(pdf_path), None, [], {},
+                               warnings=[f'section {section} not configured'])
+
+        with pdfplumber.open(pdf_path) as pdf:
+            page_idx = self._find_target_page(pdf, sec_cfg)
+            if page_idx is None:
+                return ParseResult(section, str(pdf_path), None, [], {},
+                                   warnings=[f'no page matched for {section}'])
+
+            page = pdf.pages[page_idx]
+
+            # Try default extraction first, then text strategy
+            tables = page.extract_tables() or []
+            if not tables or all(len(t) < 8 for t in tables):
+                tables = page.extract_tables(table_settings={
+                    "vertical_strategy": "text",
+                    "horizontal_strategy": "text",
+                }) or []
+
+            if not tables:
+                return ParseResult(section, str(pdf_path), page_idx + 1, [], {},
+                                   warnings=['no tables extracted'])
+
+            table = max(tables, key=lambda t: len(t))
+
+            # Pass page text for year detection fallback
+            page_text = page.extract_text() or ''
+            year_cols = self._detect_year_columns(table, page_text=page_text)
+            if not year_cols:
+                return ParseResult(section, str(pdf_path), page_idx + 1, [], {},
+                                   warnings=['no year columns detected'])
+
+            metrics, unmatched = self._map_rows(table, sec_cfg, year_cols)
+
+            return ParseResult(
+                section=section,
+                pdf_path=str(pdf_path),
+                page_used=page_idx + 1,
+                years_detected=[y for _, y in year_cols],
+                metrics=metrics,
+                unmatched_rows=unmatched,
+            )
+
+    # ─── Page finding ─────────────────────────────────────────────
+
+    def _find_target_page(self, pdf, sec_cfg) -> Optional[int]:
+        triggers = sec_cfg.get('page_triggers', [])
+        anti = sec_cfg.get('page_anti_triggers', [])
+        anchors = sec_cfg.get('section_anchors', [])
+
+        for i, page in enumerate(pdf.pages[:40]):
+            text = page.extract_text() or ''
+            text_low = text.lower()
+
+            if not any(t.lower() in text_low for t in triggers):
+                continue
+            if any(a.lower() in text_low for a in anti):
+                continue
+
+            # Must have numbers (financial data, not TOC)
+            if not re.search(r'\d{1,3}(?:,\d{3})+|\(\d', text):
+                continue
+
+            # Anchor filter — ALL anchors must appear on page (normalized)
+            if anchors:
+                norm_text = self._normalize(text)
+                if not all(self._normalize(a) in norm_text for a in anchors):
+                    continue
+
+            return i
+
+        # Fallback: any page with trigger
+        for i, page in enumerate(pdf.pages[:40]):
+            text = page.extract_text() or ''
+            if any(t.lower() in text.lower() for t in triggers):
+                return i
+
+        return None
+
+    # ─── Year column auto-detection ───────────────────────────────
+
+    def _detect_year_columns(self, table, page_text: str = '') -> list:
+        """Scan first 5 rows for 4-digit years. Return [(col_idx, year), ...].
+        Also uses page_text to find years, then maps to numeric columns."""
+        year_re = re.compile(r'\b(20\d{2})\b')
+        col_to_year = {}
+
+        # Strategy 1: scan table header rows
+        for row in table[:5]:
+            for col_idx, cell in enumerate(row):
+                if cell is None:
+                    continue
+                m = year_re.search(str(cell))
+                if m:
+                    y = int(m.group(1))
+                    if 2015 <= y <= 2030 and col_idx not in col_to_year:
+                        col_to_year[col_idx] = y
+
+        if col_to_year:
+            return sorted(col_to_year.items())
+
+        # Strategy 2: get years from page text, then map to numeric columns
+        all_years = set()
+        # From page text
+        if page_text:
+            for m in year_re.finditer(page_text):
+                y = int(m.group(1))
+                if 2015 <= y <= 2030:
+                    all_years.add(y)
+        # Also from table cells
+        for row in table[:10]:
+            for cell in row:
+                if cell:
+                    for m in year_re.finditer(str(cell)):
+                        y = int(m.group(1))
+                        if 2015 <= y <= 2030:
+                            all_years.add(y)
+
+        if all_years:
+            # Assign years to the last N numeric columns
+            years_sorted = sorted(all_years, reverse=True)
+            # Find columns that consistently have numeric data
+            num_cols = []
+            for col_idx in range(len(table[0]) if table else 0):
+                has_nums = sum(1 for row in table[2:15]
+                             if col_idx < len(row) and row[col_idx]
+                             and re.search(r'\d', str(row[col_idx])))
+                if has_nums >= 3:
+                    num_cols.append(col_idx)
+            # Map years to rightmost numeric columns
+            num_cols = sorted(num_cols)[-len(years_sorted):]
+            for ci, yr in zip(num_cols, years_sorted):
+                col_to_year[ci] = yr
+            if col_to_year:
+                return sorted(col_to_year.items())
+
+        # Strategy 3: fallback from yaml columns hint
+        # (backward compat with Phase 4a yaml: year_cols_from)
+        sec_cfg = None
+        for sec_name, sec_val in (self.adapter.get('sections') or {}).items():
+            if sec_val and 'columns' in sec_val:
+                sec_cfg = sec_val
+                break
+        if sec_cfg:
+            cols_cfg = sec_cfg.get('columns', {})
+            ycf = cols_cfg.get('year_cols_from')
+            n_years = cols_cfg.get('expected_year_count', 2)
+            if ycf is not None:
+                # Use most recent years as default
+                import datetime
+                cur_year = datetime.datetime.now().year
+                for i in range(n_years):
+                    col_to_year[ycf + i] = cur_year - i
+                return sorted(col_to_year.items())
+
+        return []
+
+    # ─── Row mapping (section-aware) ──────────────────────────────
+
+    def _map_rows(self, table, sec_cfg, year_cols):
+        rows_cfg = sec_cfg.get('rows', {})
+        section_markers = sec_cfg.get('section_markers', {})
+
+        # First year column index — everything before it is metric text
+        first_year_col = min(c for c, _ in year_cols) if year_cols else len(table[0]) if table else 1
+
+        # Pre-compile row patterns (already normalized in yaml for Phase 4a-v2 format)
+        compiled = {}
+        for canonical, spec in rows_cfg.items():
+            patterns = spec.get('patterns', [])
+            # Normalize patterns: remove whitespace, lowercase
+            norm_patterns = [re.compile(self._normalize(p)) for p in patterns]
+            compiled[canonical] = {
+                'patterns': norm_patterns,
+                'sign': spec.get('sign', 'natural'),
+                'sections': spec.get('sections'),
+            }
+
+        # Pre-compile section markers
+        compiled_markers = {
+            name: [self._normalize(p) for p in phrases]
+            for name, phrases in section_markers.items()
+        }
+
+        metrics = {}
+        unmatched = []
+        matched_canonicals = set()
+        current_section = None
+
+        for row in table:
+            if not row:
+                continue
+
+            # Merge metric text from all columns before first year column
+            metric_parts = []
+            for ci in range(min(first_year_col, len(row))):
+                cell = str(row[ci] or '').strip()
+                if cell:
+                    metric_parts.append(cell)
+            metric_raw = ' '.join(metric_parts).strip()
+            if not metric_raw:
+                continue
+
+            norm = self._normalize(metric_raw)
+
+            # Skip pure numbers / very short
+            if len(norm) < 3 or re.match(r'^\d+$', norm):
+                continue
+
+            # Section marker detection
+            marker_hit = False
+            for section_name, norm_phrases in compiled_markers.items():
+                if any(norm.startswith(p) for p in norm_phrases):
+                    current_section = section_name
+                    marker_hit = True
+                    break
+            if marker_hit:
+                continue
+
+            # Match against canonicals
+            matched_canonical = None
+            for canonical, spec in compiled.items():
+                if canonical in matched_canonicals:
+                    continue
+                if spec['sections'] is not None and current_section not in (spec['sections'] if isinstance(spec['sections'], list) else [spec['sections']]):
+                    continue
+                if any(p.search(norm) for p in spec['patterns']):
+                    matched_canonical = canonical
+                    matched_canonicals.add(canonical)
+                    break
+
+            if matched_canonical is None:
+                if any(c.isalpha() for c in metric_raw) and len(metric_raw) > 3:
+                    unmatched.append(metric_raw)
+                continue
+
+            # Extract year values
+            sign = compiled[matched_canonical]['sign']
+            year_values = {}
+            for col_idx, year in year_cols:
+                if col_idx >= len(row):
+                    continue
+                val = self._parse_number(row[col_idx])
+                if val is None:
+                    continue
+                if sign == 'abs':
+                    val = abs(val)
+                year_values[year] = val
+
+            if year_values:
+                if matched_canonical in metrics:
+                    metrics[matched_canonical].update(year_values)
+                else:
+                    metrics[matched_canonical] = year_values
+
+        return metrics, unmatched
+
+    # ─── Number parsing ───────────────────────────────────────────
+
+    def _parse_number(self, raw) -> Optional[float]:
+        if raw is None:
+            return None
+        s = str(raw).strip()
+        if s in ('', '—', '-', '–', 'n/a', 'N/A'):
+            return None
+        neg = False
+        if s.startswith('(') and s.endswith(')'):
+            neg = True
+            s = s[1:-1]
+        s = s.replace(self.thousands, '').replace(' ', '').replace('\xa0', '')
+        s = re.sub(r'[^0-9.\-]', '', s)
+        if not s:
+            return None
+        try:
+            v = float(s)
+        except ValueError:
+            return None
+        return -v if neg else v

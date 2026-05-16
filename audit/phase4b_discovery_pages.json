@@ -1,0 +1,50 @@
+{
+  "pdf": "RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+  "total_pages": 74,
+  "found": {
+    "BS": [
+      {
+        "page_1based": 11,
+        "tables": [
+          [
+            74,
+            7
+          ]
+        ],
+        "first_trigger": "consolidated statement of financial position"
+      },
+      {
+        "page_1based": 30,
+        "tables": [
+          [
+            63,
+            9
+          ]
+        ],
+        "first_trigger": "consolidated statement of financial position"
+      },
+      {
+        "page_1based": 47,
+        "tables": [
+          [
+            67,
+            9
+          ]
+        ],
+        "first_trigger": "consolidated statement of financial position"
+      }
+    ],
+    "CF": [
+      {
+        "page_1based": 13,
+        "tables": [
+          [
+            77,
+            10
+          ]
+        ],
+        "first_trigger": "consolidated statement of cash flows"
+      }
+    ]
+  }
+}

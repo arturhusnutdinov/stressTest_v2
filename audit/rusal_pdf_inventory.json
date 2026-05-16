@@ -1,0 +1,253 @@
+{
+  "pdf_dir": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates",
+  "files": [
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/6azccjf71b3lruvjgn5fs5ue1repgeen.pdf",
+      "name": "6azccjf71b3lruvjgn5fs5ue1repgeen.pdf",
+      "size_mb": 17.6,
+      "year": null,
+      "type": "Unknown",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2012_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2012_RUS.pdf",
+      "size_mb": 1.6,
+      "year": 2012,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2013_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2013_RUS.pdf",
+      "size_mb": 2.2,
+      "year": 2013,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2014_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2014_RUS.pdf",
+      "size_mb": 2.1,
+      "year": 2014,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2015_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2015_RUS.pdf",
+      "size_mb": 2.0,
+      "year": 2015,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2016_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2016_RUS.pdf",
+      "size_mb": 4.0,
+      "year": 2016,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2017_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2017_RUS.pdf",
+      "size_mb": 3.3,
+      "year": 2017,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2018_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2018_RUS.pdf",
+      "size_mb": 4.0,
+      "year": 2018,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2019_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2019_RUS.pdf",
+      "size_mb": 1.5,
+      "year": 2019,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2020_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2020_RUS.pdf",
+      "size_mb": 0.9,
+      "year": 2020,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2021_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2021_RUS.pdf",
+      "size_mb": 4.4,
+      "year": 2021,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2022_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2022_RUS.pdf",
+      "size_mb": 6.6,
+      "year": 2022,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2023_ENG.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2023_ENG.pdf",
+      "size_mb": 2.7,
+      "year": 2023,
+      "type": "FS",
+      "lang": "EN"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Consolidated_Financial_Statements_RUSAL_2023_RUS.pdf",
+      "name": "Consolidated_Financial_Statements_RUSAL_2023_RUS.pdf",
+      "size_mb": 2.6,
+      "year": 2023,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/RUSAL_AR_2024_RU_r101.pdf",
+      "name": "RUSAL_AR_2024_RU_r101.pdf",
+      "size_mb": 19.0,
+      "year": 2024,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/RUSAL_Consolidated-Financial-Statements-for-12m2025_ENG.pdf",
+      "name": "RUSAL_Consolidated-Financial-Statements-for-12m2025_ENG.pdf",
+      "size_mb": 2.6,
+      "year": 2025,
+      "type": "FS",
+      "lang": "EN"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/RUSAL_Consolidated-Financial-Statements-for-12m2025_RUS.pdf",
+      "name": "RUSAL_Consolidated-Financial-Statements-for-12m2025_RUS.pdf",
+      "size_mb": 1.8,
+      "year": 2025,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+      "name": "RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+      "size_mb": 2.8,
+      "year": 2024,
+      "type": "FS",
+      "lang": "EN"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/RUSAL_consolidated_financial_statement_12m2024_RUS.pdf",
+      "name": "RUSAL_consolidated_financial_statement_12m2024_RUS.pdf",
+      "size_mb": 1.8,
+      "year": 2024,
+      "type": "FS",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2012_RU.pdf",
+      "name": "Rusal_Annual_Report_2012_RU.pdf",
+      "size_mb": 2.6,
+      "year": 2012,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2013_RU.pdf",
+      "name": "Rusal_Annual_Report_2013_RU.pdf",
+      "size_mb": 13.0,
+      "year": 2013,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2014_RU.pdf",
+      "name": "Rusal_Annual_Report_2014_RU.pdf",
+      "size_mb": 7.3,
+      "year": 2014,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2015_RU.pdf",
+      "name": "Rusal_Annual_Report_2015_RU.pdf",
+      "size_mb": 5.2,
+      "year": 2015,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2016_RU.pdf",
+      "name": "Rusal_Annual_Report_2016_RU.pdf",
+      "size_mb": 6.9,
+      "year": 2016,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2017_RU.pdf",
+      "name": "Rusal_Annual_Report_2017_RU.pdf",
+      "size_mb": 4.4,
+      "year": 2017,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2018_RU.pdf",
+      "name": "Rusal_Annual_Report_2018_RU.pdf",
+      "size_mb": 15.4,
+      "year": 2018,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2019_RU.pdf",
+      "name": "Rusal_Annual_Report_2019_RU.pdf",
+      "size_mb": 5.3,
+      "year": 2019,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2020_RU.pdf",
+      "name": "Rusal_Annual_Report_2020_RU.pdf",
+      "size_mb": 9.9,
+      "year": 2020,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2021_RU.pdf",
+      "name": "Rusal_Annual_Report_2021_RU.pdf",
+      "size_mb": 9.1,
+      "year": 2021,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2022_RU.pdf",
+      "name": "Rusal_Annual_Report_2022_RU.pdf",
+      "size_mb": 17.6,
+      "year": 2022,
+      "type": "Annual Report",
+      "lang": "RU"
+    },
+    {
+      "path": "/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/Rusal_Annual_Report_2023_RU.pdf",
+      "name": "Rusal_Annual_Report_2023_RU.pdf",
+      "size_mb": 18.3,
+      "year": 2023,
+      "type": "Annual Report",
+      "lang": "RU"
+    }
+  ]
+}

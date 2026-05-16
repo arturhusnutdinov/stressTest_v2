@@ -1,0 +1,324 @@
+=== Diff: 4b-ii-hotfix → current ===
+--- audit/phase4b_ii_hotfix_backup/pdf_parser.py.bak	2026-04-21 18:18:12
++++ parsers/pdf_parser.py	2026-04-22 15:31:25
+@@ -79,6 +79,23 @@
+             # Pass page text for year detection fallback
+             page_text = page.extract_text() or ''
+             year_cols = self._detect_year_columns(table, page_text=page_text)
++
++            # Text-line fallback: if table gives <=1 year but page text has 2+,
++            # build virtual table from text lines (handles split-column Notes)
++            if len(year_cols) <= 1 and page_text:
++                text_years = set()
++                for m in re.finditer(r'\b(20\d{2})\b', page_text):
++                    y = int(m.group(1))
++                    if 2015 <= y <= 2030:
++                        text_years.add(y)
++                if len(text_years) >= 2:
++                    vt = self._build_text_table(page_text)
++                    if vt:
++                        vt_years = self._detect_year_columns(vt, page_text=page_text)
++                        if len(vt_years) >= 2:
++                            table = vt
++                            year_cols = vt_years
++
+             if not year_cols:
+                 return ParseResult(section, str(pdf_path), page_idx + 1, [], {},
+                                    warnings=['no year columns detected'])
+@@ -94,6 +111,53 @@
+                 unmatched_rows=unmatched,
+             )
+ 
++    # ─── Text-line table builder ────────────────────────────────────
++
++    @staticmethod
++    def _build_text_table(page_text: str) -> list:
++        """Build a virtual table from page text lines.
++        Finds year header, then splits data lines into [metric, val1, val2, ...].
++        Used as fallback when pdfplumber splits columns badly (Notes pages)."""
++        lines = page_text.split('\n')
++        year_re = re.compile(r'\b(20\d{2})\b')
++
++        # Find line with 2+ years — serves as column header
++        years = []
++        data_start = 0
++        for i, line in enumerate(lines):
++            line_years = sorted(set(
++                int(m.group(1)) for m in year_re.finditer(line)
++                if 2015 <= int(m.group(1)) <= 2030
++            ), reverse=True)
++            if len(line_years) >= 2:
++                years = line_years
++                data_start = i + 1
++                break
++
++        if not years:
++            return []
++
++        # Build virtual table: header row with years, then data rows
++        header = [''] + [str(y) for y in years]
++        rows = [header]
++
++        for line in lines[data_start:]:
++            line = line.strip()
++            if not line:
++                continue
++            m = re.match(
++                r'^(.*?)\s+'
++                r'([\d,.()\-–—]+(?:\s+[\d,.()\-–—]+)*)\s*$',
++                line)
++            if m:
++                text_part = m.group(1).strip()
++                nums = m.group(2).strip().split()
++                rows.append([text_part] + nums)
++            else:
++                rows.append([line])
++
++        return rows if len(rows) > 1 else []
++
+     # ─── Page finding ─────────────────────────────────────────────
+ 
+     def _find_target_page(self, pdf, sec_cfg) -> Optional[int]:
+@@ -101,7 +165,7 @@
+         anti = sec_cfg.get('page_anti_triggers', [])
+         anchors = sec_cfg.get('section_anchors', [])
+ 
+-        for i, page in enumerate(pdf.pages[:40]):
++        for i, page in enumerate(pdf.pages[:80]):
+             text = page.extract_text() or ''
+             text_low = text.lower()
+ 
+@@ -123,7 +187,7 @@
+             return i
+ 
+         # Fallback: any page with trigger
+-        for i, page in enumerate(pdf.pages[:40]):
++        for i, page in enumerate(pdf.pages[:80]):
+             text = page.extract_text() or ''
+             if any(t.lower() in text.lower() for t in triggers):
+                 return i
+@@ -150,7 +214,18 @@
+                         col_to_year[col_idx] = y
+ 
+         if col_to_year:
+-            return sorted(col_to_year.items())
++            # Validate: year columns must have numeric data in body rows
++            validated = {}
++            for ci, yr in col_to_year.items():
++                has_data = any(
++                    ci < len(row) and row[ci]
++                    and re.search(r'\d', str(row[ci]))
++                    for row in table[5:20]
++                )
++                if has_data:
++                    validated[ci] = yr
++            if validated:
++                return sorted(validated.items())
+ 
+         # Strategy 2: get years from page text, then map to numeric columns
+         all_years = set()
+@@ -227,6 +302,7 @@
+                 'patterns': norm_patterns,
+                 'sign': spec.get('sign', 'natural'),
+                 'sections': spec.get('sections'),
++                'combine_from': spec.get('combine_from'),
+             }
+ 
+         # Pre-compile section markers
+@@ -263,7 +339,7 @@
+             # Section marker detection
+             marker_hit = False
+             for section_name, norm_phrases in compiled_markers.items():
+-                if any(p in norm for p in norm_phrases):
++                if any(norm.startswith(p) for p in norm_phrases):
+                     current_section = section_name
+                     marker_hit = True
+                     break
+@@ -306,6 +382,29 @@
+                 else:
+                     metrics[matched_canonical] = year_values
+ 
++        # ─── combine_from pass ────────────────────────────────────
++        for canonical, spec in compiled.items():
++            cf = spec.get('combine_from')
++            if not cf:
++                continue
++            component_metrics = [metrics.get(c, {}) for c in cf]
++            years_sets = [set(cm.keys()) for cm in component_metrics]
++            if not years_sets:
++                continue
++            common_years = set.intersection(*years_sets)
++            if not common_years:
++                continue
++            agg = {}
++            for y in sorted(common_years):
++                agg[y] = sum(cm[y] for cm in component_metrics)
++            if canonical in metrics:
++                metrics[canonical].update(agg)
++            else:
++                metrics[canonical] = agg
++
++        # ─── Filter helper rows (prefixed '_') out of final result ────
++        metrics = {k: v for k, v in metrics.items() if not k.startswith('_')}
++
+         return metrics, unmatched
+ 
+     # ─── Number parsing ───────────────────────────────────────────
+
+=== Diff: 4b-ii-agg → current ===
+--- audit/phase4b_agg_backup/pdf_parser.py.bak	2026-04-22 12:05:19
++++ parsers/pdf_parser.py	2026-04-22 15:31:25
+@@ -79,6 +79,23 @@
+             # Pass page text for year detection fallback
+             page_text = page.extract_text() or ''
+             year_cols = self._detect_year_columns(table, page_text=page_text)
++
++            # Text-line fallback: if table gives <=1 year but page text has 2+,
++            # build virtual table from text lines (handles split-column Notes)
++            if len(year_cols) <= 1 and page_text:
++                text_years = set()
++                for m in re.finditer(r'\b(20\d{2})\b', page_text):
++                    y = int(m.group(1))
++                    if 2015 <= y <= 2030:
++                        text_years.add(y)
++                if len(text_years) >= 2:
++                    vt = self._build_text_table(page_text)
++                    if vt:
++                        vt_years = self._detect_year_columns(vt, page_text=page_text)
++                        if len(vt_years) >= 2:
++                            table = vt
++                            year_cols = vt_years
++
+             if not year_cols:
+                 return ParseResult(section, str(pdf_path), page_idx + 1, [], {},
+                                    warnings=['no year columns detected'])
+@@ -94,6 +111,53 @@
+                 unmatched_rows=unmatched,
+             )
+ 
++    # ─── Text-line table builder ────────────────────────────────────
++
++    @staticmethod
++    def _build_text_table(page_text: str) -> list:
++        """Build a virtual table from page text lines.
++        Finds year header, then splits data lines into [metric, val1, val2, ...].
++        Used as fallback when pdfplumber splits columns badly (Notes pages)."""
++        lines = page_text.split('\n')
++        year_re = re.compile(r'\b(20\d{2})\b')
++
++        # Find line with 2+ years — serves as column header
++        years = []
++        data_start = 0
++        for i, line in enumerate(lines):
++            line_years = sorted(set(
++                int(m.group(1)) for m in year_re.finditer(line)
++                if 2015 <= int(m.group(1)) <= 2030
++            ), reverse=True)
++            if len(line_years) >= 2:
++                years = line_years
++                data_start = i + 1
++                break
++
++        if not years:
++            return []
++
++        # Build virtual table: header row with years, then data rows
++        header = [''] + [str(y) for y in years]
++        rows = [header]
++
++        for line in lines[data_start:]:
++            line = line.strip()
++            if not line:
++                continue
++            m = re.match(
++                r'^(.*?)\s+'
++                r'([\d,.()\-–—]+(?:\s+[\d,.()\-–—]+)*)\s*$',
++                line)
++            if m:
++                text_part = m.group(1).strip()
++                nums = m.group(2).strip().split()
++                rows.append([text_part] + nums)
++            else:
++                rows.append([line])
++
++        return rows if len(rows) > 1 else []
++
+     # ─── Page finding ─────────────────────────────────────────────
+ 
+     def _find_target_page(self, pdf, sec_cfg) -> Optional[int]:
+@@ -101,7 +165,7 @@
+         anti = sec_cfg.get('page_anti_triggers', [])
+         anchors = sec_cfg.get('section_anchors', [])
+ 
+-        for i, page in enumerate(pdf.pages[:40]):
++        for i, page in enumerate(pdf.pages[:80]):
+             text = page.extract_text() or ''
+             text_low = text.lower()
+ 
+@@ -123,7 +187,7 @@
+             return i
+ 
+         # Fallback: any page with trigger
+-        for i, page in enumerate(pdf.pages[:40]):
++        for i, page in enumerate(pdf.pages[:80]):
+             text = page.extract_text() or ''
+             if any(t.lower() in text.lower() for t in triggers):
+                 return i
+@@ -150,7 +214,18 @@
+                         col_to_year[col_idx] = y
+ 
+         if col_to_year:
+-            return sorted(col_to_year.items())
++            # Validate: year columns must have numeric data in body rows
++            validated = {}
++            for ci, yr in col_to_year.items():
++                has_data = any(
++                    ci < len(row) and row[ci]
++                    and re.search(r'\d', str(row[ci]))
++                    for row in table[5:20]
++                )
++                if has_data:
++                    validated[ci] = yr
++            if validated:
++                return sorted(validated.items())
+ 
+         # Strategy 2: get years from page text, then map to numeric columns
+         all_years = set()
+@@ -227,6 +302,7 @@
+                 'patterns': norm_patterns,
+                 'sign': spec.get('sign', 'natural'),
+                 'sections': spec.get('sections'),
++                'combine_from': spec.get('combine_from'),
+             }
+ 
+         # Pre-compile section markers
+@@ -306,6 +382,29 @@
+                 else:
+                     metrics[matched_canonical] = year_values
+ 
++        # ─── combine_from pass ────────────────────────────────────
++        for canonical, spec in compiled.items():
++            cf = spec.get('combine_from')
++            if not cf:
++                continue
++            component_metrics = [metrics.get(c, {}) for c in cf]
++            years_sets = [set(cm.keys()) for cm in component_metrics]
++            if not years_sets:
++                continue
++            common_years = set.intersection(*years_sets)
++            if not common_years:
++                continue
++            agg = {}
++            for y in sorted(common_years):
++                agg[y] = sum(cm[y] for cm in component_metrics)
++            if canonical in metrics:
++                metrics[canonical].update(agg)
++            else:
++                metrics[canonical] = agg
++
++        # ─── Filter helper rows (prefixed '_') out of final result ────
++        metrics = {k: v for k, v in metrics.items() if not k.startswith('_')}
++
+         return metrics, unmatched
+ 
+     # ─── Number parsing ───────────────────────────────────────────

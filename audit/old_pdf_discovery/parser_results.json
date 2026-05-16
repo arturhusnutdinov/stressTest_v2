@@ -1,0 +1,76 @@
+{
+  "2014": {
+    "IS": {
+      "page": 6,
+      "n_metrics": 13,
+      "years": [
+        2025,
+        2026
+      ],
+      "warnings": []
+    },
+    "BS": {
+      "page": 9,
+      "n_metrics": 12,
+      "years": [
+        2015
+      ],
+      "warnings": []
+    },
+    "CF": {
+      "page": 2,
+      "n_metrics": 0,
+      "years": [],
+      "warnings": []
+    }
+  },
+  "2016": {
+    "IS": {
+      "page": 9,
+      "n_metrics": 14,
+      "years": [
+        2015,
+        2016
+      ],
+      "warnings": []
+    },
+    "BS": {
+      "page": 2,
+      "n_metrics": 0,
+      "years": [],
+      "warnings": []
+    },
+    "CF": {
+      "page": 2,
+      "n_metrics": 0,
+      "years": [],
+      "warnings": []
+    }
+  },
+  "2019": {
+    "IS": {
+      "page": 9,
+      "n_metrics": 15,
+      "years": [
+        2018,
+        2019
+      ],
+      "warnings": []
+    },
+    "BS": {
+      "page": 12,
+      "n_metrics": 13,
+      "years": [
+        2018,
+        2019
+      ],
+      "warnings": []
+    },
+    "CF": {
+      "page": 2,
+      "n_metrics": 0,
+      "years": [],
+      "warnings": []
+    }
+  }
+}

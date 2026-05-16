@@ -1,0 +1,112 @@
+{
+  "page": 41,
+  "cats": [
+    "3_8",
+    "million",
+    "metric"
+  ],
+  "data": {
+    "cost": {
+      "2023": {
+        "additions": {
+          "3_8": 6.0,
+          "million": 34.0,
+          "metric": 40.0
+        },
+        "disposals": {
+          "3_8": 0.0,
+          "million": -7.0,
+          "metric": -7.0
+        },
+        "fx": {
+          "3_8": -236.0,
+          "million": -14.0,
+          "metric": -250.0
+        },
+        "closing": {
+          "3_8": 2653.0,
+          "million": 644.0,
+          "metric": 3297.0
+        }
+      },
+      "2024": {
+        "additions": {
+          "3_8": 0.0,
+          "million": 34.0,
+          "metric": 34.0
+        },
+        "disposals": {
+          "3_8": 0.0,
+          "million": -9.0,
+          "metric": -9.0
+        },
+        "fx": {
+          "3_8": -91.0,
+          "million": -7.0,
+          "metric": -98.0
+        },
+        "closing": {
+          "3_8": 2562.0,
+          "million": 662.0,
+          "metric": 3224.0
+        }
+      }
+    },
+    "accum_amort": {
+      "2023": {
+        "amortisation_charge": {
+          "3_8": 0.0,
+          "million": -19.0,
+          "metric": -19.0
+        },
+        "disposals": {
+          "3_8": 0.0,
+          "million": 7.0,
+          "metric": 7.0
+        },
+        "impairment": {
+          "3_8": -48.0,
+          "million": 3.0,
+          "metric": -45.0
+        },
+        "fx": {
+          "3_8": 0.0,
+          "million": 6.0,
+          "metric": 6.0
+        },
+        "closing": {
+          "3_8": -497.0,
+          "million": -463.0,
+          "metric": -960.0
+        }
+      },
+      "2024": {
+        "amortisation_charge": {
+          "3_8": 0.0,
+          "million": -26.0,
+          "metric": -26.0
+        },
+        "disposals": {
+          "3_8": 0.0,
+          "million": 9.0,
+          "metric": 9.0
+        },
+        "impairment": {
+          "3_8": -51.0,
+          "million": 1.0,
+          "metric": -50.0
+        },
+        "fx": {
+          "3_8": 0.0,
+          "million": 4.0,
+          "metric": 4.0
+        },
+        "closing": {
+          "3_8": -548.0,
+          "million": -475.0,
+          "metric": -1023.0
+        }
+      }
+    }
+  }
+}

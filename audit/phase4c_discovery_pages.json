@@ -1,0 +1,36 @@
+{
+  "pdf": "RUSAL_consolidated_financial_statement_12m2024_ENG.pdf",
+  "total_pages": 74,
+  "found": {
+    "Note_13_PPE": [
+      {
+        "page": 33,
+        "matched_pattern": "^\\s*13\\s+Property,?\\s+plant\\s+and\\s+equipment",
+        "keyword_hits": 0,
+        "n_tables": 0,
+        "table_dims": [],
+        "text_first_200": "UC RUSAL, IPJSC\nNotes to the Consolidated Financial Statements\nfor the year ended 31 December 2024\n12 Earnings per share\nThe calculation of earnings per share is based on the profit attributable to or"
+      }
+    ],
+    "Note_19_Debt": [
+      {
+        "page": 53,
+        "matched_pattern": "^\\s*19\\s+Loans?\\s+and\\s+borrowings?",
+        "keyword_hits": 2,
+        "n_tables": 0,
+        "table_dims": [],
+        "text_first_200": "UC RUSAL, IPJSC\nNotes to the Consolidated Financial Statements\nfor the year ended 31 December 2024\n(b) Other reserves\nOther reserves include the amounts related to: effect of transaction of reorganiza"
+      }
+    ],
+    "Note_16_Inventory": [
+      {
+        "page": 46,
+        "matched_pattern": "^\\s*16\\s+Inventories",
+        "keyword_hits": 1,
+        "n_tables": 0,
+        "table_dims": [],
+        "text_first_200": "UC RUSAL, IPJSC\nNotes to the Consolidated Financial Statements\nfor the year ended 31 December 2024\nSummary of the additional financial information of the Group\u2019s effective interest in BEMO project for"
+      }
+    ]
+  }
+}

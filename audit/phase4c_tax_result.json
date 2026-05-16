@@ -1,0 +1,150 @@
+{
+  "recon": {
+    "2024": {
+      "profit_before_tax": {
+        "amount_2024": 858.0,
+        "pct_2024": 100.0,
+        "amount_2023": 244.0,
+        "pct_2023": 100.0
+      },
+      "income_tax_statutory": {
+        "amount_2024": 172.0,
+        "pct_2024": 20.0,
+        "amount_2023": 49.0,
+        "pct_2023": 20.0
+      },
+      "effect_different_rates": {
+        "amount_2024": -87.0,
+        "pct_2024": -10.0,
+        "amount_2023": -194.0,
+        "pct_2023": -80.0
+      },
+      "effect_norilsk": {
+        "amount_2024": -69.0,
+        "pct_2024": -8.0,
+        "amount_2023": -126.0,
+        "pct_2023": -52.0
+      },
+      "change_unrecognised_dta": {
+        "amount_2024": -6.0,
+        "pct_2024": -1.0,
+        "amount_2023": 151.0,
+        "pct_2023": 62.0
+      },
+      "effect_impairment": {
+        "amount_2024": 12.0,
+        "pct_2024": 1.0,
+        "amount_2023": 43.0,
+        "pct_2023": 18.0
+      },
+      "effect_windfall": {
+        "amount_2024": 0.0,
+        "pct_2024": 0.0,
+        "amount_2023": 39.0,
+        "pct_2023": 16.0
+      },
+      "other_net": {
+        "amount_2024": 68.0,
+        "pct_2024": 8.0,
+        "amount_2023": 0.0,
+        "pct_2023": 0.0
+      },
+      "tax_expense": {
+        "amount_2024": 55.0,
+        "pct_2024": 6.0,
+        "amount_2023": -38.0,
+        "pct_2023": -16.0
+      }
+    }
+  },
+  "dta": {
+    "2023": {
+      "ppe": {
+        "opening": -482.0,
+        "recognised_in_pl": -44.0,
+        "fx": 23.0,
+        "closing": -503.0
+      },
+      "inventories": {
+        "opening": 1.0,
+        "recognised_in_pl": 19.0,
+        "fx": 0.0,
+        "closing": 20.0
+      },
+      "receivables": {
+        "opening": 20.0,
+        "recognised_in_pl": -2.0,
+        "fx": 0.0,
+        "closing": 18.0
+      },
+      "payables": {
+        "opening": 18.0,
+        "recognised_in_pl": 9.0,
+        "fx": 0.0,
+        "closing": 27.0
+      },
+      "tax_losses": {
+        "opening": 129.0,
+        "recognised_in_pl": -69.0,
+        "fx": 0.0,
+        "closing": 60.0
+      },
+      "others": {
+        "opening": -55.0,
+        "recognised_in_pl": 257.0,
+        "fx": 0.0,
+        "closing": 202.0
+      },
+      "total": {
+        "opening": -369.0,
+        "recognised_in_pl": 170.0,
+        "fx": 23.0,
+        "closing": -176.0
+      }
+    },
+    "2024": {
+      "ppe": {
+        "opening": -503.0,
+        "recognised_in_pl": -72.0,
+        "fx": -27.0,
+        "closing": -602.0
+      },
+      "inventories": {
+        "opening": 20.0,
+        "recognised_in_pl": 9.0,
+        "fx": 0.0,
+        "closing": 29.0
+      },
+      "receivables": {
+        "opening": 18.0,
+        "recognised_in_pl": 9.0,
+        "fx": 0.0,
+        "closing": 27.0
+      },
+      "payables": {
+        "opening": 27.0,
+        "recognised_in_pl": 3.0,
+        "fx": 0.0,
+        "closing": 30.0
+      },
+      "tax_losses": {
+        "opening": 60.0,
+        "recognised_in_pl": 18.0,
+        "fx": 0.0,
+        "closing": 78.0
+      },
+      "others": {
+        "opening": 202.0,
+        "recognised_in_pl": 98.0,
+        "fx": 0.0,
+        "closing": 300.0
+      },
+      "total": {
+        "opening": -176.0,
+        "recognised_in_pl": 65.0,
+        "fx": -27.0,
+        "closing": -138.0
+      }
+    }
+  }
+}

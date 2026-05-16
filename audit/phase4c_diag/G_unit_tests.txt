@@ -1,0 +1,28 @@
+=== test_parser_helpers.py state ===
+     149 parsers/tests/test_parser_helpers.py
+10:def test_detect_year_columns_simple():
+14:def test_detect_year_columns_embedded_text():
+18:def test_detect_year_columns_bs_layout():
+22:def test_parse_number_parens():
+28:def test_parse_number_nulls():
+33:def test_normalize():
+39:def test_normalize_preserves_digits():
+46:def test_smoke_file_exists():
+53:def test_yaml_no_dollar_after_letters():
+63:def test_combine_from_basic():
+101:def test_combine_from_partial_year():
+
+=== Test run ===
+  ✓ test_detect_year_columns_simple
+  ✓ test_detect_year_columns_embedded_text
+  ✓ test_detect_year_columns_bs_layout
+  ✓ test_parse_number_parens
+  ✓ test_parse_number_nulls
+  ✓ test_normalize
+  ✓ test_normalize_preserves_digits
+  ✓ test_smoke_file_exists
+  ✓ test_yaml_no_dollar_after_letters
+  ✓ test_combine_from_basic
+  ✓ test_combine_from_partial_year
+
+11 passed, 0 failed

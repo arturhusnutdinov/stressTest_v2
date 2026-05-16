@@ -1,0 +1,65 @@
+{
+  "metrics": {
+    "revenue": {
+      "2024": 12082.0,
+      "2023": 12213.0
+    },
+    "gross_profit": {
+      "2024": 2821.0,
+      "2023": 1768.0
+    },
+    "sga": {
+      "2024": 695.0,
+      "2023": 603.0
+    },
+    "asset_impairment": {
+      "2024": 580.0,
+      "2023": 321.0
+    },
+    "expected_credit_losses": {
+      "2024": 44.0,
+      "2023": 1.0
+    },
+    "other_operating_expenses": {
+      "2024": -286.0,
+      "2023": -167.0
+    },
+    "interest_income": {
+      "2024": 457.0,
+      "2023": 144.0
+    },
+    "interest_expense": {
+      "2024": 531.0,
+      "2023": 573.0
+    },
+    "tax_expense": {
+      "2024": 55.0,
+      "2023": 38.0
+    },
+    "net_income": {
+      "2024": 803.0,
+      "2023": 282.0
+    }
+  },
+  "page": 9,
+  "years": [
+    2024,
+    2023
+  ],
+  "unmatched": [
+    "Costof sales",
+    "Distributionexpenses",
+    "Results fromo operatingactivities",
+    "Shareof profits of associates and joint ventures",
+    "Profit beforet axation",
+    "Current income tax expense",
+    "Deferred income tax credit",
+    "Attributableto Shareholders of the Company",
+    "Profit for the year",
+    "Earnings per share",
+    "Basic and diluted earnings per share (USD)",
+    "Adjusted EBITDA",
+    "The consolidated statementof incomeis tobe readin conjunction",
+    "financial statem ents set outon pages 14to 74."
+  ]
+}

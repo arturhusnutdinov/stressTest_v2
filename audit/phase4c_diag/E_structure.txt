@@ -1,0 +1,53 @@
+=== Imports ===
+"""PDF parser for company financial reports. Generic engine + YAML adapters.
+
+v2 (Phase 4b-i):
+- Auto-detected year columns (no more hardcoded year_cols_from)
+- Multi-column metric text merge (handles pdfplumber word-wrap)
+- Section-aware row iteration (Operating/Investing/Financing, Non-current/Current)
+- Anchor-metric page filter (skips Notes pages that match page_triggers)
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import pdfplumber
+import yaml
+
+
+@dataclass
+class ParseResult:
+    section: str
+    pdf_path: str
+    page_used: Optional[int]
+    years_detected: list
+    metrics: dict
+    unmatched_rows: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
+
+
+class PDFParser:
+    """Generic PDF parser. Adapter yaml provides company-specific layout."""
+
+    def __init__(self, adapter_path: Path):
+        self.adapter_path = Path(adapter_path)
+        with open(self.adapter_path) as f:
+            self.adapter = yaml.safe_load(f)
+        self.meta = self.adapter.get('meta', {})
+        self.thousands = self.meta.get('thousands_separator', ',')
+
+
+=== Public methods ===
+50:    def parse_section(self, pdf_path: Path, section: str) -> ParseResult:
+
+=== Private methods ===
+34:    def __init__(self, adapter_path: Path):
+42:    def _normalize(s) -> str:
+117:    def _build_text_table(page_text: str) -> list:
+163:    def _find_target_page(self, pdf, sec_cfg) -> Optional[int]:
+199:    def _detect_year_columns(self, table, page_text: str = '') -> list:
+288:    def _map_rows(self, table, sec_cfg, year_cols):
+412:    def _parse_number(self, raw) -> Optional[float]:

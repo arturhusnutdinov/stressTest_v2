@@ -1,0 +1,891 @@
+"""PDF parser for company financial reports. Generic engine + YAML adapters.
+
+v2 (Phase 4b-i):
+- Auto-detected year columns (no more hardcoded year_cols_from)
+- Multi-column metric text merge (handles pdfplumber word-wrap)
+- Section-aware row iteration (Operating/Investing/Financing, Non-current/Current)
+- Anchor-metric page filter (skips Notes pages that match page_triggers)
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Optional
+
+import pdfplumber
+import yaml
+
+
+@dataclass
+class ParseResult:
+    section: str
+    pdf_path: str
+    page_used: Optional[int]
+    years_detected: list
+    metrics: dict
+    unmatched_rows: list = field(default_factory=list)
+    warnings: list = field(default_factory=list)
+
+
+@dataclass
+class PivotNoteResult:
+    """Result of parse_pivot_note() — for Notes with pivot layout
+    (movement rows x category columns), e.g. PPE, Provisions, DTA/DTL."""
+    section: str
+    pdf_path: str
+    page_used: Optional[int]
+    data: dict  # {block: {year: {movement: {category: value}}}}
+    categories: list  # detected column category names
+    warnings: list = field(default_factory=list)
+
+
+@dataclass
+class InstrumentListResult:
+    """Result of parse_instrument_list() — for Notes with instrument rows,
+    e.g. Note 19 Loans and borrowings repayment schedule."""
+    section: str
+    pdf_path: str
+    page_used: list  # multiple pages possible
+    instruments: list  # List[Dict] per instrument
+    schedule_year: int  # primary snapshot year
+    warnings: list = field(default_factory=list)
+
+
+class PDFParser:
+    """Generic PDF parser. Adapter yaml provides company-specific layout."""
+
+    def __init__(self, adapter_path: Path):
+        self.adapter_path = Path(adapter_path)
+        with open(self.adapter_path) as f:
+            self.adapter = yaml.safe_load(f)
+        self.meta = self.adapter.get('meta', {})
+        self.thousands = self.meta.get('thousands_separator', ',')
+
+    @staticmethod
+    def _normalize(s) -> str:
+        """Strip all whitespace and lowercase for robust matching."""
+        if s is None:
+            return ''
+        return re.sub(r'\s+', '', str(s).lower())
+
+    # ─── Section dispatch ─────────────────────────────────────────
+
+    def parse_section(self, pdf_path: Path, section: str) -> ParseResult:
+        pdf_path = Path(pdf_path)
+        sec_cfg = (self.adapter.get('sections') or {}).get(section)
+        if sec_cfg is None:
+            return ParseResult(section, str(pdf_path), None, [], {},
+                               warnings=[f'section {section} not configured'])
+
+        with pdfplumber.open(pdf_path) as pdf:
+            page_idx = self._find_target_page(pdf, sec_cfg)
+            if page_idx is None:
+                return ParseResult(section, str(pdf_path), None, [], {},
+                                   warnings=[f'no page matched for {section}'])
+
+            page = pdf.pages[page_idx]
+
+            # Try default extraction first, then text strategy
+            tables = page.extract_tables() or []
+            if not tables or all(len(t) < 8 for t in tables):
+                tables = page.extract_tables(table_settings={
+                    "vertical_strategy": "text",
+                    "horizontal_strategy": "text",
+                }) or []
+
+            if not tables:
+                return ParseResult(section, str(pdf_path), page_idx + 1, [], {},
+                                   warnings=['no tables extracted'])
+
+            table = max(tables, key=lambda t: len(t))
+
+            # Pass page text for year detection fallback
+            page_text = page.extract_text() or ''
+            year_cols = self._detect_year_columns(table, page_text=page_text)
+
+            # Text-line fallback: if table gives <=1 year but page text has 2+,
+            # build virtual table from text lines (handles split-column Notes)
+            if len(year_cols) <= 1 and page_text:
+                text_years = set()
+                for m in re.finditer(r'\b(20\d{2})\b', page_text):
+                    y = int(m.group(1))
+                    if 2015 <= y <= 2030:
+                        text_years.add(y)
+                if len(text_years) >= 2:
+                    vt = self._build_text_table(page_text)
+                    if vt:
+                        vt_years = self._detect_year_columns(vt, page_text=page_text)
+                        if len(vt_years) >= 2:
+                            table = vt
+                            year_cols = vt_years
+
+            if not year_cols:
+                return ParseResult(section, str(pdf_path), page_idx + 1, [], {},
+                                   warnings=['no year columns detected'])
+
+            metrics, unmatched = self._map_rows(table, sec_cfg, year_cols)
+
+            return ParseResult(
+                section=section,
+                pdf_path=str(pdf_path),
+                page_used=page_idx + 1,
+                years_detected=[y for _, y in year_cols],
+                metrics=metrics,
+                unmatched_rows=unmatched,
+            )
+
+    # ─── Pivot Note parser ────────────────────────────────────────
+
+    def parse_pivot_note(self, pdf_path: Path, section: str) -> 'PivotNoteResult':
+        """Parse Notes with pivot layout: movement rows x category columns.
+        Uses page text directly (avoids pdfplumber split-column issues)."""
+        pdf_path = Path(pdf_path)
+        sec_cfg = (self.adapter.get('sections') or {}).get(section)
+        if sec_cfg is None:
+            return PivotNoteResult(section, str(pdf_path), None, {}, [],
+                                   warnings=[f'section {section} not configured'])
+
+        with pdfplumber.open(pdf_path) as pdf:
+            page_idx = self._find_target_page(pdf, sec_cfg)
+            if page_idx is None:
+                return PivotNoteResult(section, str(pdf_path), None, {}, [],
+                                       warnings=[f'no page matched for {section}'])
+
+            page = pdf.pages[page_idx]
+            page_text = page.extract_text() or ''
+            if not page_text:
+                return PivotNoteResult(section, str(pdf_path), page_idx + 1, {}, [],
+                                       warnings=['no text extracted'])
+
+            if sec_cfg.get('pivot_wide_table'):
+                data, categories, warnings = self._parse_wide_pivot_text(
+                    page_text, sec_cfg)
+            else:
+                data, categories, warnings = self._parse_pivot_text(
+                    page_text, sec_cfg)
+
+            return PivotNoteResult(
+                section=section,
+                pdf_path=str(pdf_path),
+                page_used=page_idx + 1,
+                data=data,
+                categories=categories,
+                warnings=warnings,
+            )
+
+    # ─── Instrument List parser ───────────────────────────────────
+
+    def parse_instrument_list(self, pdf_path: Path, section: str) -> 'InstrumentListResult':
+        """Parse Notes with instrument-list layout: each row = one instrument.
+        Uses page text directly (not pdfplumber tables)."""
+        pdf_path = Path(pdf_path)
+        sec_cfg = (self.adapter.get('sections') or {}).get(section)
+        if sec_cfg is None:
+            return InstrumentListResult(section, str(pdf_path), [], [], 0,
+                                        warnings=[f'section {section} not configured'])
+
+        all_instruments = []
+        schedule_years = []
+        pages_used = []
+        warnings = []
+
+        with pdfplumber.open(pdf_path) as pdf:
+            for i, page in enumerate(pdf.pages[:80]):
+                text = page.extract_text() or ''
+                text_low = text.lower()
+
+                triggers = sec_cfg.get('page_triggers', [])
+                anti = sec_cfg.get('page_anti_triggers', [])
+                if not any(t.lower() in text_low for t in triggers):
+                    continue
+                if any(a.lower() in text_low for a in anti):
+                    continue
+                if not re.search(r'\d{1,3}(?:,\d{3})+|\(\d', text):
+                    continue
+
+                instruments, schedule_year, page_warnings = \
+                    self._parse_instrument_page(text, sec_cfg)
+                warnings.extend(page_warnings)
+
+                if instruments:
+                    all_instruments.extend(instruments)
+                    if schedule_year:
+                        schedule_years.append(schedule_year)
+                    pages_used.append(i + 1)
+
+        primary_year = max(schedule_years) if schedule_years else 0
+
+        return InstrumentListResult(
+            section=section,
+            pdf_path=str(pdf_path),
+            page_used=pages_used,
+            instruments=all_instruments,
+            schedule_year=primary_year,
+            warnings=warnings,
+        )
+
+    def _parse_instrument_page(self, text: str, sec_cfg: dict):
+        """Parse one page of instrument schedule from page text."""
+        classes_cfg = sec_cfg.get('instrument_classes', {})
+        rate_types_cfg = sec_cfg.get('rate_types', {})
+        skip_patterns = [self._normalize(p.lstrip('^')) for p in sec_cfg.get('skip_rows', [])]
+        n_buckets = sec_cfg.get('maturity_buckets_count', 7)
+        bucket_names = sec_cfg.get('maturity_bucket_names',
+                                   ['total', 'yr1', 'yr2', 'yr3', 'yr4', 'yr5', 'yr6_plus'])
+
+        num_re = re.compile(r'[\d,.()\-–—]+')
+
+        instruments = []
+        warnings = []
+        schedule_year = None
+        current_class = None
+        current_rate_type = None
+        pending_description = ''
+
+        for line in text.split('\n'):
+            line = line.strip()
+            if not line:
+                pending_description = ''
+                continue
+            norm = self._normalize(line)
+
+            # Extract schedule year from "schedule as at 31 December YYYY"
+            if not schedule_year:
+                m = re.search(r'schedule\s+as\s+at.*?(20\d{2})', line, re.IGNORECASE)
+                if m:
+                    schedule_year = int(m.group(1))
+                    continue
+
+            # Skip configured patterns
+            if any(norm.startswith(p) for p in skip_patterns):
+                pending_description = ''
+                continue
+            if len(norm) < 3:
+                continue
+
+            # Detect instrument class
+            class_hit = None
+            for cls_name, triggers in classes_cfg.items():
+                if any(norm.startswith(self._normalize(t)) for t in triggers):
+                    class_hit = cls_name
+                    break
+            if class_hit:
+                current_class = class_hit
+                pending_description = ''
+                continue
+
+            # Detect rate type
+            rate_hit = None
+            for rt_name, triggers in rate_types_cfg.items():
+                if norm in [self._normalize(t) for t in triggers]:
+                    rate_hit = rt_name
+                    break
+            if rate_hit:
+                current_rate_type = rate_hit
+                pending_description = ''
+                continue
+
+            # Split line into tokens: count trailing data tokens (numbers/dashes)
+            tokens = line.split()
+            data_count = 0
+            trailing_vals = []
+            for tok in reversed(tokens):
+                v = self._parse_number(tok)
+                if v is not None or tok in ('–', '—', '-'):
+                    trailing_vals.insert(0, v if v is not None else 0.0)
+                    data_count += 1
+                else:
+                    break
+
+            if data_count < n_buckets:
+                if data_count < max(2, n_buckets // 2):
+                    pending_description = line
+                else:
+                    pending_description = ''
+                continue
+
+            vals = trailing_vals[-n_buckets:]
+            description = ' '.join(tokens[:-n_buckets])
+
+            # Multi-line: prepend pending if description is a continuation
+            if pending_description and (
+                description.startswith('+') or
+                description.startswith('(') or
+                len(description) < 15
+            ):
+                description = pending_description + ' ' + description
+            pending_description = ''
+
+            if not description or description.isdigit():
+                continue
+            if not any(c.isalpha() for c in description):
+                continue
+
+            instrument = {
+                'schedule_year': schedule_year,
+                'instrument_class': current_class,
+                'rate_type': current_rate_type,
+                'rate_description': description,
+            }
+            for name, val in zip(bucket_names, vals):
+                instrument[name] = val
+
+            instruments.append(instrument)
+
+        return instruments, schedule_year, warnings
+
+    def _parse_pivot_text(self, page_text: str, sec_cfg: dict):
+        """Parse pivot table from page text lines.
+        Each data line: label followed by N numbers (one per category).
+        Categories detected from header line (e.g. 'USD million buildings equipment ...')."""
+        blocks_cfg = sec_cfg.get('pivot_blocks', {})
+        movements_cfg = sec_cfg.get('pivot_movements', {})
+        cat_names = sec_cfg.get('pivot_categories')  # optional explicit list
+
+        warnings = []
+        lines = page_text.split('\n')
+        num_re = re.compile(r'[\d,.()\-–—]+')
+
+        # Detect category count from data lines (most common trailing number count)
+        # Skip year-like numbers (2015-2030) — they're labels, not data
+        def _trailing_data_nums(nums_list):
+            result = []
+            for n in reversed(nums_list):
+                v = self._parse_number(n)
+                if v is not None and not (2015 <= v <= 2030):
+                    result.insert(0, v)
+                elif n in ('–', '—', '-'):
+                    result.insert(0, 0.0)
+                else:
+                    break
+            return result
+
+        val_counts = []
+        for line in lines:
+            nums = num_re.findall(line)
+            trailing = _trailing_data_nums(nums)
+            if trailing:
+                val_counts.append(len(trailing))
+        if not val_counts:
+            return {}, [], ['no data lines found']
+        # Most common count = number of categories
+        from collections import Counter
+        n_cats = Counter(val_counts).most_common(1)[0][0]
+
+        # If no explicit category names, generate positional ones
+        if not cat_names:
+            # Try to find header line: contains "USD million" or "Total"
+            for line in lines:
+                if 'total' in line.lower() and ('million' in line.lower() or 'usd' in line.lower()):
+                    parts = line.split()
+                    # Take the last n_cats words as category names
+                    if len(parts) >= n_cats:
+                        cat_names = [re.sub(r'[^a-z0-9]+', '_', w.lower()).strip('_')
+                                     for w in parts[-n_cats:]]
+                    break
+        if not cat_names:
+            cat_names = [f'cat_{i}' for i in range(n_cats)]
+            # Always include 'total' as last
+            cat_names[-1] = 'total'
+
+        # Parse data lines
+        data = {}
+        current_block = None
+        current_year = None
+
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            norm = self._normalize(line)
+
+            # Block switch
+            block_hit = False
+            for bname, triggers in blocks_cfg.items():
+                if any(self._normalize(t) in norm for t in triggers):
+                    current_block = bname
+                    if current_block not in data:
+                        data[current_block] = {}
+                    block_hit = True
+                    break
+            if block_hit:
+                continue
+
+            if current_block is None:
+                continue
+
+            # Extract trailing data numbers (skip years)
+            all_nums = num_re.findall(line)
+            trailing_vals = _trailing_data_nums(all_nums)
+
+            # Get label (everything before trailing data numbers)
+            if trailing_vals and len(trailing_vals) >= n_cats:
+                vals = trailing_vals[-n_cats:]
+                # Remove only data numbers from right to get label
+                label = line
+                data_nums = [n for n in all_nums
+                             if self._parse_number(n) is not None
+                             and not (2015 <= (self._parse_number(n) or 0) <= 2030)]
+                for n in reversed(data_nums[-n_cats:]):
+                    idx = label.rfind(n)
+                    if idx >= 0:
+                        label = label[:idx]
+                label = label.strip()
+            else:
+                label = line
+                vals = None
+
+            if not label:
+                continue
+
+            # Opening balance detection (sets year)
+            year_m = re.search(r'\b(20\d{2})\b', label)
+            if year_m:
+                opening_triggers = movements_cfg.get('opening',
+                    ['balance at 1 january', 'at beginning'])
+                norm_label = self._normalize(label)
+                if any(self._normalize(t) in norm_label for t in opening_triggers):
+                    current_year = int(year_m.group(1))
+                    if current_year not in data[current_block]:
+                        data[current_block][current_year] = {}
+                    continue
+
+            if current_year is None or vals is None:
+                continue
+
+            # Match movement
+            norm_label = self._normalize(label)
+            matched = None
+            for mname, triggers in movements_cfg.items():
+                if mname == 'opening':
+                    continue
+                if any(self._normalize(t) in norm_label for t in triggers):
+                    matched = mname
+                    break
+
+            if matched is None:
+                continue
+
+            # Store values per category
+            cat_vals = {}
+            for ci, cat in enumerate(cat_names):
+                if ci < len(vals):
+                    cat_vals[cat] = vals[ci]
+            if cat_vals:
+                data[current_block].setdefault(current_year, {})[matched] = cat_vals
+
+        return data, cat_names, warnings
+
+    # ─── Text-line table builder ────────────────────────────────────
+
+    @staticmethod
+    def _build_text_table(page_text: str) -> list:
+        """Build a virtual table from page text lines.
+        Finds year header, then splits data lines into [metric, val1, val2, ...].
+        Used as fallback when pdfplumber splits columns badly (Notes pages)."""
+        lines = page_text.split('\n')
+        year_re = re.compile(r'\b(20\d{2})\b')
+
+        # Find line with 2+ years — serves as column header
+        years = []
+        data_start = 0
+        for i, line in enumerate(lines):
+            line_years = sorted(set(
+                int(m.group(1)) for m in year_re.finditer(line)
+                if 2015 <= int(m.group(1)) <= 2030
+            ), reverse=True)
+            if len(line_years) >= 2:
+                years = line_years
+                data_start = i + 1
+                break
+
+        if not years:
+            return []
+
+        # Build virtual table: header row with years, then data rows
+        header = [''] + [str(y) for y in years]
+        rows = [header]
+
+        for line in lines[data_start:]:
+            line = line.strip()
+            if not line:
+                continue
+            m = re.match(
+                r'^(.*?)\s+'
+                r'([\d,.()\-–—]+(?:\s+[\d,.()\-–—]+)*)\s*$',
+                line)
+            if m:
+                text_part = m.group(1).strip()
+                nums = m.group(2).strip().split()
+                rows.append([text_part] + nums)
+            else:
+                rows.append([line])
+
+        return rows if len(rows) > 1 else []
+
+    # ─── Wide pivot table parser ─────────────────────────────────
+
+    def _parse_wide_pivot_text(self, page_text: str, sec_cfg: dict):
+        """Parse wide-format pivot: years in column headers, not row labels.
+        E.g. Note 15: [JV_2024, Assoc_2024, Total_2024, JV_2023, Assoc_2023, Total_2023]."""
+        movements_cfg = sec_cfg.get('pivot_movements', {})
+        blocks_cfg = sec_cfg.get('pivot_blocks', {})
+        skip_patterns = [self._normalize(p.lstrip('^'))
+                         for p in sec_cfg.get('skip_rows', [])]
+        categories = sec_cfg.get('pivot_categories', [])
+        n_cats = len(categories)
+
+        warnings = []
+
+        # Detect years from header line with 2+ years
+        year_re = re.compile(r'\b(20\d{2})\b')
+        years = []
+        for line in page_text.split('\n'):
+            line_years = sorted(set(
+                int(m.group(1)) for m in year_re.finditer(line)
+                if 2010 <= int(m.group(1)) <= 2030
+            ), reverse=True)
+            if len(line_years) >= 2:
+                years = line_years[:2]
+                break
+
+        if not years:
+            return {}, categories, ['wide_pivot: no years detected']
+
+        expected_nums = n_cats * len(years)
+
+        # Parse lines
+        data = {}
+        current_block = list(blocks_cfg.keys())[0] if blocks_cfg else 'default'
+
+        for line in page_text.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            norm = self._normalize(line)
+
+            if any(norm.startswith(p) for p in skip_patterns):
+                continue
+            if len(norm) < 3:
+                continue
+
+            # Extract trailing numbers (token-based, skip year-like)
+            tokens = line.split()
+            data_count = 0
+            trailing = []
+            for tok in reversed(tokens):
+                v = self._parse_number(tok)
+                if v is not None or tok in ('–', '—', '-'):
+                    trailing.insert(0, v if v is not None else 0.0)
+                    data_count += 1
+                else:
+                    break
+
+            if data_count < expected_nums:
+                continue
+
+            vals = trailing[-expected_nums:]
+            label = ' '.join(tokens[:-expected_nums])
+
+            if not label or not any(c.isalpha() for c in label):
+                continue
+
+            # Match to movement
+            norm_label = self._normalize(label)
+            matched_mv = None
+            for mname, triggers in movements_cfg.items():
+                if any(self._normalize(t) in norm_label for t in triggers):
+                    matched_mv = mname
+                    break
+
+            if matched_mv is None:
+                continue
+
+            # Map values: first n_cats = year[0], next n_cats = year[1], etc.
+            if current_block not in data:
+                data[current_block] = {}
+
+            for yr_idx, year in enumerate(years):
+                if year not in data[current_block]:
+                    data[current_block][year] = {}
+                cat_vals = {}
+                for cat_idx, cat_name in enumerate(categories):
+                    num_idx = yr_idx * n_cats + cat_idx
+                    if num_idx < len(vals):
+                        cat_vals[cat_name] = vals[num_idx]
+                if cat_vals:
+                    data[current_block][year][matched_mv] = cat_vals
+
+        return data, categories, warnings
+
+    # ─── Page finding ─────────────────────────────────────────────
+
+    def _find_target_page(self, pdf, sec_cfg) -> Optional[int]:
+        triggers = sec_cfg.get('page_triggers', [])
+        anti = sec_cfg.get('page_anti_triggers', [])
+        anchors = sec_cfg.get('section_anchors', [])
+
+        for i, page in enumerate(pdf.pages[:80]):
+            text = page.extract_text() or ''
+            text_low = text.lower()
+
+            if not any(t.lower() in text_low for t in triggers):
+                continue
+            if any(a.lower() in text_low for a in anti):
+                continue
+
+            # Must have numbers (financial data, not TOC)
+            if not re.search(r'\d{1,3}(?:,\d{3})+|\(\d', text):
+                continue
+
+            # Anchor filter — ALL anchors must appear on page (normalized)
+            if anchors:
+                norm_text = self._normalize(text)
+                if not all(self._normalize(a) in norm_text for a in anchors):
+                    continue
+
+            return i
+
+        # Fallback: any page with trigger
+        for i, page in enumerate(pdf.pages[:80]):
+            text = page.extract_text() or ''
+            if any(t.lower() in text.lower() for t in triggers):
+                return i
+
+        return None
+
+    # ─── Year column auto-detection ───────────────────────────────
+
+    def _detect_year_columns(self, table, page_text: str = '') -> list:
+        """Scan first 5 rows for 4-digit years. Return [(col_idx, year), ...].
+        Also uses page_text to find years, then maps to numeric columns."""
+        year_re = re.compile(r'\b(20\d{2})\b')
+        col_to_year = {}
+
+        # Strategy 1: scan table header rows
+        for row in table[:5]:
+            for col_idx, cell in enumerate(row):
+                if cell is None:
+                    continue
+                m = year_re.search(str(cell))
+                if m:
+                    y = int(m.group(1))
+                    if 2015 <= y <= 2030 and col_idx not in col_to_year:
+                        col_to_year[col_idx] = y
+
+        if col_to_year:
+            # Validate: year columns must have numeric data in body rows
+            validated = {}
+            for ci, yr in col_to_year.items():
+                has_data = any(
+                    ci < len(row) and row[ci]
+                    and re.search(r'\d', str(row[ci]))
+                    for row in table[5:20]
+                )
+                if has_data:
+                    validated[ci] = yr
+            if validated:
+                return sorted(validated.items())
+
+        # Strategy 2: get years from page text, then map to numeric columns
+        all_years = set()
+        # From page text
+        if page_text:
+            for m in year_re.finditer(page_text):
+                y = int(m.group(1))
+                if 2015 <= y <= 2030:
+                    all_years.add(y)
+        # Also from table cells
+        for row in table[:10]:
+            for cell in row:
+                if cell:
+                    for m in year_re.finditer(str(cell)):
+                        y = int(m.group(1))
+                        if 2015 <= y <= 2030:
+                            all_years.add(y)
+
+        if all_years:
+            # Assign years to the last N numeric columns
+            years_sorted = sorted(all_years, reverse=True)
+            # Find columns that consistently have numeric data
+            num_cols = []
+            for col_idx in range(len(table[0]) if table else 0):
+                has_nums = sum(1 for row in table[2:15]
+                             if col_idx < len(row) and row[col_idx]
+                             and re.search(r'\d', str(row[col_idx])))
+                if has_nums >= 3:
+                    num_cols.append(col_idx)
+            # Map years to rightmost numeric columns
+            num_cols = sorted(num_cols)[-len(years_sorted):]
+            for ci, yr in zip(num_cols, years_sorted):
+                col_to_year[ci] = yr
+            if col_to_year:
+                return sorted(col_to_year.items())
+
+        # Strategy 3: fallback from yaml columns hint
+        # (backward compat with Phase 4a yaml: year_cols_from)
+        sec_cfg = None
+        for sec_name, sec_val in (self.adapter.get('sections') or {}).items():
+            if sec_val and 'columns' in sec_val:
+                sec_cfg = sec_val
+                break
+        if sec_cfg:
+            cols_cfg = sec_cfg.get('columns', {})
+            ycf = cols_cfg.get('year_cols_from')
+            n_years = cols_cfg.get('expected_year_count', 2)
+            if ycf is not None:
+                # Use most recent years as default
+                import datetime
+                cur_year = datetime.datetime.now().year
+                for i in range(n_years):
+                    col_to_year[ycf + i] = cur_year - i
+                return sorted(col_to_year.items())
+
+        return []
+
+    # ─── Row mapping (section-aware) ──────────────────────────────
+
+    def _map_rows(self, table, sec_cfg, year_cols):
+        rows_cfg = sec_cfg.get('rows', {})
+        section_markers = sec_cfg.get('section_markers', {})
+
+        # First year column index — everything before it is metric text
+        first_year_col = min(c for c, _ in year_cols) if year_cols else len(table[0]) if table else 1
+
+        # Pre-compile row patterns (already normalized in yaml for Phase 4a-v2 format)
+        compiled = {}
+        for canonical, spec in rows_cfg.items():
+            patterns = spec.get('patterns', [])
+            # Normalize patterns: remove whitespace, lowercase
+            norm_patterns = [re.compile(self._normalize(p)) for p in patterns]
+            compiled[canonical] = {
+                'patterns': norm_patterns,
+                'sign': spec.get('sign', 'natural'),
+                'sections': spec.get('sections'),
+                'combine_from': spec.get('combine_from'),
+            }
+
+        # Pre-compile section markers
+        compiled_markers = {
+            name: [self._normalize(p) for p in phrases]
+            for name, phrases in section_markers.items()
+        }
+
+        metrics = {}
+        unmatched = []
+        matched_canonicals = set()
+        current_section = None
+
+        for row in table:
+            if not row:
+                continue
+
+            # Merge metric text from all columns before first year column
+            metric_parts = []
+            for ci in range(min(first_year_col, len(row))):
+                cell = str(row[ci] or '').strip()
+                if cell:
+                    metric_parts.append(cell)
+            metric_raw = ' '.join(metric_parts).strip()
+            if not metric_raw:
+                continue
+
+            norm = self._normalize(metric_raw)
+
+            # Skip pure numbers / very short
+            if len(norm) < 3 or re.match(r'^\d+$', norm):
+                continue
+
+            # Section marker detection
+            marker_hit = False
+            for section_name, norm_phrases in compiled_markers.items():
+                if any(norm.startswith(p) for p in norm_phrases):
+                    current_section = section_name
+                    marker_hit = True
+                    break
+            if marker_hit:
+                continue
+
+            # Match against canonicals
+            matched_canonical = None
+            for canonical, spec in compiled.items():
+                if canonical in matched_canonicals:
+                    continue
+                if spec['sections'] is not None and current_section not in (spec['sections'] if isinstance(spec['sections'], list) else [spec['sections']]):
+                    continue
+                if any(p.search(norm) for p in spec['patterns']):
+                    matched_canonical = canonical
+                    matched_canonicals.add(canonical)
+                    break
+
+            if matched_canonical is None:
+                if any(c.isalpha() for c in metric_raw) and len(metric_raw) > 3:
+                    unmatched.append(metric_raw)
+                continue
+
+            # Extract year values
+            sign = compiled[matched_canonical]['sign']
+            year_values = {}
+            for col_idx, year in year_cols:
+                if col_idx >= len(row):
+                    continue
+                val = self._parse_number(row[col_idx])
+                if val is None:
+                    continue
+                if sign == 'abs':
+                    val = abs(val)
+                year_values[year] = val
+
+            if year_values:
+                if matched_canonical in metrics:
+                    metrics[matched_canonical].update(year_values)
+                else:
+                    metrics[matched_canonical] = year_values
+
+        # ─── combine_from pass ────────────────────────────────────
+        for canonical, spec in compiled.items():
+            cf = spec.get('combine_from')
+            if not cf:
+                continue
+            component_metrics = [metrics.get(c, {}) for c in cf]
+            years_sets = [set(cm.keys()) for cm in component_metrics]
+            if not years_sets:
+                continue
+            common_years = set.intersection(*years_sets)
+            if not common_years:
+                continue
+            agg = {}
+            for y in sorted(common_years):
+                agg[y] = sum(cm[y] for cm in component_metrics)
+            if canonical in metrics:
+                metrics[canonical].update(agg)
+            else:
+                metrics[canonical] = agg
+
+        # ─── Filter helper rows (prefixed '_') out of final result ────
+        metrics = {k: v for k, v in metrics.items() if not k.startswith('_')}
+
+        return metrics, unmatched
+
+    # ─── Number parsing ───────────────────────────────────────────
+
+    def _parse_number(self, raw) -> Optional[float]:
+        if raw is None:
+            return None
+        s = str(raw).strip()
+        if s in ('', '—', '-', '–', 'n/a', 'N/A'):
+            return None
+        neg = False
+        if s.startswith('(') and s.endswith(')'):
+            neg = True
+            s = s[1:-1]
+        s = s.replace(self.thousands, '').replace(' ', '').replace('\xa0', '')
+        s = re.sub(r'[^0-9.\-]', '', s)
+        if not s:
+            return None
+        try:
+            v = float(s)
+        except ValueError:
+            return None
+        return -v if neg else v

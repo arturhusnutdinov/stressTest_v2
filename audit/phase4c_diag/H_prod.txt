@@ -1,0 +1,2 @@
+us_steel: BS=0.000004
+rusal: BS=0.000004

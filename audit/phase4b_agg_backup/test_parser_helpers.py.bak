@@ -1,0 +1,70 @@
+"""Unit tests for Phase 4b-i parser upgrades."""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from parsers.pdf_parser import PDFParser
+
+def _p():
+    return PDFParser(Path('parsers/adapters/rusal.yaml'))
+
+def test_detect_year_columns_simple():
+    table = [['', '', '', '2024', '', '2023'], ['Revenue', None, None, '12,082', None, '12,213']]
+    assert _p()._detect_year_columns(table) == [(3, 2024), (5, 2023)]
+
+def test_detect_year_columns_embedded_text():
+    table = [['', '', '', '31 December 2024', '', '31 December 2023']]
+    assert _p()._detect_year_columns(table) == [(3, 2024), (5, 2023)]
+
+def test_detect_year_columns_bs_layout():
+    table = [['', '', '', '', '2024', '', '2023', ''], ['', '', '', 'Note', 'USD million', '', 'USD million', '']]
+    assert _p()._detect_year_columns(table) == [(4, 2024), (6, 2023)]
+
+def test_parse_number_parens():
+    p = _p()
+    assert p._parse_number('(1,234)') == -1234.0
+    assert p._parse_number('1,234') == 1234.0
+    assert p._parse_number('0') == 0.0
+
+def test_parse_number_nulls():
+    p = _p()
+    for v in ['—', '-', '–', 'n/a', 'N/A', '', None, '   ']:
+        assert p._parse_number(v) is None, f'expected None for {v!r}'
+
+def test_normalize():
+    assert PDFParser._normalize('Cost of sales') == 'costofsales'
+    assert PDFParser._normalize('Property, plant and equipment') == 'property,plantandequipment'
+    assert PDFParser._normalize('') == ''
+    assert PDFParser._normalize(None) == ''
+
+def test_normalize_preserves_digits():
+    assert PDFParser._normalize('Note 5') == 'note5'
+    assert PDFParser._normalize('(1,234)') == '(1,234)'
+
+if __name__ == '__main__':
+    import traceback
+    tests = [v for k, v in list(globals().items()) if k.startswith('test_')]
+    passed = failed = 0
+    for t in tests:
+        try:
+            t(); print(f'  ✓ {t.__name__}'); passed += 1
+        except Exception:
+            print(f'  ✗ {t.__name__}'); traceback.print_exc(); failed += 1
+    print(f'\n{passed} passed, {failed} failed')
+    import sys; sys.exit(0 if failed == 0 else 1)
+
+
+# ─── Added in Phase 4b-i FIX ───────────────────────────────────
+
+def test_smoke_file_exists():
+    """Smoke test must be a REAL file, not inline heredoc."""
+    p = Path('parsers/tests/smoke_rusal_is_2024.py')
+    assert p.exists(), f'Smoke test file MUST exist: {p}'
+    assert p.stat().st_size > 1000, f'Smoke test too small: {p.stat().st_size} bytes'
+
+
+def test_yaml_no_dollar_after_letters():
+    """yaml patterns should not use $ directly after letters."""
+    import re as _re
+    yaml_text = Path('parsers/adapters/rusal.yaml').read_text()
+    dangerous = _re.findall(r'"[^"]*[a-z)]\$"', yaml_text)
+    assert not dangerous, f'Dangerous anchored patterns: {dangerous}'

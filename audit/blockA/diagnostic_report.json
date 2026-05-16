@@ -1,0 +1,9 @@
+{
+  "missing_2024": [],
+  "missing_2023": [],
+  "missing_2022": [
+    "history_cf.wc_inventory",
+    "history_cf.wc_receivables",
+    "history_cf.wc_payables"
+  ]
+}

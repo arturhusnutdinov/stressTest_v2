@@ -1,0 +1,230 @@
+{
+  "section": "NOTE_13_PPE",
+  "page_used": 35,
+  "categories": [
+    "buildings",
+    "equipment",
+    "lysers",
+    "other",
+    "assets",
+    "progress",
+    "total"
+  ],
+  "blocks": [
+    "cost",
+    "accum_dep"
+  ],
+  "data": {
+    "cost": {
+      "2023": {
+        "additions": {
+          "buildings": 18.0,
+          "equipment": 63.0,
+          "lysers": 0.0,
+          "other": 12.0,
+          "assets": 45.0,
+          "progress": 983.0,
+          "total": 1121.0
+        },
+        "disposals": {
+          "buildings": -221.0,
+          "equipment": -355.0,
+          "lysers": -1938.0,
+          "other": -5.0,
+          "assets": -40.0,
+          "progress": -65.0,
+          "total": -2624.0
+        },
+        "transfers": {
+          "buildings": 172.0,
+          "equipment": 372.0,
+          "lysers": 179.0,
+          "other": 9.0,
+          "assets": 19.0,
+          "progress": -751.0,
+          "total": 0.0
+        },
+        "fx": {
+          "buildings": -167.0,
+          "equipment": -186.0,
+          "lysers": -31.0,
+          "other": -2.0,
+          "assets": -66.0,
+          "progress": -159.0,
+          "total": -611.0
+        },
+        "closing": {
+          "buildings": 3954.0,
+          "equipment": 7398.0,
+          "lysers": 1508.0,
+          "other": 205.0,
+          "assets": 394.0,
+          "progress": 3055.0,
+          "total": 16514.0
+        }
+      },
+      "2024": {
+        "additions": {
+          "buildings": 14.0,
+          "equipment": 120.0,
+          "lysers": 1.0,
+          "other": 3.0,
+          "assets": 27.0,
+          "progress": 1338.0,
+          "total": 1503.0
+        },
+        "disposals": {
+          "buildings": -13.0,
+          "equipment": -84.0,
+          "lysers": -137.0,
+          "other": -1.0,
+          "assets": -47.0,
+          "progress": -8.0,
+          "total": -290.0
+        },
+        "transfers": {
+          "buildings": 523.0,
+          "equipment": 528.0,
+          "lysers": 490.0,
+          "other": 40.0,
+          "assets": 0.0,
+          "progress": -1581.0,
+          "total": 0.0
+        },
+        "fx": {
+          "buildings": -99.0,
+          "equipment": -124.0,
+          "lysers": -23.0,
+          "other": -3.0,
+          "assets": -33.0,
+          "progress": -104.0,
+          "total": -386.0
+        },
+        "closing": {
+          "buildings": 4379.0,
+          "equipment": 7838.0,
+          "lysers": 1839.0,
+          "other": 244.0,
+          "assets": 341.0,
+          "progress": 2700.0,
+          "total": 17341.0
+        }
+      }
+    },
+    "accum_dep": {
+      "2023": {
+        "depreciation_charge": {
+          "buildings": 105.0,
+          "equipment": 250.0,
+          "lysers": 175.0,
+          "other": 7.0,
+          "assets": 5.0,
+          "progress": 0.0,
+          "total": 542.0
+        },
+        "impairment": {
+          "buildings": -9.0,
+          "equipment": 74.0,
+          "lysers": 22.0,
+          "other": 3.0,
+          "assets": 25.0,
+          "progress": 149.0,
+          "total": 264.0
+        },
+        "disposals": {
+          "buildings": -211.0,
+          "equipment": -339.0,
+          "lysers": -1938.0,
+          "other": -3.0,
+          "assets": -6.0,
+          "progress": -46.0,
+          "total": -2543.0
+        },
+        "transfers": {
+          "buildings": 0.0,
+          "equipment": 0.0,
+          "lysers": 0.0,
+          "other": 0.0,
+          "assets": 0.0,
+          "progress": 0.0,
+          "total": 0.0
+        },
+        "fx": {
+          "buildings": -77.0,
+          "equipment": -131.0,
+          "lysers": -26.0,
+          "other": 1.0,
+          "assets": -65.0,
+          "progress": -51.0,
+          "total": -349.0
+        },
+        "closing": {
+          "buildings": 2304.0,
+          "equipment": 6048.0,
+          "lysers": 1047.0,
+          "other": 168.0,
+          "assets": 379.0,
+          "progress": 762.0,
+          "total": 10708.0
+        }
+      },
+      "2024": {
+        "depreciation_charge": {
+          "buildings": 129.0,
+          "equipment": 239.0,
+          "lysers": 188.0,
+          "other": 6.0,
+          "assets": -6.0,
+          "progress": 0.0,
+          "total": 556.0
+        },
+        "impairment": {
+          "buildings": 55.0,
+          "equipment": 188.0,
+          "lysers": 93.0,
+          "other": 4.0,
+          "assets": -18.0,
+          "progress": 218.0,
+          "total": 540.0
+        },
+        "disposals": {
+          "buildings": -5.0,
+          "equipment": -74.0,
+          "lysers": -137.0,
+          "other": -2.0,
+          "assets": 0.0,
+          "progress": 0.0,
+          "total": -218.0
+        },
+        "transfers": {
+          "buildings": 0.0,
+          "equipment": 0.0,
+          "lysers": 0.0,
+          "other": 0.0,
+          "assets": 0.0,
+          "progress": 0.0,
+          "total": 0.0
+        },
+        "fx": {
+          "buildings": -57.0,
+          "equipment": -107.0,
+          "lysers": -20.0,
+          "other": 0.0,
+          "assets": -32.0,
+          "progress": -34.0,
+          "total": -250.0
+        },
+        "closing": {
+          "buildings": 2426.0,
+          "equipment": 6294.0,
+          "lysers": 1171.0,
+          "other": 176.0,
+          "assets": 323.0,
+          "progress": 946.0,
+          "total": 11336.0
+        }
+      }
+    }
+  },
+  "warnings": []
+}

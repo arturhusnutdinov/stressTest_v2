@@ -1,0 +1,358 @@
+{
+  "file": "3-Statement Model (Template)_Rusal_1.xlsb",
+  "sheets": {
+    "Cover": {
+      "dims": [
+        40,
+        24
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Outputs": {
+      "dims": [
+        50,
+        18
+      ],
+      "years_detected": [
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026,
+        2027,
+        2028
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Заключение": {
+      "dims": [
+        226,
+        13
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Outputs-R": {
+      "dims": [
+        50,
+        20
+      ],
+      "years_detected": [
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026,
+        2027,
+        2028
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Inputs": {
+      "dims": [
+        128,
+        14
+      ],
+      "years_detected": [
+        2024,
+        2025,
+        2026,
+        2027,
+        2028
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Inputs-R": {
+      "dims": [
+        67,
+        17
+      ],
+      "years_detected": [
+        2023,
+        2024,
+        2025,
+        2026,
+        2027
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "_REPORT": {
+      "dims": [
+        107,
+        15
+      ],
+      "years_detected": [
+        2020,
+        2021,
+        2022,
+        2023,
+        2024
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Pyramid Analysis Solution": {
+      "dims": [
+        180,
+        24
+      ],
+      "years_detected": [
+        2020,
+        2021,
+        2022,
+        2023,
+        2024
+      ],
+      "metrics_count": 1,
+      "sample_metrics": [
+        "Pyramid Analysis Solution"
+      ]
+    },
+    "Model": {
+      "dims": [
+        247,
+        16
+      ],
+      "years_detected": [
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026,
+        2027,
+        2028
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Financial Statements": {
+      "dims": [
+        750,
+        21
+      ],
+      "years_detected": [
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026,
+        2027,
+        2028,
+        2029
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Scenarios": {
+      "dims": [
+        169,
+        16
+      ],
+      "years_detected": [
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026,
+        2027,
+        2028,
+        2029
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Raw Data_": {
+      "dims": [
+        680,
+        24
+      ],
+      "years_detected": [
+        2020,
+        2021,
+        2022,
+        2023,
+        2024
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Control Panel": {
+      "dims": [
+        83,
+        23
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Provisions": {
+      "dims": [
+        55,
+        15
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Loans and Borrowings": {
+      "dims": [
+        67,
+        10
+      ],
+      "years_detected": [
+        2024,
+        2025,
+        2026,
+        2027,
+        2028,
+        2029
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Bonds": {
+      "dims": [
+        58,
+        12
+      ],
+      "years_detected": [
+        2023,
+        2024,
+        2025
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Macro Data": {
+      "dims": [
+        18,
+        10
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Deferred Taxes expl": {
+      "dims": [
+        7,
+        2
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "ZC_USD_2023": {
+      "dims": [
+        252,
+        25
+      ],
+      "years_detected": [],
+      "metrics_count": 79,
+      "sample_metrics": [
+        "Date",
+        "12/29/2023",
+        "12/28/2023",
+        "12/27/2023",
+        "12/26/2023",
+        "12/22/2023",
+        "12/21/2023",
+        "12/20/2023",
+        "12/19/2023",
+        "12/18/2023",
+        "12/15/2023",
+        "12/14/2023",
+        "12/13/2023",
+        "12/12/2023",
+        "12/11/2023",
+        "12/08/2023",
+        "12/07/2023",
+        "12/06/2023",
+        "12/05/2023",
+        "12/04/2023"
+      ]
+    },
+    "ZC_USD_2024": {
+      "dims": [
+        252,
+        14
+      ],
+      "years_detected": [],
+      "metrics_count": 79,
+      "sample_metrics": [
+        "Date",
+        "12/31/2024",
+        "12/30/2024",
+        "12/27/2024",
+        "12/26/2024",
+        "12/24/2024",
+        "12/23/2024",
+        "12/20/2024",
+        "12/19/2024",
+        "12/18/2024",
+        "12/17/2024",
+        "12/16/2024",
+        "12/13/2024",
+        "12/12/2024",
+        "12/11/2024",
+        "12/10/2024",
+        "12/09/2024",
+        "12/06/2024",
+        "12/05/2024",
+        "12/04/2024"
+      ]
+    },
+    "Methods": {
+      "dims": [
+        26,
+        8
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Лист3": {
+      "dims": [
+        0,
+        0
+      ],
+      "years_detected": [],
+      "metrics_count": 0,
+      "sample_metrics": []
+    },
+    "Model-R": {
+      "dims": [
+        445,
+        22
+      ],
+      "years_detected": [
+        2021,
+        2022,
+        2023,
+        2024,
+        2025,
+        2026,
+        2027,
+        2028
+      ],
+      "metrics_count": 0,
+      "sample_metrics": []
+    }
+  }
+}

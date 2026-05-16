@@ -1,0 +1,76 @@
+{
+  "page": 44,
+  "cats": [
+    "jv",
+    "associates",
+    "total"
+  ],
+  "data": {
+    "investments": {
+      "2024": {
+        "opening": {
+          "jv": 850.0,
+          "associates": 3671.0,
+          "total": 4521.0
+        },
+        "share_of_profits": {
+          "jv": 217.0,
+          "associates": 347.0,
+          "total": 564.0
+        },
+        "dividends": {
+          "jv": -34.0,
+          "associates": 0.0,
+          "total": -34.0
+        },
+        "fx": {
+          "jv": -94.0,
+          "associates": -402.0,
+          "total": -496.0
+        },
+        "unrealised": {
+          "jv": -3.0,
+          "associates": 0.0,
+          "total": -3.0
+        },
+        "closing": {
+          "jv": 1252.0,
+          "associates": 3616.0,
+          "total": 4868.0
+        }
+      },
+      "2023": {
+        "opening": {
+          "jv": 888.0,
+          "associates": 4286.0,
+          "total": 5174.0
+        },
+        "share_of_profits": {
+          "jv": 123.0,
+          "associates": 629.0,
+          "total": 752.0
+        },
+        "dividends": {
+          "jv": 0.0,
+          "associates": -398.0,
+          "total": -398.0
+        },
+        "fx": {
+          "jv": -161.0,
+          "associates": -846.0,
+          "total": -1007.0
+        },
+        "unrealised": {
+          "jv": 0.0,
+          "associates": 0.0,
+          "total": 0.0
+        },
+        "closing": {
+          "jv": 850.0,
+          "associates": 3671.0,
+          "total": 4521.0
+        }
+      }
+    }
+  }
+}

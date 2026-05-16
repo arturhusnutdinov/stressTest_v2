@@ -1,0 +1,113 @@
+# Rusal — PDF Parser Adapter
+# Companion to parsers/pdf_parser.py
+# Language: EN (primary), RU (Phase 4c)
+
+meta:
+  company_id: rusal
+  reporting_unit: mUSD
+  decimal_separator: "."
+  thousands_separator: ","
+  negative_style: parens
+
+sections:
+  IS:
+    page_triggers:
+      - "Consolidated Statement of Income"
+      - "Consolidated Statement of Comprehensive Income"
+      - "Consolidated Statement of Profit or Loss"
+      - "Consolidated Income Statement"
+      - "CONSOLIDATED STATEMENT OF PROFIT OR LOSS"
+    page_anti_triggers:
+      - "Table of Contents"
+      - "Contents"
+      - "Index"
+    columns:
+      metric_col: 0
+      note_col: 3
+      year_cols_from: 4
+      expected_year_count: 2
+    rows:
+      revenue:
+        patterns:
+          - "^Revenue$"
+          - "^Total revenue"
+        sign: natural
+      cogs:
+        patterns:
+          - "^Cost of sales"
+          - "^Cost of goods sold"
+        sign: abs
+      gross_profit:
+        patterns:
+          - "^Gross profit"
+        sign: natural
+      distribution_expenses:
+        patterns:
+          - "^Distribution expenses"
+          - "^Selling.*distribution"
+        sign: abs
+      sga:
+        patterns:
+          - "^Administrative expenses"
+          - "^General and administrative"
+        sign: abs
+      asset_impairment:
+        patterns:
+          - "^Impairment.*non.current assets"
+          - "^Impairment of property"
+          - "^Reversal of impairment"
+        sign: abs
+      earnings_from_investees:
+        patterns:
+          - "^Share of (profit|results).*associates"
+          - "^Share of (profits|results).*joint"
+        sign: natural
+      expected_credit_losses:
+        patterns:
+          - "^Expected credit loss"
+          - "^Impairment loss on trade"
+        sign: abs
+      other_operating_expenses:
+        patterns:
+          - "^Other.*operating"
+          - "^Other (losses|gains).*net"
+          - "^Net other"
+        sign: natural
+      ebit:
+        patterns:
+          - "^Results from operating"
+          - "^Operating profit"
+          - "^Profit from operations"
+        sign: natural
+      interest_income:
+        patterns:
+          - "^Finance income$"
+          - "^Interest income"
+        sign: natural
+      interest_expense:
+        patterns:
+          - "^Finance (expense|costs)$"
+          - "^Finance expenses"
+        sign: abs
+      ebt:
+        patterns:
+          - "^Profit.*before.*(income )?tax"
+          - "^Profit.*before taxation"
+          - "^Loss.*before.*(income )?tax"
+        sign: natural
+      tax_expense:
+        patterns:
+          - "^Income tax expense"
+          - "^Income tax"
+          - "^Taxation"
+        sign: abs
+      net_income:
+        patterns:
+          - "^Profit for the (year|period)$"
+          - "^Loss for the (year|period)$"
+          - "^Net (profit|loss) for the"
+          - "^\\(Loss\\)/profit for the"
+        sign: natural
+
+  BS: null
+  CF: null

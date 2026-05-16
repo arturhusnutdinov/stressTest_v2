@@ -1,0 +1,12 @@
+=== yaml line count progression ===
+audit/phase4b_ii_backup/rusal.yaml.bak:      110 lines
+audit/phase4b_agg_backup/rusal.yaml.bak:      214 lines
+audit/phase4b_iii_backup/rusal.yaml.bak:      301 lines
+audit/phase4c_inv_backup/rusal.yaml.bak:      490 lines
+Current:      514 lines
+
+=== yaml section structure (current) ===
+  IS: 16 rows, triggers=4, anchors=0, markers=0
+  BS: 38 rows, triggers=2, anchors=2, markers=5
+  CF: 34 rows, triggers=3, anchors=3, markers=3
+  NOTE_16_INVENTORY: 3 rows, triggers=1, anchors=2, markers=0

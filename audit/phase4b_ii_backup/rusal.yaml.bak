@@ -1,0 +1,110 @@
+# Rusal — PDF Parser Adapter (v2)
+# Language: EN (primary), RU (Phase 4c)
+
+meta:
+  company_id: rusal
+  reporting_unit: mUSD
+  decimal_separator: "."
+  thousands_separator: ","
+  negative_style: parens
+
+sections:
+
+  IS:
+    page_triggers:
+      - "Consolidated Statement of Income"
+      - "Consolidated Statement of Comprehensive Income"
+      - "Consolidated Statement of Profit or Loss"
+      - "Consolidated Income Statement"
+    page_anti_triggers:
+      - "Table of Contents"
+      - "Contents"
+      - "Index"
+    columns:
+      metric_col: 0
+      note_col: 3
+      year_cols_from: 4
+      expected_year_count: 2
+
+    rows:
+      revenue:
+        patterns:
+          - "^revenue"
+          - "^totalrevenue"
+      cogs:
+        patterns:
+          - "^costofsales"
+          - "^costofgoodssold"
+          - "^costofrevenue"
+      gross_profit:
+        patterns:
+          - "^grossprofit"
+      distribution_expenses:
+        patterns:
+          - "^distributionexpenses"
+          - "^selling.*distribution"
+      sga:
+        patterns:
+          - "^administrativeexpenses"
+          - "^generalandadministrative"
+      asset_impairment:
+        patterns:
+          - "^impairment.*non.?currentassets"
+          - "^impairmentofproperty"
+          - "^reversalofimpairment"
+      earnings_from_investees:
+        patterns:
+          - "^shareof(profit|results).*associates"
+          - "^shareof(profit|results).*joint"
+      expected_credit_losses:
+        patterns:
+          - "^expectedcreditloss"
+          - "^impairmentlossontrade"
+      other_operating_expenses:
+        patterns:
+          - "^netotheroperating"
+          - "^otheroperating"
+          - "^other(losses|gains).*net"
+      ebit:
+        patterns:
+          - "^resultsfromoperatingactivities"
+          - "^operatingprofit"
+          - "^profitfromoperations"
+      interest_income:
+        patterns:
+          - "^financeincome"
+          - "^interestincome"
+      interest_expense:
+        patterns:
+          - "^finance(expense|costs)"
+          - "^financeexpenses"
+      ebt:
+        patterns:
+          - "^profit.*beforetax"
+          - "^loss.*beforetax"
+          - "^profitbeforetax"
+      tax_expense:
+        patterns:
+          - "^incometaxexpense"
+          - "^incometax"
+          - "^taxation"
+      net_income:
+        patterns:
+          - "^profitfortheyear"
+          - "^lossfortheyear"
+          - "^netprofitforthe"
+          - "^\\(loss\\)/profitforthe"
+      ebitda:
+        patterns:
+          - "^adjustedebitda"
+          - "^ebitda"
+
+    notes_only:
+      - dep_ppe
+      - amort_intangibles
+      - total_da
+      - current_tax
+      - deferred_tax
+
+  BS: null
+  CF: null

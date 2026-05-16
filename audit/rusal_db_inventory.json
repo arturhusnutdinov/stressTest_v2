@@ -1,0 +1,530 @@
+{
+  "tables": {
+    "history_is": {
+      "amort_intangibles": {
+        "n_years": 10,
+        "min": 2011,
+        "max": 2025
+      },
+      "asset_impairment": {
+        "n_years": 14,
+        "min": 2011,
+        "max": 2025
+      },
+      "cogs": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "current_tax": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "deferred_tax": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "dep_ppe": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "distribution_expenses": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "earnings_from_investees": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "ebit": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "ebitda": {
+        "n_years": 11,
+        "min": 2015,
+        "max": 2025
+      },
+      "ebt": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "expected_credit_losses": {
+        "n_years": 1,
+        "min": 2024,
+        "max": 2024
+      },
+      "gross_profit": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "interest_expense": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "interest_income": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "net_income": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "other_operating_expenses": {
+        "n_years": 2,
+        "min": 2023,
+        "max": 2024
+      },
+      "revenue": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "sga": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "tax_expense": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "total_da": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      }
+    },
+    "history_bs": {
+      "accounts_payable": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "accounts_receivable": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "aoci": {
+        "n_years": 12,
+        "min": 2013,
+        "max": 2025
+      },
+      "apic": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "cash": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "dta": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "dtl": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "employee_benefits": {
+        "n_years": 14,
+        "min": 2011,
+        "max": 2024
+      },
+      "goodwill": {
+        "n_years": 7,
+        "min": 2015,
+        "max": 2024
+      },
+      "intangibles": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "inventory": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "investments_lt": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "lease_liab_current": {
+        "n_years": 1,
+        "min": 2024,
+        "max": 2024
+      },
+      "lease_liab_noncurrent": {
+        "n_years": 5,
+        "min": 2019,
+        "max": 2024
+      },
+      "long_term_debt": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "nci": {
+        "n_years": 3,
+        "min": 2017,
+        "max": 2025
+      },
+      "other_ca": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "other_ca_tax": {
+        "n_years": 3,
+        "min": 2023,
+        "max": 2025
+      },
+      "other_cl": {
+        "n_years": 11,
+        "min": 2014,
+        "max": 2025
+      },
+      "other_nca": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "other_ncl": {
+        "n_years": 11,
+        "min": 2014,
+        "max": 2025
+      },
+      "ppe_accum_dep": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "ppe_gross": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "ppe_net": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "retained_earnings": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "rou_asset": {
+        "n_years": 5,
+        "min": 2019,
+        "max": 2024
+      },
+      "share_capital": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "short_term_debt": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "taxes_payable": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "total_assets": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "total_ca": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "total_cl": {
+        "n_years": 11,
+        "min": 2014,
+        "max": 2025
+      },
+      "total_equity": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "total_liabilities": {
+        "n_years": 13,
+        "min": 2013,
+        "max": 2025
+      },
+      "total_nca": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "total_ncl": {
+        "n_years": 11,
+        "min": 2014,
+        "max": 2025
+      }
+    },
+    "history_cf": {
+      "acquisitions": {
+        "n_years": 2,
+        "min": 2024,
+        "max": 2025
+      },
+      "amortization": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "capex": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "capex_intangibles": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cash_closing": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cash_opening": {
+        "n_years": 12,
+        "min": 2014,
+        "max": 2025
+      },
+      "cff_dividends": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cff_lt_debt_issuance": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cff_lt_debt_repayment": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cff_total": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfi_other": {
+        "n_years": 5,
+        "min": 2021,
+        "max": 2025
+      },
+      "cfi_total": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfo_before_tax": {
+        "n_years": 12,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfo_before_wc": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfo_da": {
+        "n_years": 13,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfo_income_tax_paid": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfo_interest_paid": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "cfo_interest_received": {
+        "n_years": 4,
+        "min": 2015,
+        "max": 2024
+      },
+      "cfo_net_income": {
+        "n_years": 2,
+        "min": 2023,
+        "max": 2024
+      },
+      "cfo_total": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "deferred_income_taxes": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "depreciation": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "dividends_from_associates": {
+        "n_years": 11,
+        "min": 2014,
+        "max": 2025
+      },
+      "fin_lease_principal_cff": {
+        "n_years": 6,
+        "min": 2019,
+        "max": 2024
+      },
+      "fx_effect_cash": {
+        "n_years": 14,
+        "min": 2011,
+        "max": 2025
+      },
+      "fx_noncash": {
+        "n_years": 8,
+        "min": 2017,
+        "max": 2025
+      },
+      "impairment_noncash": {
+        "n_years": 13,
+        "min": 2011,
+        "max": 2025
+      },
+      "interest_income_noncash": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "interest_noncash": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "interest_paid": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "interest_received": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "net_change_cash": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "net_income": {
+        "n_years": 14,
+        "min": 2012,
+        "max": 2025
+      },
+      "op_lease_cash_cfo": {
+        "n_years": 6,
+        "min": 2019,
+        "max": 2024
+      },
+      "proceeds_borrowings": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "proceeds_ppe_disposal": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "refinancing_fees": {
+        "n_years": 12,
+        "min": 2013,
+        "max": 2025
+      },
+      "repayments_borrowings": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "share_associates_noncash": {
+        "n_years": 12,
+        "min": 2014,
+        "max": 2025
+      },
+      "tax_noncash": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "taxes_paid": {
+        "n_years": 7,
+        "min": 2019,
+        "max": 2025
+      },
+      "wc_inventory": {
+        "n_years": 9,
+        "min": 2011,
+        "max": 2025
+      },
+      "wc_payables": {
+        "n_years": 3,
+        "min": 2023,
+        "max": 2025
+      },
+      "wc_provisions": {
+        "n_years": 15,
+        "min": 2011,
+        "max": 2025
+      },
+      "wc_receivables": {
+        "n_years": 3,
+        "min": 2023,
+        "max": 2025
+      }
+    }
+  },
+  "debt_instruments": {
+    "count": 31,
+    "total_balance": 9604000000.0
+  },
+  "has_canonical_metrics_table": false,
+  "alias_checks": {
+    "depreciation_owned": 0,
+    "deferred_tax": 15,
+    "deferred_tax_expense": 0
+  }
+}

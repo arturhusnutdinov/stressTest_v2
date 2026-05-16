@@ -1,0 +1,222 @@
+{
+  "dry_run": false,
+  "stats": {
+    "matched": 98,
+    "inserted": 13,
+    "mismatch": 30,
+    "skipped": 0
+  },
+  "ppe_inserted": 77,
+  "mismatches": [
+    {
+      "section": "IS",
+      "metric": "sga",
+      "parser_musd": -603.0,
+      "db_musd": -1358.0,
+      "delta_pct": 0.5559646539027983
+    },
+    {
+      "section": "IS",
+      "metric": "sga",
+      "parser_musd": -769.0,
+      "db_musd": -1466.0,
+      "delta_pct": 0.47544338335607095
+    },
+    {
+      "section": "BS",
+      "metric": "accounts_payable",
+      "parser_musd": 1183.0,
+      "db_musd": 1535.0,
+      "delta_pct": 0.2293159609120521
+    },
+    {
+      "section": "BS",
+      "metric": "accounts_receivable",
+      "parser_musd": 1154.0,
+      "db_musd": 1470.0,
+      "delta_pct": 0.21496598639455783
+    },
+    {
+      "section": "BS",
+      "metric": "aoci",
+      "parser_musd": -10613.0,
+      "db_musd": -11205.0,
+      "delta_pct": 0.05283355644801428
+    },
+    {
+      "section": "BS",
+      "metric": "aoci",
+      "parser_musd": -9033.0,
+      "db_musd": -6351.0,
+      "delta_pct": 0.4222957014643363
+    },
+    {
+      "section": "BS",
+      "metric": "cash",
+      "parser_musd": 2087.0,
+      "db_musd": 1501.0,
+      "delta_pct": 0.39040639573617586
+    },
+    {
+      "section": "BS",
+      "metric": "dta",
+      "parser_musd": 229.0,
+      "db_musd": 328.0,
+      "delta_pct": 0.3018292682926829
+    },
+    {
+      "section": "BS",
+      "metric": "dtl",
+      "parser_musd": 405.0,
+      "db_musd": 466.0,
+      "delta_pct": 0.13090128755364808
+    },
+    {
+      "section": "BS",
+      "metric": "intangibles",
+      "parser_musd": 2337.0,
+      "db_musd": 2201.0,
+      "delta_pct": 0.061790095411176735
+    },
+    {
+      "section": "BS",
+      "metric": "inventory",
+      "parser_musd": 3599.0,
+      "db_musd": 4477.0,
+      "delta_pct": 0.19611346884074157
+    },
+    {
+      "section": "BS",
+      "metric": "investments_in_associates",
+      "parser_musd": 4521.0,
+      "db_musd": 4868.0,
+      "delta_pct": 0.07128184059161874
+    },
+    {
+      "section": "BS",
+      "metric": "long_term_debt",
+      "parser_musd": 5900.0,
+      "db_musd": 3398.0,
+      "delta_pct": 0.7363154796939376
+    },
+    {
+      "section": "BS",
+      "metric": "nci",
+      "parser_musd": 2689.0,
+      "db_musd": 2856.0,
+      "delta_pct": 0.0584733893557423
+    },
+    {
+      "section": "BS",
+      "metric": "other_ca",
+      "parser_musd": 1094.0,
+      "db_musd": 883.0,
+      "delta_pct": 0.23895809739524349
+    },
+    {
+      "section": "BS",
+      "metric": "other_ca_tax",
+      "parser_musd": 8.0,
+      "db_musd": 30.0,
+      "delta_pct": 0.7333333333333333
+    },
+    {
+      "section": "BS",
+      "metric": "other_nca",
+      "parser_musd": 277.0,
+      "db_musd": 221.0,
+      "delta_pct": 0.25339366515837103
+    },
+    {
+      "section": "BS",
+      "metric": "other_ncl",
+      "parser_musd": 396.0,
+      "db_musd": 351.0,
+      "delta_pct": 0.1282051282051282
+    },
+    {
+      "section": "BS",
+      "metric": "other_ncl",
+      "parser_musd": 424.0,
+      "db_musd": 275.0,
+      "delta_pct": 0.5418181818181819
+    },
+    {
+      "section": "BS",
+      "metric": "ppe_net",
+      "parser_musd": 5806.0,
+      "db_musd": 6005.0,
+      "delta_pct": 0.03313905079100749
+    },
+    {
+      "section": "BS",
+      "metric": "retained_earnings",
+      "parser_musd": 3002.0,
+      "db_musd": 3627.0,
+      "delta_pct": 0.17231872070581747
+    },
+    {
+      "section": "BS",
+      "metric": "short_term_debt",
+      "parser_musd": 1966.0,
+      "db_musd": 4520.0,
+      "delta_pct": 0.5650442477876106
+    },
+    {
+      "section": "BS",
+      "metric": "taxes_payable",
+      "parser_musd": 233.0,
+      "db_musd": -157.0,
+      "delta_pct": 2.484076433121019
+    },
+    {
+      "section": "BS",
+      "metric": "taxes_payable",
+      "parser_musd": 243.0,
+      "db_musd": -210.0,
+      "delta_pct": 2.157142857142857
+    },
+    {
+      "section": "BS",
+      "metric": "total_assets",
+      "parser_musd": 21464.0,
+      "db_musd": 22201.0,
+      "delta_pct": 0.03319670285122292
+    },
+    {
+      "section": "BS",
+      "metric": "total_ca",
+      "parser_musd": 7942.0,
+      "db_musd": 8361.0,
+      "delta_pct": 0.050113622772395644
+    },
+    {
+      "section": "BS",
+      "metric": "total_cl",
+      "parser_musd": 3719.0,
+      "db_musd": 6759.0,
+      "delta_pct": 0.449770676135523
+    },
+    {
+      "section": "BS",
+      "metric": "total_nca",
+      "parser_musd": 13522.0,
+      "db_musd": 13840.0,
+      "delta_pct": 0.022976878612716762
+    },
+    {
+      "section": "BS",
+      "metric": "total_ncl",
+      "parser_musd": 6729.0,
+      "db_musd": 4226.0,
+      "delta_pct": 0.5922858495030762
+    },
+    {
+      "section": "CF",
+      "metric": "cfo_income_tax_paid",
+      "parser_musd": -358.0,
+      "db_musd": 261.0,
+      "delta_pct": 2.371647509578544
+    }
+  ]
+}
