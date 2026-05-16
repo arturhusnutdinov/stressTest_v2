@@ -1,0 +1,293 @@
+# Шаблон мэппинга БД → Канон
+# Copy to: companies/{company}/configs/db_mapping.yaml
+# Используется для преобразования данных из таблиц БД в канонические метрики
+# Версия: 1.0
+# Дата: 2025-01-27
+
+meta:
+  version: "1.0"
+  description: "Mapping from database tables to canonical metrics"
+  last_updated: "2025-01-27"
+
+# Мэппинг для EAV таблиц (history_bs/is/cf)
+# Формат: metric_name в БД → canonical_metric
+database_to_canonical_mapping:
+  # History tables (EAV format)
+  history_bs:
+    # Один-в-один мэппинг
+    one_to_one:
+      cash: cash
+      accounts_receivable: accounts_receivable
+      inventory: inventory
+      ppe_net: ppe_net
+      long_term_debt: long_term_debt
+      short_term_debt: short_term_debt
+      retained_earnings: retained_earnings
+      # ... другие метрики
+    
+    # Суммирование нескольких метрик в одну каноническую
+    sum_to_one:
+      total_current_assets:
+        - cash
+        - accounts_receivable
+        - inventory
+        - other_current_assets
+      total_non_current_assets:
+        - ppe_net
+        - intangibles
+        - longterm_investments
+        - deferred_tax_assets
+      total_assets:
+        - total_current_assets
+        - total_non_current_assets
+      total_current_liabilities:
+        - short_term_debt
+        - accounts_payable
+        - accrued_liabilities
+        - taxes_payable
+      total_non_current_liabilities:
+        - long_term_debt
+        - deferred_tax_liabilities
+        - other_non_current_liabilities
+      total_liabilities:
+        - total_current_liabilities
+        - total_non_current_liabilities
+      total_equity:
+        - share_capital
+        - additional_paid_in_capital
+        - retained_earnings
+        - aoci
+        - noncontrolling_interests
+  
+  history_is:
+    one_to_one:
+      revenue: revenue
+      cogs: cogs
+      sga: sga
+      depreciation_owned: depreciation_owned
+      amortization: amortization
+      interest_income: interest_income
+      interest_expense_debt: interest_expense_debt
+      tax_expense: tax_expense
+      net_income: net_income
+    
+    sum_to_one:
+      gross_profit:
+        - revenue
+        - cogs
+      total_da:
+        - depreciation_owned
+        - depreciation_rou
+        - amortization
+      ebit:
+        - gross_profit
+        - sga
+        - total_da
+        - asset_impairment_charges
+        - restructuring_and_other_charges
+        - other_losses_gains_net
+      ebt:
+        - ebit
+        - net_interest_and_other_financial_costs
+      net_interest_and_other_financial_costs:
+        - interest_income
+        - interest_expense_debt
+        - interest_expense_lease
+        - other_financial_costs
+  
+  history_cf:
+    one_to_one:
+      net_income: net_income
+      total_da: total_da
+      change_ar: change_ar
+      change_inventory: change_inventory
+      change_ap: change_ap
+      capex: capex
+      debt_issuance: debt_issuance
+      debt_repayment: debt_repayment
+      dividends_paid: dividends_paid
+    
+    sum_to_one:
+      cfo_total:
+        - net_income
+        - total_da
+        - change_ar
+        - change_inventory
+        - change_ap
+        - change_other_wc
+        - interest_paid
+        - taxes_paid
+      cfi_total:
+        - capex
+        - ppe_disposal_proceeds
+        - acquisitions
+        - divestitures
+        - investments_purchases
+        - investments_sales
+      cff_total:
+        - debt_issuance
+        - debt_repayment
+        - equity_issuance
+        - share_buybacks
+        - dividends_paid
+      net_change_in_cash:
+        - cfo_total
+        - cfi_total
+        - cff_total
+
+  # Schedule tables (Structured format)
+  tax_schedule:
+    # Один-в-один мэппинг полей таблицы
+    one_to_one:
+      total_provision: tax_expense
+      effective_tax_rate: effective_tax_rate
+      current_tax_total: current_tax_expense
+      deferred_tax_total: deferred_tax_expense
+      dta_total: deferred_tax_assets
+      dtl_total: deferred_tax_liabilities
+    
+    # Суммирование (если нужно)
+    sum_to_one:
+      # Пример: если нужно суммировать несколько полей
+      # total_tax_assets:
+      #   - dta_total
+      #   - other_tax_assets
+
+  # Semi-EAV таблицы (tax_details с категориями)
+  tax_details:
+    # Мэппинг по категориям
+    by_category:
+      reconciliation:
+        statutory_rate_applied: tax_reconciliation_statutory_rate
+        federal_rate: tax_reconciliation_federal_rate
+        state_rate: tax_reconciliation_state_rate
+        foreign_rate: tax_reconciliation_foreign_rate
+        # ... другие метрики reconciliation
+      
+      provision_detail:
+        current_tax_federal: current_tax_expense_federal
+        current_tax_state: current_tax_expense_state
+        current_tax_foreign: current_tax_expense_foreign
+        # ... другие метрики provision_detail
+      
+      dta:
+        dta_total: deferred_tax_assets
+        dta_valuation_allowance: deferred_tax_assets_valuation_allowance
+        # ... другие метрики DTA
+      
+      dtl:
+        dtl_total: deferred_tax_liabilities
+        # ... другие метрики DTL
+      
+      utb:
+        utb_ending: unrecognized_tax_benefits
+        utb_beginning: unrecognized_tax_benefits_beginning
+        # ... другие метрики UTB
+
+  # Debt Schedule (Structured)
+  debt_schedule:
+    # Поля таблицы маппятся напрямую (для построения корков)
+    # Не маппятся в канон напрямую, используются для корков
+    for_corkscrew:
+      opening_balance: debt_opening_balance
+      closing_balance: debt_closing_balance
+      draw: debt_draw
+      repay_mandatory: debt_repay_mandatory
+      repay_voluntary: debt_repay_voluntary
+      interest_expense: debt_interest_expense
+    
+    # Если нужно маппить в канон (например, для истории)
+    one_to_one:
+      # Пример: если debt_schedule используется для истории
+      # total_debt: total_debt
+
+  # Equity Schedule (Structured)
+  equity_schedule:
+    for_corkscrew:
+      share_capital_beginning: share_capital_beginning
+      share_capital_ending: share_capital_ending
+      apic_beginning: apic_beginning
+      apic_ending: apic_ending
+      retained_earnings_beginning: retained_earnings_beginning
+      retained_earnings_ending: retained_earnings_ending
+      net_income: equity_net_income
+      dividends: equity_dividends
+      buyback: equity_buyback
+      issuance: equity_issuance
+
+  # Lease Schedule (Structured)
+  lease_schedule:
+    for_corkscrew:
+      rou_asset_beginning: lease_rou_asset_beginning
+      rou_asset_ending: lease_rou_asset_ending
+      lease_liability_beginning: lease_liability_beginning
+      lease_liability_ending: lease_liability_ending
+      lease_payment: lease_payment
+      interest_expense: lease_interest_expense
+      depreciation: lease_depreciation
+
+  # PP&E Schedule (Structured)
+  ppe_components:
+    for_corkscrew:
+      gross_beginning: ppe_gross_beginning
+      gross_ending: ppe_gross_ending
+      additions: ppe_additions
+      disposals: ppe_disposals
+      depreciation: ppe_depreciation
+      accumulated_depreciation_beginning: ppe_accumulated_depreciation_beginning
+      accumulated_depreciation_ending: ppe_accumulated_depreciation_ending
+
+# Алиасы для гибкости (дополняют основной мэппинг)
+aliases:
+  # Алиасы для history_bs
+  history_bs:
+    cash_and_equivalents: cash
+    ar: accounts_receivable
+    inv: inventory
+    ppe: ppe_net
+    lt_debt: long_term_debt
+    st_debt: short_term_debt
+    re: retained_earnings
+  
+  # Алиасы для history_is
+  history_is:
+    sales: revenue
+    revenue_total: revenue
+    cost_of_sales: cogs
+    operating_expenses: sga
+    depreciation: depreciation_owned
+    interest: interest_expense_debt
+  
+  # Алиасы для history_cf
+  history_cf:
+    cfo: cfo_total
+    cfi: cfi_total
+    cff: cff_total
+    net_change: net_change_in_cash
+
+# Правила приоритетов мэппинга
+mapping_priority:
+  # Порядок применения правил мэппинга
+  order:
+    - one_to_one
+    - aliases
+    - sum_to_one
+    - by_category
+  
+  # Если метрика найдена в нескольких правилах, использовать первое совпадение
+  first_match_wins: true
+  
+  # Если метрика не найдена, использовать исходное имя
+  fallback_to_original: true
+
+# Валидация мэппинга
+validation:
+  # Проверять, что все канонические метрики определены
+  check_canonical_metrics: true
+  
+  # Проверять, что суммирование корректно (сумма компонентов = итог)
+  check_sum_consistency: true
+  
+  # Проверять, что нет циклических зависимостей в sum_to_one
+  check_circular_dependencies: true
+

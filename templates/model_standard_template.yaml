@@ -1,0 +1,80 @@
+# Шаблон конфигурации стандартной модели (3 statements)
+# Copy to: merge into companies/{company}/configs/project.yaml model.standard section
+model:
+  mode: standard
+  standard:
+    revenue:
+      driver: lme_al_usd
+      elasticity: 1.0
+      use_elastic_net: true
+      l1_ratio: 0.5  # Соотношение L1/L2 регуляризации для Elastic Net (0.0 = Ridge, 1.0 = Lasso, 0.5 = Elastic Net по умолчанию)
+      fallback_growth: ewa   # ewa|cagr|constant
+      # Сегментное моделирование (только для Custom режима)
+      segment_modeling: false  # Включить сегментное моделирование: Revenue = Σ(Volume_i × Price_i)
+      segment_volume_method: ewa  # Метод прогноза объемов: ewa | macro
+      segment_price_method: elastic_net  # Метод прогноза цен: elastic_net | ewa
+      segment_volume_factors: []  # Макро-факторы для прогноза объемов
+      segment_price_factors: []  # Макро-факторы для прогноза цен
+    margins:
+      ebitda_margin_default: 0.18
+      depreciation_ratio: 0.05
+      interest_rate_default: 0.08
+      tax_rate_statutory: 0.20
+      tax_rate_delta_pct: 0.0  # Delta для стресс-тестирования (в %)
+    capex:
+      method: ratio_to_revenue
+      ratio_default: 0.06
+    ppe:
+      useful_life_years: 12
+      residual_value_pct: 0.0
+    wc:
+      dso_days: 30
+      dio_days: 45
+      dpo_days: 40
+    debt:
+      general_rate_delta_pct: 0.0  # Общая дельта для всех ставок долга (для стресс-тестирования, в %)
+      rc:
+        enable: true
+        limit:  # число или путь к csv
+        min_cash:  # число или путь к csv
+        rate_spread: 0.03
+        rate_delta_pct: 0.0  # Delta для стресс-тестирования (в %)
+      refinancing:
+        enable: true
+        rate_delta_pct: 0.0  # Delta для стресс-тестирования (в %)
+      iter_max: 50
+      tol: 1e-6
+    taxes:
+      policy: statutory_with_floor
+      nol_opening_balance: 0.0  # Входящий остаток NOL на начало прогноза
+      nol_max_utilization_pct: 80.0  # Максимальный % использования NOL за год
+      nol_expiration_years: 20  # Срок действия NOL (лет)
+    # DEPRECATED: раздел finance больше не используется
+    # Interest Income/Expense рассчитываются автоматически из cash/debt/leases
+    # Формула EBT: EBT = EBIT + Interest Income - Interest Expense - Lease Interest
+    leases:
+      enabled: false
+      default_discount_rate: 0.05
+      rate_delta_pct: 0.0  # Delta для стресс-тестирования (в %)
+      # Опциональные параметры для детализации Finance/Operating Lease (если доступны в канонической структуре):
+      # finance_lease_rate: 0.05  # Ставка дисконтирования для Finance Lease
+      # operating_lease_rate: 0.05  # Ставка дисконтирования для Operating Lease
+      # finance_principal_share: 0.5  # Доля Finance Lease в общих платежах
+      # operating_principal_share: 0.5  # Доля Operating Lease в общих платежах
+      # new_finance_leases: 0.0  # Новые Finance Lease в прогнозе
+      # new_operating_leases: 0.0  # Новые Operating Lease в прогнозе
+      # finance_rou_depr_override: null  # Переопределение амортизации ROU Finance (если null - рассчитывается автоматически)
+      # operating_rou_depr_override: null  # Переопределение амортизации ROU Operating (если null - рассчитывается автоматически)
+    dividends:
+      payout_ratio: 0.3
+  outputs:
+    base: companies/{company}/outputs/model
+
+history:
+  # мэппинги для линковки источников истории с каноническими статьями
+  mapping:
+    is: configs/mapping/{company}/is_mapping.yaml
+    bs: configs/mapping/{company}/bs_mapping.yaml
+    cf: configs/mapping/{company}/cf_mapping.yaml
+
+

@@ -1,0 +1,159 @@
+# Шаблон мэппинга статей отчетности к канонической форме модели
+# Copy to: companies/{company}/configs/excel_loader.yaml (simple version)
+# See also: excel_loader_template.yaml (recommended)
+
+is:
+  source_file: companies/{company}/history/is_history_{company}.csv
+  date_column: date
+  currency: RUB
+  items:
+    revenue:
+      source_columns: [Revenue, Sales]
+      scale: 1
+    # Опциональные breakdown метрики (если доступны в исходных данных):
+    # revenue_product:
+    #   source_columns: [Product_Revenue, Goods_Revenue]
+    #   scale: 1
+    # revenue_service:
+    #   source_columns: [Service_Revenue]
+    #   scale: 1
+    cogs:
+      source_columns: [COGS, Cost_of_Sales]
+      scale: 1
+    # Опциональные breakdown метрики COGS:
+    # cogs_materials:
+    #   source_columns: [Materials_Cost]
+    #   scale: 1
+    # cogs_labor:
+    #   source_columns: [Labor_Cost]
+    #   scale: 1
+    sgna:
+      source_columns: [SG&A, Operating_Expenses]
+      scale: 1
+    # Опциональные breakdown метрики SGA:
+    # sga_selling:
+    #   source_columns: [Selling_Expense]
+    #   scale: 1
+    # sga_general_admin:
+    #   source_columns: [G&A, Administrative_Expense]
+    #   scale: 1
+    depreciation:
+      source_columns: [Depreciation]
+      scale: 1
+    interest_expense:
+      source_columns: [Interest_Expense]
+      scale: 1
+    # Опциональные breakdown метрики налогов:
+    # current_tax_expense:
+    #   source_columns: [Current_Tax]
+    #   scale: 1
+    # deferred_tax_expense:
+    #   source_columns: [Deferred_Tax]
+    #   scale: 1
+    taxes_paid:
+      source_columns: [Taxes]
+      scale: 1
+
+bs:
+  source_file: companies/{company}/history/bs_history_{company}.csv
+  date_column: date
+  currency: RUB
+  items:
+    cash:
+      source_columns: [Cash_and_Cash_Equivalents]
+      scale: 1
+    receivables:
+      source_columns: [Accounts_Receivable]
+      scale: 1
+    # Опциональные breakdown метрики AR:
+    # accounts_receivable_gross:
+    #   source_columns: [AR_Gross]
+    #   scale: 1
+    # allowance_for_doubtful_accounts:
+    #   source_columns: [Allowance_for_Bad_Debts]
+    #   scale: 1
+    inventory:
+      source_columns: [Inventory]
+      scale: 1
+    # Опциональные breakdown метрики Inventory:
+    # inventory_raw_materials:
+    #   source_columns: [Raw_Materials]
+    #   scale: 1
+    # inventory_wip:
+    #   source_columns: [Work_in_Process]
+    #   scale: 1
+    # inventory_finished_goods:
+    #   source_columns: [Finished_Goods]
+    #   scale: 1
+    payables:
+      source_columns: [Accounts_Payable]
+      scale: 1
+    ppe:
+      source_columns: [PP&E]
+      scale: 1
+    # Опциональные breakdown метрики лизинга (для кастом модели):
+    # rou_finance_asset:
+    #   source_columns: [Finance_Lease_ROU_Asset]
+    #   scale: 1
+    # rou_operating_asset:
+    #   source_columns: [Operating_Lease_ROU_Asset]
+    #   scale: 1
+    # current_finance_lease_liability:
+    #   source_columns: [Current_Finance_Lease_Liability]
+    #   scale: 1
+    # current_operating_lease_liability:
+    #   source_columns: [Current_Operating_Lease_Liability]
+    #   scale: 1
+    debt_total:
+      source_columns: [Total_Debt]
+      scale: 1
+
+cf:
+  source_file: companies/{company}/history/cf_history_{company}.csv
+  date_column: date
+  currency: RUB
+  items:
+    cfo:
+      source_columns: [Cash_Flow_From_Operations]
+      scale: 1
+    # Опциональные breakdown метрики CFO:
+    # change_ar:
+    #   source_columns: [Change_in_AR]
+    #   scale: 1
+    # change_inventory:
+    #   source_columns: [Change_in_Inventory]
+    #   scale: 1
+    # change_ap:
+    #   source_columns: [Change_in_AP]
+    #   scale: 1
+    # lease_payments_cfo_operating:
+    #   source_columns: [Operating_Lease_Payments]
+    #   scale: 1
+    cfi:
+      source_columns: [Cash_Flow_From_Investing]
+      scale: 1
+    # Опциональные breakdown метрики CFI:
+    # ppe_disposal_proceeds:
+    #   source_columns: [Asset_Sale_Proceeds]
+    #   scale: 1
+    # acquisitions:
+    #   source_columns: [Acquisitions]
+    #   scale: 1
+    cff:
+      source_columns: [Cash_Flow_From_Financing]
+      scale: 1
+    # Опциональные breakdown метрики CFF:
+    # debt_issuance:
+    #   source_columns: [Debt_Issued]
+    #   scale: 1
+    # debt_repayment:
+    #   source_columns: [Debt_Repaid]
+    #   scale: 1
+    # finance_lease_principal:
+    #   source_columns: [Finance_Lease_Principal_Payments]
+    #   scale: 1
+    # dividends_paid:
+    #   source_columns: [Dividends]
+    #   scale: 1
+
+

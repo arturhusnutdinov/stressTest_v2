@@ -1,0 +1,94 @@
+# ═══════════════════════════════════════════════════════════════
+# Stress Scenarios Template — stressTest_v2 Engine
+# ═══════════════════════════════════════════════════════════════
+# Copy to: companies/{company}/configs/stress_scenarios.yaml
+# Orchestrator auto-reads this file for the company.
+#
+# Shock types:
+#   macro_shocks  — applied to macro_forecasts (commodity prices, FX, rates)
+#   driver_shocks — applied to model drivers (cogs_pct, dso_days, avg_rate)
+#
+# Value types:
+#   percentage — multiply factor by (1 + value/100): {type: percentage, value: -25.0}
+#   pp         — add percentage points to ratio:     {type: pp, value: 3.0}
+#   level      — set to absolute value:              {type: level, value: 50.0}
+#
+# NOTE: If CogsBlock (cogs.mode=component) is active, macro_shocks on
+# lme_alumina, russian_power_price, usd_rub flow through automatically.
+# Remove redundant driver_shocks.cogs_pct in that case.
+
+scenarios:
+
+  # ── Commodity Downturn ───────────────────────────────────────
+  # (customize commodity factors for your industry)
+  commodity_downturn:
+    description: "Primary commodity -25%, secondary -15%"
+    macro_shocks:
+      # Steel: steel_price_hrc: {type: percentage, value: -25.0}
+      # Aluminium: lme_aluminium: {type: percentage, value: -25.0}
+      # Oil: brent: {type: percentage, value: -30.0}
+      steel_price_hrc:
+        type: percentage
+        value: -25.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 15.0
+      dih_days:
+        type: percentage
+        value: 20.0
+
+  # ── FX Shock ────────────────────────────────────────────────
+  # (for companies with FX-denominated costs)
+  fx_shock:
+    description: "Local currency devaluation +30%"
+    macro_shocks:
+      usd_rub:                     # change to your FX pair
+        type: percentage
+        value: 30.0
+      # If energy costs are FX-linked:
+      # russian_power_price:
+      #   type: percentage
+      #   value: 15.0
+
+  # ── Energy Spike ────────────────────────────────────────────
+  energy_spike:
+    description: "Power price +40%, oil +30%"
+    macro_shocks:
+      russian_power_price:         # change to your energy factor
+        type: percentage
+        value: 40.0
+      brent:
+        type: percentage
+        value: 30.0
+    # If NOT using CogsBlock, add flat COGS override:
+    # driver_shocks:
+    #   cogs_pct:
+    #     type: pp
+    #     value: 5.0
+
+  # ── Rate Spike ──────────────────────────────────────────────
+  rate_spike:
+    description: "Interest rate +200bp across all instruments"
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+
+  # ── Covenant Breach (combined severe shock) ─────────────────
+  covenant_breach:
+    description: "Combined: commodity -20%, rates +200bp, WC stress"
+    macro_shocks:
+      steel_price_hrc:             # change to your primary commodity
+        type: percentage
+        value: -20.0
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+      dso_days:
+        type: percentage
+        value: 10.0
+      dih_days:
+        type: percentage
+        value: 10.0

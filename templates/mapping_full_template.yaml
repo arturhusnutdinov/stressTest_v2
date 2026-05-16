@@ -1,0 +1,276 @@
+# Полный шаблон мэппинга для преобразования исходных данных в каноническую форму
+# Copy to: companies/{company}/configs/mapping.yaml (full version)
+# Используется когда исходные данные имеют нестандартные названия статей
+
+meta:
+  units: USDm  # или RUBm, EURm и т.д.
+  frequency: annual
+  company: "{company}"  # будет заменено при создании
+
+sign_convention:
+  income_statement:
+    expenses_negative: true  # расходы могут быть отрицательными в исходных данных
+  cash_flow:
+    outflows_negative: true  # оттоки отрицательные
+
+# Мэппинг исходных колонок на канонические названия
+columns:
+  IS:
+    # Примеры: каноническое_имя: [вариант1, вариант2, ...]
+    revenue: ["Revenue", "Sales", "Turnover", "Total Operating Revenues", "Выручка"]
+    revenue_product: ["Product Revenue", "Goods Revenue", "Product Sales", "Revenue from Products"]
+    revenue_service: ["Service Revenue", "Services Revenue", "Revenue from Services"]
+    revenue_other: ["Other Revenue", "Other Operating Revenue"]
+    cogs: ["COGS", "Cost of Goods Sold", "Cost_of_Sales", "Себестоимость"]
+    cogs_materials: ["Cost of Materials", "Materials Cost", "Raw Materials Cost"]
+    cogs_labor: ["Cost of Labor", "Labor Cost", "Direct Labor"]
+    cogs_overhead: ["Overhead Cost", "Manufacturing Overhead", "Overhead"]
+    cogs_services: ["Cost of Services", "Service Cost"]
+    cogs_other: ["Other COGS", "Other Cost of Sales"]
+    cogs_incl_da: ["COGS (incl D&A)", "Cost of Sales (incl D&A)", "COGS including D&A"]
+    sga: ["SG&A", "Selling, General and Administrative", "Operating Expenses", "SGNA", "Коммерческие расходы"]
+    sga_selling: ["Selling Expense", "Sales Expense", "Selling Costs"]
+    sga_general_admin: ["General and Administrative", "G&A", "Administrative Expense"]
+    sga_marketing: ["Marketing Expense", "Advertising Expense", "Marketing Costs"]
+    sga_it: ["IT Expense", "Information Technology Expense"]
+    sga_other: ["Other SG&A", "Other Operating Expenses"]
+    depreciation: ["Depreciation", "Depreciation Expense", "Амортизация"]
+    amortization: ["Amortization", "Amortization Expense"]
+    interest_income: ["Interest Income", "Finance Income (deprecated)", "Financial Income", "Процентные доходы"]
+    interest_expense: ["Interest Expense", "Finance Expense (deprecated)", "Financial Expense", "Процентные расходы"]
+    interest_expense_debt: ["Interest Expense on Debt", "Debt Interest Expense"]
+    interest_expense_lease: ["Lease Interest Expense", "Interest Expense on Leases"]
+    lease_interest: ["Lease Interest", "Finance Lease Interest", "Lease Interest Expense"]
+    lease_interest_finance: ["Finance Lease Interest", "Interest on Finance Leases"]
+    lease_expense_operating: ["Operating Lease Expense", "Operating Lease Cost"]
+    current_tax_expense: ["Current Tax Expense", "Current Income Tax", "Current Tax"]
+    deferred_tax_expense: ["Deferred Tax Expense", "Deferred Income Tax", "Deferred Tax"]
+    other: ["Other Income/(Expense)", "Other", "Other Non-Operating", "Прочие доходы/расходы"]
+    income_tax_expense: ["Income Tax Expense", "Tax Expense", "Income Tax", "Налог на прибыль"]
+    net_income: ["Net Income", "Net Profit", "Чистая прибыль"]
+    net_income_parent: ["Net Income to Parent", "Net Income Attributable to Parent"]
+    net_income_nci: ["Net Income to NCI", "Noncontrolling Interest Income"]
+    net_income_to_sh: ["Net Income to Shareholders", "Net Income Attributable", "Net Income (to SH)"]
+
+  BS:
+    # Плоский формат (стандартный)
+    cash: ["Cash", "Cash and Cash Equivalents", "Cash & Equivalents", "Денежные средства"]
+    restricted_cash: ["Restricted Cash", "Restricted Cash and Equivalents"]
+    accounts_receivable: ["Accounts Receivable", "AR", "Receivables", "Trade Receivables", "Дебиторская задолженность"]
+    accounts_receivable_gross: ["Accounts Receivable Gross", "AR Gross", "Gross Receivables"]
+    allowance_for_doubtful_accounts: ["Allowance for Doubtful Accounts", "Allowance for Bad Debts", "Bad Debt Allowance"]
+    inventory: ["Inventory", "Inventories", "Запасы"]
+    inventory_raw_materials: ["Raw Materials Inventory", "Raw Materials", "Materials Inventory"]
+    inventory_wip: ["Work in Process", "WIP Inventory", "Work in Progress"]
+    inventory_finished_goods: ["Finished Goods Inventory", "Finished Goods"]
+    prepaid_expenses: ["Prepaid Expenses", "Prepaids", "Prepaid Assets"]
+    accounts_payable: ["Accounts Payable", "AP", "Trade Payables", "Кредиторская задолженность"]
+    accrued_compensation: ["Accrued Compensation", "Accrued Salaries", "Accrued Wages"]
+    taxes_payable: ["Taxes Payable", "Income Taxes Payable", "Tax Payable"]
+    interest_payable: ["Interest Payable", "Accrued Interest Payable"]
+    current_portion_of_lt_debt: ["Current Portion of Long-Term Debt", "Current Maturities of LT Debt"]
+    ppe_net: ["PP&E (Net)", "Property, Plant and Equipment (Net)", "PPE", "Fixed Assets", "Основные средства"]
+    ppe_gross: ["PP&E Gross", "Property, Plant and Equipment Gross", "PPE Gross"]
+    ppe_accumulated_depreciation: ["Accumulated Depreciation", "Accumulated Depreciation PPE"]
+    rou_asset: ["ROU Asset", "Right-of-Use Asset", "Lease Asset"]
+    rou_finance_asset: ["Finance Lease ROU Asset", "Finance ROU Asset", "ROU Asset Finance"]
+    rou_operating_asset: ["Operating Lease ROU Asset", "Operating ROU Asset", "ROU Asset Operating"]
+    intangibles: ["Intangible Assets", "Intangibles", "Нематериальные активы"]
+    intangibles_finite_life: ["Finite Life Intangibles", "Amortizable Intangibles"]
+    intangibles_indefinite_life: ["Indefinite Life Intangibles", "Non-amortizable Intangibles"]
+    goodwill: ["Goodwill"]
+    longterm_investments: ["Long-Term Investments", "Long-Term Investment Securities"]
+    investments_in_associates: ["Investments in Associates", "JV Investments", "Инвестиции в ассоциированные компании"]
+    dta: ["Deferred Tax Assets", "DTA", "Отложенные налоговые активы"]
+    st_debt: ["Short-Term Debt", "ST Debt", "Current Portion of Debt", "Краткосрочный долг"]
+    lt_debt: ["Long-Term Debt", "LT Debt", "Long Term Debt", "Долгосрочный долг"]
+    lt_debt_bonds: ["Long-Term Bonds", "Bonds Payable", "Long-Term Notes"]
+    lt_debt_bank: ["Long-Term Bank Debt", "Long-Term Loans", "Term Loans"]
+    lt_debt_other: ["Other Long-Term Debt", "Other LT Debt"]
+    current_lease_liability: ["Current Lease Liability", "Current Portion of Lease Liability"]
+    current_finance_lease_liability: ["Current Finance Lease Liability", "Current Finance Lease Obligation"]
+    current_operating_lease_liability: ["Current Operating Lease Liability", "Current Operating Lease Obligation"]
+    long_term_lease_liability: ["Long-Term Lease Liability", "Noncurrent Lease Liability"]
+    noncurrent_finance_lease_liability: ["Noncurrent Finance Lease Liability", "Long-Term Finance Lease Liability"]
+    noncurrent_operating_lease_liability: ["Noncurrent Operating Lease Liability", "Long-Term Operating Lease Liability"]
+    deferred_tax_liabilities: ["Deferred Tax Liabilities", "DTL", "Deferred Tax Liability"]
+    retained_earnings: ["Retained Earnings", "RE", "Нераспределенная прибыль"]
+    total_equity: ["Total Equity", "Shareholders' Equity", "Equity", "Капитал"]
+    total_assets: ["Total Assets", "Assets", "Активы"]
+    total_liabilities: ["Total Liabilities", "Liabilities", "Обязательства"]
+
+# Альтернативный структурированный формат для BS (assets/liabilities/equity)
+# Используется для лучшей организации мэппинга
+# Если указан - имеет приоритет над columns.BS
+# assets:
+#   cash: Cash_and_equivalents
+#   accounts_receivable: Trade_receivables
+#   inventory: Inventory
+#   ppe_net: PPE
+#   intangibles: Intangibles
+#   investments_in_associates: Investments_in_associates_JV
+#   dta: Deferred_tax_assets
+# liabilities:
+#   st_debt: ST_debt_current_portion
+#   accounts_payable: Trade_payables
+#   lt_debt: LT_debt
+#   dtl: Deferred_tax_liabilities
+# equity:
+#   share_capital: Share_capital
+#   retained_earnings: Retained_earnings
+#   total_equity: Total_equity
+
+  CF:
+    cfo: ["Operating Cash Flow", "CFO", "Cash Flow from Operations", "Operating Activities", "CF from Operations"]
+    impairment: ["Impairment", "Impairment Charges", "Asset Impairment"]
+    stock_based_comp: ["Stock-Based Compensation", "Share-Based Compensation", "Stock Compensation"]
+    deferred_tax: ["Deferred Tax", "Deferred Tax Adjustment", "Deferred Income Tax"]
+    gain_loss_disposal: ["Gain/Loss on Disposal", "Gain on Sale of Assets", "Loss on Disposal"]
+    change_ar: ["Change in Accounts Receivable", "AR Change", "Change AR"]
+    change_inventory: ["Change in Inventory", "Inventory Change", "Change Inventory"]
+    change_ap: ["Change in Accounts Payable", "AP Change", "Change AP"]
+    change_other_wc: ["Change in Other Working Capital", "Other WC Change"]
+    change_taxes_payable: ["Change in Taxes Payable", "Taxes Payable Change"]
+    change_interest_payable: ["Change in Interest Payable", "Interest Payable Change"]
+    lease_interest_paid: ["Lease Interest Paid", "Interest Paid on Leases"]
+    lease_interest_cfo_finance: ["Finance Lease Interest Paid (CFO)", "Finance Lease Interest"]
+    lease_interest_cfo_operating: ["Operating Lease Interest Paid (CFO)", "Operating Lease Interest"]
+    lease_payments_cfo_operating: ["Operating Lease Payments (CFO)", "Operating Lease Cash Payments"]
+    interest_paid: ["Interest Paid", "Cash Interest Paid"]
+    taxes_paid: ["Taxes Paid", "Cash Taxes Paid", "Income Taxes Paid"]
+    capex_cf: ["CapEx", "Capital Expenditures", "Capital Expenditure", "CAPEX", "CapEx (CF)"]
+    ppe_disposal_proceeds: ["PPE Disposal Proceeds", "Proceeds from Sale of PPE", "Asset Sale Proceeds"]
+    acquisitions: ["Acquisitions", "Business Acquisitions", "Acquisition Payments"]
+    divestitures: ["Divestitures", "Divestiture Proceeds", "Business Sales"]
+    investments_purchases: ["Investments Purchases", "Purchase of Investments"]
+    investments_sales: ["Investments Sales", "Sale of Investments"]
+    cfi: ["Investing Cash Flow", "CFI", "Cash Flow from Investing", "Investing Activities"]
+    debt_issuance: ["Debt Issuance", "Proceeds from Debt", "Debt Issued"]
+    debt_repayment: ["Debt Repayment", "Repayment of Debt", "Debt Repaid"]
+    revolver_draws: ["Revolver Draws", "Revolver Borrowings", "Credit Line Draws"]
+    revolver_repayments: ["Revolver Repayments", "Revolver Paydowns", "Credit Line Repayments"]
+    finance_lease_principal: ["Finance Lease Principal Payments", "Finance Lease Principal", "Principal on Finance Leases"]
+    dividends_paid: ["Dividends Paid", "Cash Dividends", "Dividend Payments"]
+    share_buybacks: ["Share Buybacks", "Share Repurchases", "Treasury Stock Purchases"]
+    equity_issuance: ["Equity Issuance", "Proceeds from Equity", "Equity Issued"]
+    cff_borrowings: ["Proceeds from Borrowings", "Debt Issued", "Borrowings", "Заемные средства"]
+    cff_repayments: ["Repayments of Borrowings", "Debt Repaid", "Repayments", "Погашение долга"]
+    cff: ["Financing Cash Flow", "CFF", "Cash Flow from Financing", "Financing Activities"]
+    net_change: ["Net Change in Cash", "Net Cash Flow", "Change in Cash", "Net Change"]
+    cash_beginning: ["Cash Beginning", "Beginning Cash", "Opening Cash"]
+    cash_ending: ["Cash Ending", "Ending Cash", "Closing Cash"]
+
+# Вычисляемые статьи (calculated/derived)
+# Формулы могут использовать: +, -, *, /, а также функции abs(), max(), min()
+calculated:
+  IS:
+    # Примеры формул для Income Statement
+    revenue_total: "revenue_product + revenue_service + revenue_other"  # если есть breakdown
+    # или просто: revenue_total: "revenue"
+    cogs_total: "cogs_materials + cogs_labor + cogs_overhead + cogs_services + cogs_other"  # если есть breakdown
+    # или просто: cogs_total: "cogs"
+    gross_profit: "revenue_total - cogs_total"
+    gross_margin: "gross_profit / revenue_total"  # если revenue_total > 0
+    sga_total: "sga_selling + sga_general_admin + sga_marketing + sga_it + sga_other"  # если есть breakdown
+    # или просто: sga_total: "sga"
+    ebitda: "gross_profit - sga_total"
+    # Если cogs уже включает D&A:
+    # ebitda: "revenue_total - cogs_incl_da - sga_total + depreciation + amortization"
+    ebit: "ebitda - depreciation - amortization"
+    operating_margin: "ebit / revenue_total"  # если revenue_total > 0
+    # Альтернативный вариант если есть прямая статья EBIT:
+    # ebit: "ebit"  # если есть прямая статья в columns
+    interest_expense: "interest_expense_debt + interest_expense_lease"  # если есть breakdown
+    ebt: "ebit + interest_income - interest_expense - lease_interest"
+    # или: ebt: "ebit + interest_income - interest_expense_debt - interest_expense_lease"
+    total_tax_expense: "current_tax_expense + deferred_tax_expense"  # если есть breakdown
+    # или просто: total_tax_expense: "income_tax_expense"
+    net_income: "ebt - total_tax_expense"
+    # или: net_income: "ebt - income_tax_expense"
+    net_income_parent: "net_income - net_income_nci"  # если есть NCI breakdown
+
+  BS:
+    # Примеры формул для Balance Sheet
+    accounts_receivable_net: "accounts_receivable_gross - allowance_for_doubtful_accounts"  # если есть breakdown
+    # или просто: accounts_receivable_net: "accounts_receivable"
+    inventory_total: "inventory_raw_materials + inventory_wip + inventory_finished_goods"  # если есть breakdown
+    # или просто: inventory_total: "inventory"
+    total_current_assets: "cash + restricted_cash + accounts_receivable_net + inventory_total + prepaid_expenses"
+    # Если есть другие оборотные активы:
+    # total_current_assets: "cash + restricted_cash + accounts_receivable_net + inventory_total + prepaid_expenses + other_current_assets"
+    
+    ppe_net: "ppe_gross - ppe_accumulated_depreciation"  # если есть breakdown
+    rou_asset_total: "rou_finance_asset + rou_operating_asset"  # если есть breakdown
+    # или просто: rou_asset_total: "rou_asset"
+    intangibles_total: "intangibles_finite_life + intangibles_indefinite_life"  # если есть breakdown
+    # или просто: intangibles_total: "intangibles"
+    total_non_current_assets: "ppe_net + rou_asset_total + intangibles_total + goodwill + longterm_investments + investments_in_associates + dta"
+    # total_assets: "total_current_assets + total_non_current_assets"  # или используем прямую статью
+    
+    lt_debt: "lt_debt_bonds + lt_debt_bank + lt_debt_other"  # если есть breakdown
+    # или просто: lt_debt: "lt_debt"
+    current_lease_liability_total: "current_finance_lease_liability + current_operating_lease_liability"  # если есть breakdown
+    # или просто: current_lease_liability_total: "current_lease_liability"
+    noncurrent_lease_liability_total: "noncurrent_finance_lease_liability + noncurrent_operating_lease_liability"  # если есть breakdown
+    # или просто: noncurrent_lease_liability_total: "long_term_lease_liability"
+    total_current_liabilities: "st_debt + current_portion_of_lt_debt + accounts_payable + accrued_compensation + taxes_payable + interest_payable + current_lease_liability_total"
+    total_non_current_liabilities: "lt_debt + noncurrent_lease_liability_total + deferred_tax_liabilities"
+    
+    # Если нужно вычислить equity:
+    # total_equity: "total_assets - total_liabilities"  # альтернатива если нет прямой статьи
+    total_liab_equity: "total_liabilities + total_equity"  # должно равняться total_assets
+
+  CF:
+    # Примеры формул для Cash Flow
+    # CFO может быть вычислен через indirect method:
+    # cfo_total: "net_income + depreciation + amortization + impairment + stock_based_comp + deferred_tax + gain_loss_disposal - change_ar - change_inventory + change_ap - change_other_wc - change_taxes_payable - change_interest_payable - lease_interest_paid - interest_paid - taxes_paid - lease_payments_cfo_operating"
+    # или упрощенно:
+    # cfo_total: "net_income + depreciation + amortization - change_ar - change_inventory + change_ap"
+    
+    # CFI = CapEx + другие инвестиционные потоки
+    cfi_total: "capex_cf + ppe_disposal_proceeds + acquisitions - divestitures + investments_purchases - investments_sales"
+    # или упрощенно: cfi_total: "capex_cf + acquisitions - disposals"
+    
+    # CFF = заемные средства - погашения - дивиденды
+    cff_total: "debt_issuance - debt_repayment + revolver_draws - revolver_repayments - finance_lease_principal - dividends_paid - share_buybacks + equity_issuance"
+    # или упрощенно: cff_total: "cff_borrowings - cff_repayments - dividends_paid"
+    
+    # Net Change = CFO + CFI + CFF + FX Effect
+    net_change_in_cash: "cfo_total + cfi_total + cff_total + cf_fx_effect"
+    # или: net_change: "cfo_total + cfi_total + cff_total"
+    
+    # Cash bridge: Opening + Net Change = Ending
+    cash_ending: "cash_beginning + net_change_in_cash"
+
+# Валидация (опционально)
+validation:
+  rules:
+    - name: BS identity
+      expr: "abs(total_assets - total_liab_equity) < 1e-6"
+      description: "Баланс должен сходиться: Активы = Пассивы + Капитал"
+    
+    - name: CF sum equals Net Change
+      expr: "abs((cfo + cfi + cff) - net_change) < 1e-6"
+      description: "Сумма CF разделов должна равняться Net Change"
+    
+    - name: Cash bridge
+      expr: "abs((cash_t - cash_t_minus_1) - net_change) < 1e-6"
+      description: "Изменение Cash в BS должно равняться Net Change в CF"
+
+# Группировка статей (опционально, для агрегации нескольких исходных статей в одну каноническую)
+grouping:
+  IS:
+    # Пример: несколько статей складываются в одну
+    # total_operating_expenses: 
+    #   - "SG&A"
+    #   - "R&D"
+    #   - "Other Operating Expenses"
+    pass
+  
+  BS:
+    # Примеры группировок для BS
+    # other_current_assets:
+    #   - "Prepaid Expenses"
+    #   - "Other Current Assets"
+    pass
+

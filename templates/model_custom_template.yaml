@@ -1,0 +1,51 @@
+# Шаблон конфигурации кастомной модели (VECM/VARIMA + пользовательская логика)
+# Copy to: merge into companies/{company}/configs/project.yaml model.custom section
+model:
+  mode: custom
+  standard:
+    # Параметры revenue для Custom режима (включая сегментное моделирование)
+    revenue:
+      driver: lme_al_usd
+      elasticity: 1.0
+      use_elastic_net: true
+      l1_ratio: 0.5  # Соотношение L1/L2 регуляризации для Elastic Net (0.0 = Ridge, 1.0 = Lasso, 0.5 = Elastic Net по умолчанию)
+      fallback_growth: ewa
+      # Сегментное моделирование (только для Custom режима)
+      segment_modeling: false  # Включить сегментное моделирование: Revenue = Σ(Volume_i × Price_i)
+      segment_volume_method: ewa  # Метод прогноза объемов: ewa | macro
+      segment_price_method: elastic_net  # Метод прогноза цен: elastic_net | ewa
+      segment_volume_factors: []  # Макро-факторы для прогноза объемов (если segment_volume_method: macro)
+      segment_price_factors: []  # Макро-факторы для прогноза цен (если segment_price_method: elastic_net)
+  custom:
+    macro_config: configs/forecast/macro_ecm.yaml
+    # пользовательские параметры кастомных модулей модели (опционально)
+    modules:
+      revenue:
+        spec: companies/{company}/configs/custom/revenue.yaml  # Опционально: переопределение через отдельный файл
+      cost:
+        spec: companies/{company}/configs/custom/cost.yaml
+      capex:
+        spec: companies/{company}/configs/custom/capex.yaml
+      debt:
+        spec: companies/{company}/configs/custom/debt.yaml
+    # Опциональная поддержка детализации лизинга (Finance/Operating)
+    # Если в канонической структуре доступны rou_finance_asset, rou_operating_asset,
+    # current_finance_lease_liability, current_operating_lease_liability и т.д.,
+    # модель автоматически использует эти данные для более точного моделирования
+    leases:
+      # Использовать детализацию из канонической структуры (если доступна)
+      use_canonical_breakdown: true
+      # Параметры по умолчанию (используются если детализация недоступна)
+      default_discount_rate: 0.05
+      finance_lease_rate: 0.05
+      operating_lease_rate: 0.05
+  outputs:
+    base: companies/{company}/outputs/model
+
+history:
+  mapping:
+    is: configs/mapping/{company}/is_mapping.yaml
+    bs: configs/mapping/{company}/bs_mapping.yaml
+    cf: configs/mapping/{company}/cf_mapping.yaml
+
+

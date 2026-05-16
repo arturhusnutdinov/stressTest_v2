@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# DB
+*.db
+*.db-shm
+*.db-wal
+
+# Data
+*.xlsx
+*.xlsb
+*.csv
+*.pdf
+!templates/excel_templates/*.xlsx
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/

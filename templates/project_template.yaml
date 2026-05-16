@@ -1,0 +1,384 @@
+# ═══════════════════════════════════════════════════════════════
+# Project Configuration Template — stressTest_v2 Engine
+# ═══════════════════════════════════════════════════════════════
+# Copy to: companies/{company}/configs/project.yaml
+# Replace {company}, {COMPANY_NAME}, {INDUSTRY}, {CURRENCY}, {STANDARD}
+#
+# Reference implementations:
+#   US Steel:  companies/us_steel/configs/project.yaml (US GAAP, steel)
+#   Rusal:     companies/rusal/configs/project.yaml (IFRS, metals/mining)
+
+# ── Company Metadata ─────────────────────────────────────────
+company:
+  name: {COMPANY_NAME}            # e.g. "United States Steel Corporation"
+  industry: {INDUSTRY}            # steel | metals | mining | oil_gas | ...
+  currency: {CURRENCY}            # USD | EUR | RUB | CNY
+  accounting_standard: {STANDARD} # US_GAAP | IFRS
+
+# ── Accounting Conventions ───────────────────────────────────
+accounting_conventions:
+  # D&A included in COGS (true=US GAAP typical, false=IFRS typical)
+  da_in_cogs: true
+  # Capitalize interest on PPE under construction
+  capitalize_interest: false
+  # Interest payments reported in CFF (true) or CFO (false)
+  interest_in_cff: false
+  # D&A presentation: separate_line | embedded_in_cogs
+  da_presentation: separate_line
+  # Sign convention for income items below EBIT in DB:
+  #   credit_negative — income stored as negative (US GAAP / US Steel)
+  #   natural         — income stored as positive (IFRS / Rusal)
+  is_income_sign: credit_negative  # change to "natural" for IFRS companies
+
+# ── Macro Forecast ───────────────────────────────────────────
+macro_forecast:
+  profile: vecm_default
+  config: companies/{company}/configs/forecast/macro_ecm.yaml
+  factors:
+    # Steel/manufacturing:
+    # - steel_price_hrc
+    # - iron_ore_price
+    # - ppi_us
+    # Metals/mining:
+    # - lme_aluminium
+    # - lme_alumina
+    # - usd_rub
+    # Universal:
+    - brent
+    - gdp_world
+    - cpi_us
+  policy:
+    factors: []  # subset of factors for policy scenario
+  search_paths:
+    - companies/{company}/drivers
+    - companies/{company}/data/macro
+    - macro/global/drivers
+
+# ── History Data Paths (legacy CSV — optional if using ExcelLoader) ──
+# history:
+#   is: companies/{company}/history/is_history_{company}.csv
+#   bs: companies/{company}/history/bs_history_{company}.csv
+#   cf: companies/{company}/history/cf_history_{company}.csv
+#   mapping: companies/{company}/configs/excel_loader.yaml
+
+# ── Model Configuration ─────────────────────────────────────
+model:
+  engine_version: v2
+  mode: custom               # standard | custom
+
+  # ── Standard model (base defaults) ─────────────────────────
+  standard:
+    periods:
+      history_start_year: 2010
+      history_end_year: 2024       # last year with actuals in DB
+      forecast_start_year: 2025
+      forecast_end_year: 2029
+      forecast_years: 5
+
+    transforms:
+      revenue_target: dln          # log-difference transform
+      revenue_features: dln
+
+    revenue:
+      driver: steel_price_hrc     # primary macro driver
+      macro_factors: [steel_price_hrc, gdp_world]
+      elasticity: 1.0
+      use_elastic_net: true
+      l1_ratio: 0.5
+      fallback_growth: ewa
+      target_transform: dln
+      feature_transform: dln
+      chainlink_anchor: history_last
+      segment_modeling: false       # true → use model.custom.revenue.segments
+
+    ewa:
+      sgna_halflife_years: 3
+      wc_days_halflife_years: 3
+
+    sgna:
+      base_method: ewa
+      ewa_halflife_years: 3
+      # CPI indexation (US Steel uses CPI uplift):
+      # index_by_cpi: true
+      # cpi_series: cpi_us              # or cpi_ru for IFRS/Russia
+      # cpi_beta: 1.0
+      # cpi_transform: dln
+      # demand_decline_adjustment: 0.0
+      # clamp:
+      #   min_pct: 50
+      #   max_pct: 200
+      #   clamp_to_history: true
+
+    margins:
+      ebitda_margin_default: 0.15
+      tax_rate_delta_pct: 0.0
+
+    capex_policy:
+      method: ratio_to_revenue
+      ratio_default: 0.08
+      maint_as_dep_ratio: 1.0
+      capex_useful_life_years: 20.0
+      disposals_ratio: history
+      # Per-year overrides:
+      # capex_pct_by_year: {2025: 0.08, 2026: 0.07, 2027: 0.06}
+      # Clamp settings (US Steel):
+      # clamp_ratio_to_history: true
+      # clamp_ratio_min_pct: 50.0
+      # clamp_ratio_max_pct: 200.0
+
+    ppe:
+      mode: full                   # full = corkscrew (gross + accum_dep)
+      useful_life_years: 15
+      min_capex_da_ratio: 0.9     # floor: CapEx >= 90% of D&A
+
+    wc:
+      method: days                 # days = DSO/DIH/DPO from preprocessor
+      dio_days: 60
+      transform_days: dln
+      # Floor minimums (US Steel):
+      # floors:
+      #   ar_days: 5
+      #   inv_days: 10
+      #   ap_days: 5
+
+    cogs:
+      use_ppi_uplift: false
+      # mode: ratio (default) | component (alumina + energy + labour)
+      # For component mode, see model.custom.cogs section
+      # Macro factors for COGS (US Steel uses PPI + HRC + iron ore):
+      # macro_factors: [ppi_us, steel_price_hrc, iron_ore_price]
+      # ppi_series: ppi_us
+      # ppi_beta: 1.0
+      # ppi_transform: dln
+      # cogs_macro_l1_ratio: 0.5
+      clamp:
+        min: 0.55
+        max: 0.95
+
+    leases:
+      enabled: true
+      default_discount_rate: 0.05
+
+    debt:
+      mode: optimizer              # parametric | optimizer | schedule_based
+      target_pct_revenue: 0.50
+      version: v2_solver
+      interest_treatment: separate_line
+      target_net_debt_ebitda: 0.0  # 0 = no floor
+      max_voluntary_prepay_pct_fcf: 0.5
+      rc:
+        enable: false
+        limit: 0
+        min_cash: 300000000        # $300M minimum cash
+      iter_max: 50
+      tol: 1.0e-06
+      refinancing:
+        enable: true
+        mode: simple               # simple = extend maturity | new = create new instrument
+        simple:
+          extend_years: 5
+          rate_adjustment: 0.0
+          fees_pct: 0.001          # 10bps
+        # Detailed refinancing rules (US Steel):
+        # detailed:
+        #   default_tenor_years: 5
+        #   bonds_refinance_tenor_years: 3
+        #   loans_refinance_tenor_years: 5
+        #   refinance_rate_spread: 0.02
+        #   fees_pct: 0.001
+        #   rules:
+        #     bullet:     {refinance: true, new_tenor_years: 3}
+        #     amortizing: {refinance: true, new_tenor_years: 5}
+        #     callable:   {refinance: true, new_tenor_years: 3}
+      # Debt optimizer weights (LP):
+      # lp_weights:
+      #   cash_deficit: 1000000
+      #   icr: 600000
+      #   leverage: 600000
+      #   draw: 0.1
+      #   end_debt: 0.02
+      absorb_nonmodeled_st_debt: true
+      general_rate_delta_pct: 0.0    # stress offset for all rates
+      # CBR/SOFR key rate forecast for floating instruments (year → rate)
+      # cbr_key_rate_forecast:
+      #   2025: 0.19
+      #   2026: 0.14
+
+    taxes:
+      mode: full
+      policy: statutory_with_floor
+      nol_opening_balance: 0
+      nol_max_utilization_pct: 0.8
+      tax_paid_timing: current_year
+
+    intangibles:
+      mode: full
+      additions_pct_of_revenue: 0.005
+      amortization_pct_of_balance: 5.0
+      # amortization_useful_life_years: 10
+      # track_gross_and_accum: true    # track gross + accumulated separately
+
+    interest_payable:
+      mode: full
+      payment_timing: current_year
+
+    equity:
+      mode: full
+      dividend_payout_ratio: 0.0   # % of NI
+      buyback_pct_fcf: 0.0        # % of prior year FCF
+      buyback_leverage_max: 2.0    # only if ND/EBITDA < this
+      # additional_events:
+      #   2026: {issuance: 500000000}
+
+    train_test:
+      train_end_year: 2022         # for backtesting
+
+  # ── Custom model (overrides standard) ──────────────────────
+  custom:
+    revenue:
+      macro_factor: steel_price_hrc   # primary revenue driver
+
+      # Segment Revenue Model (Volume × Price per segment)
+      # segment_modeling: true
+      # segments:
+      #   primary_product:
+      #     volume_history: {2020: 1000, 2021: 1050, 2022: 980}  # in kt
+      #     price_history:  {2020: 1500000, 2021: 1800000, 2022: 1600000}  # USD/kt
+      #     volume_method: ewa           # ewa | macro | fixed_growth
+      #     price_method: macro          # ewa | macro | fixed_growth
+      #     price_factors: [lme_aluminium]
+      #     ewa_halflife: 4.0
+      #   other:
+      #     volume_history: {2020: 1, 2021: 1, 2022: 1}
+      #     price_history:  {2020: 500e6, 2021: 550e6, 2022: 480e6}  # total revenue
+      #     volume_method: ewa
+      #     price_method: ewa
+
+    # Component COGS (macro-linked cost breakdown — Rusal example)
+    # cogs:
+    #   mode: component              # ratio (default) | component
+    #   alumina_share: 0.37          # % of COGS from alumina (LME-linked)
+    #   energy_share: 0.27           # % from energy (power price / FX)
+    #   labour_share: 0.12           # % from labour (CPI indexed)
+    #   other_share: 0.24            # % other (PPI indexed)
+    #   alumina_intensity: 1.93      # tonnes alumina per tonne Al
+    #   energy_kwh_per_t: 15500      # kWh per tonne Al
+    #   mean_reversion_dampening: 0.30  # 0-1: 0=no macro effect, 1=full drift
+    #   clamp_sigma: 0.06           # max ±Npp from EWA anchor
+
+    # Tax / NOL (US Steel example — $1B NOL carryforward)
+    # tax:
+    #   nol_opening_balance: 1014000000
+    #   nol_limit_pct: 0.8
+
+    # Equity policy with per-year overrides (US Steel example)
+    # equity:
+    #   dividend_payout_ratio: 0.0
+    #   buyback_pct_fcf: 0.1
+    #   buyback_leverage_max: 2.0
+    #   additional_events:
+    #     2025: {buyback: 200000000}
+    #     2026: {dividends: 100000000}
+
+    ppe:
+      min_capex_da_ratio: 0.9
+      expansion_capex_pct_of_rev_growth: 0.0
+
+    debt:
+      mode: optimizer
+      target_net_debt_ebitda: 2.5    # target leverage
+      max_voluntary_prepay_pct_fcf: 0.3
+      # cbr_key_rate_forecast:
+      #   2025: 0.19
+      #   2026: 0.14
+      #   2027: 0.11
+      refinancing:
+        fees_pct: 0.001
+
+    covenants:
+      enabled: false
+      thresholds:
+        net_debt_ebitda:
+          max: 4.5
+          warning: 4.0
+        interest_coverage:
+          min: 1.5
+          warning: 2.0
+        ebitda_margin:
+          min: 0.08
+          warning: 0.10
+
+# ── Solver ───────────────────────────────────────────────────
+solver:
+  max_iter: 10                     # joint iteration max
+  tol: 1000.0                     # convergence tolerance ($)
+
+# ── Output ───────────────────────────────────────────────────
+outputs:
+  base: companies/{company}/outputs
+
+# ── Features ─────────────────────────────────────────────────
+features:
+  min_cash: 0                      # minimum cash balance ($)
+
+# ── Forecast Methods (per IS/BS metric) ──────────────────────
+# Methods: ewa | last | zero | macro | driver | cork | plug | calc
+forecast_methods:
+  is:
+    asset_impairment:
+      method: ewa
+      ewa_halflife_years: 3
+    restructuring:
+      method: zero                 # one-time → zero in forecast
+    earnings_from_investees:
+      method: ewa
+      ewa_halflife_years: 3
+      # sign: -1                     # for credit_negative convention (US GAAP)
+    net_periodic_benefit_income:
+      method: ewa
+      ewa_halflife_years: 3
+      # sign: -1                     # for credit_negative convention
+    loss_on_debt_extinguishment:
+      method: zero                   # one-time → zero in forecast
+    interest_income:
+      method: ewa
+      ewa_halflife_years: 2
+    other_financial_costs:
+      method: ewa
+      ewa_halflife_years: 3
+  bs:
+    goodwill:
+      method: last                 # carry forward
+    restricted_cash:
+      method: last
+    employee_benefits:
+      method: ewa
+      ewa_halflife_years: 5
+
+# ── Covenants ────────────────────────────────────────────────
+covenants:
+  enabled: false
+  methodology: default
+  warning_buffer: 0.1
+  acceleration_triggers:
+    - interest_coverage
+    - net_debt_ebitda
+  thresholds:
+    net_debt_ebitda_max: 4.5
+    interest_coverage_min: 2.0
+    debt_to_equity_max: 4.0
+    current_ratio_min: 1.0
+    ebitda_margin_min: 0.05
+
+# ── Rating ───────────────────────────────────────────────────
+rating:
+  methodology: sp                  # sp | moodys | fitch
+  # Industry adjustment: steel=-12, metals/mining=-6, utilities=-3, tech=0
+  industry_adjustment: -12.0
+  size_adjustment: 2.0
+  cycle_avg_ebitda_margin: 0.10    # through-the-cycle normalized margin
+  weights:
+    leverage: 0.35
+    coverage: 0.30
+    profitability: 0.20
+    liquidity: 0.15
