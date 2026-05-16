@@ -29,3 +29,8 @@ Thumbs.db
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Backups
+*.bak
+*.bak_*
+*.bak_sync
