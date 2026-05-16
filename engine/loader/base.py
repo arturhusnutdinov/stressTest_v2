@@ -239,10 +239,12 @@ class FormulaEngine:
         deps: Dict[str, List[str]] = {}
 
         for m in with_formula:
-            names = self._extract_names(m.formula)
+            names = self._extract_names(m.formula or "")
             formula_deps = [n for n in names if n in metric_to_mapping]
-            deps[m.db_metric] = formula_deps
-            in_degree[m.db_metric] = len([d for d in formula_deps if d in metric_to_mapping and metric_to_mapping[d].formula])
+            if m.db_metric:
+                deps[m.db_metric] = formula_deps
+            if m.db_metric:
+                in_degree[m.db_metric] = len([d for d in formula_deps if d in metric_to_mapping and metric_to_mapping[d].formula])
 
         # Kahn's algorithm
         sorted_formula: List[RowMapping] = []

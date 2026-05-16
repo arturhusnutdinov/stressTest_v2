@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Optional,  Dict, Optional
 
 logger = logging.getLogger(__name__)
 

@@ -522,7 +522,7 @@ class ModelInputLoader:
         Если driver не задан явно в YAML — берём из препроцессора.
         Приоритет: YAML explicit > preprocess_recommended > hardcoded default.
         """
-        def _from_pp(group: str, metric: str, default: float) -> float:
+        def _from_pp(group: str, metric: str, default: Optional[float] = None) -> Optional[float]:
             val = historic.get_recommended(group, metric)
             return val if val is not None else default
 

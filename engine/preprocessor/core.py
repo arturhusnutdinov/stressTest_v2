@@ -36,7 +36,7 @@ def _safe_div(num: float, den: float, default: float = 0.0) -> float:
     return num / den if den and not math.isnan(den) and abs(den) > 1e-12 else default
 
 
-def _summary(series: Dict[int, float], halflife: float = 3.0) -> Dict[str, float]:
+def _summary(series: Dict[int, float], halflife: float = 3.0) -> Dict:
     """Возвращает {year: v, ..., _ewa, _mean, _last, _recommended}."""
     if not series:
         return {}

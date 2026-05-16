@@ -308,6 +308,11 @@ class YearState:
     cf_cash_opening: float = 0.0
     cf_cash_ending: float = 0.0
 
+    # Internal: mutable state during solver iteration
+    _cash_estimate: float = 0.0
+    _actual_cfo_est: float = 0.0
+    _fl_ncl_adj: float = 0.0
+
     def to_dict(self) -> Dict[str, float]:
         """Конвертировать в плоский словарь для записи в БД."""
         from dataclasses import asdict
@@ -472,6 +477,9 @@ class ModelConfig:
     revenue_macro_factor: Optional[str] = None
     cogs_revenue_factor: Optional[str] = None
     cogs_cost_factor: Optional[str] = None
+
+    # Internal: populated by ModelInputLoader
+    _segment_model: Optional[Dict[int, float]] = None
 
     @property
     def nol_enabled(self) -> bool:

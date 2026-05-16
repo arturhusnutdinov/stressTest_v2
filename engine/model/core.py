@@ -140,7 +140,7 @@ class ThreeStatementModel:
                 if _cogs_cfg.get('mode') == 'component':
                     from .cogs_block import CogsBlock, CogsBlockConfig
                     _base = historic.base_year_state
-                    _base_cogs = abs(_base.cogs or 0)
+                    _base_cogs = abs(_base.cogs or 0) if _base else 0
                     _pp_kpi = historic.preprocess.get('production_kpi', {})
                     _base_prod = _pp_kpi.get('production_al_kt', {})
                     if isinstance(_base_prod, dict):

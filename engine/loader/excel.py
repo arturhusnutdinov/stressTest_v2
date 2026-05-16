@@ -286,9 +286,10 @@ class ExcelLoader(BaseLoader):
         formula_mappings = [m for m in sorted_mappings if m.formula]
         for m in formula_mappings:
             for year, ctx in year_data.items():
-                val = self._formula_engine.evaluate(m.formula, ctx, year)
-                if val is not None:
-                    year_data[year][m.db_metric] = val * m.sign
+                if m.formula:
+                    val = self._formula_engine.evaluate(m.formula, ctx, year)
+                    if val is not None and m.db_metric:
+                        year_data[year][m.db_metric] = val * m.sign
 
         self._write_history(year_data, statement, result)
 

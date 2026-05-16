@@ -40,6 +40,8 @@ class Repository:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self._conn is None:
+            return
         if exc_type is None:
             self._conn.commit()
         else:
