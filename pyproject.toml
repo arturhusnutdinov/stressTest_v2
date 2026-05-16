@@ -1,0 +1,37 @@
+[project]
+name = "stresstest-v2"
+version = "2.1.0"
+description = "Universal 3-Statement Financial Model Engine with Stress Testing, Credit Rating, and Covenant Monitoring"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=1.5.0",
+    "numpy>=1.23.0",
+    "scipy>=1.9.0",
+    "statsmodels>=0.14.0",
+    "openpyxl>=3.1.0",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+markers = [
+    "slow: slow integration tests that run the full model pipeline",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
