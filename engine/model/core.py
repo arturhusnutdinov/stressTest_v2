@@ -963,38 +963,7 @@ class ThreeStatementModel:
         state.cfo_interest_paid = -(block.interest_paid_cf or 0.0)
         return state
 
-    # ── Joint Debt ↔ Interest solver ──────────────────────────────────────────
-
-    def _joint_solve(self, state: YearState, prev: YearState) -> YearState:
-        """
-        Итеративно решает циклическую зависимость:
-        Debt → Interest → CFO → Cash → RC draw/sweep → Debt
-        """
-        cfg = self._c.debt
-
-        for iteration in range(ITER_MAX):
-            prev_interest = state.interest_expense
-
-            # 1. Решаем долг (в зависимости от режима)
-            state = self._solve_debt(state, prev)
-
-            # 2. Interest income от cash
-            state.interest_income = prev.cash * self._c.cash_rate
-
-            # 3. Пересчитываем IS subtotals (нужны для ICR в LP)
-            state = self._solve_is_subtotals(state)
-
-            # 4. Проверка сходимости
-            diff = abs(state.interest_expense - prev_interest)
-            if diff < cfg.tol:
-                logger.debug(f"  Joint iter={iteration+1} diff={diff:.2f} — OK")
-                break
-        else:
-            logger.warning(
-                f"  {state.year}: joint solver не сошёлся за {ITER_MAX} итераций"
-            )
-
-        return state
+    # ── Debt solver ─────────────────────────────────────────────────────────
 
     def _solve_debt(self, state: YearState, prev: YearState) -> YearState:
         """Диспетчер режимов долга."""
