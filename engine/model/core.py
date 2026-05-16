@@ -329,89 +329,8 @@ class ThreeStatementModel:
     # ── IS блоки ──────────────────────────────────────────────────────────────
 
     def _solve_revenue(self, state: YearState, prev: YearState) -> YearState:
-        """
-        Revenue прогноз — три метода в порядке приоритета:
-
-        1. macro_forecasts['revenue']: явный прогноз из VECM/ECM
-        2. macro_ols: OLS регрессия Revenue ~ beta × Δln(factor) [если задан в YAML]
-        3. ewa_clamped: EWA темп роста с clamp к историческому диапазону
-
-        Консистентность с COGS:
-        - При методе macro_ols Revenue и COGS используют ОДИН фактор (HRC)
-        - COGS = Revenue × ratio → автоматически консистентно
-        """
-        year = state.year
-
-        # ── Сегментное моделирование (если включено в YAML) ───────────────────
-        if getattr(self._c, '_segment_model', None) is not None:
-            seg_total = self._c._segment_model.get(year)
-            if seg_total and seg_total > 0:
-                state.revenue = seg_total
-                return state
-
-        # ── Метод 1: явный прогноз macro_forecasts['revenue'] ─────────────────
-        macro_rev = self._h.macro_forecasts.get("revenue", {}).get(year)
-        if macro_rev is not None and macro_rev > 0:
-            state.revenue = macro_rev
-            return state
-
-        # ── Метод 2: OLS регрессия на макро-фактор ────────────────────────────
-        revenue_factor = None
-        try:
-            import yaml
-            from engine import ROOT as _root
-            cfg_path = (_root / "companies" /
-                        self._h.company_id / "configs" / "project.yaml")
-            if cfg_path.exists():
-                with open(cfg_path) as f:
-                    raw = yaml.safe_load(f) or {}
-                mode = raw.get("model", {}).get("mode", "standard")
-                rev_cfg = raw.get("model", {}).get(mode, {}).get("revenue", {})
-                revenue_factor = (rev_cfg.get("macro_factor") or
-                                  (rev_cfg.get("macro_factors") or [None])[0])
-        except Exception:
-            pass
-
-        if revenue_factor:
-            factor_series = self._h.macro_forecasts.get(revenue_factor, {})
-            if factor_series:
-                betas = self._h.preprocess.get("revenue_betas", {})
-                beta = betas.get(f"rev_beta_{revenue_factor}")
-                if isinstance(beta, dict):
-                    beta = beta.get(-1)
-                if beta is None:
-                    # Используем rev_best_beta из препроцессора; без него — нейтральная эластичность
-                    best = betas.get("rev_best_beta")
-                    if isinstance(best, dict):
-                        best = best.get(-1)
-                    beta = float(best) if best is not None else 1.0
-
-                f_curr = factor_series.get(year)
-                f_prev = factor_series.get(year - 1)
-                if f_curr and f_prev and f_prev > 0:
-                    alpha_val = betas.get("rev_alpha", {})
-                    if isinstance(alpha_val, dict):
-                        alpha_val = alpha_val.get(-1, 0.0)
-                    alpha_val = 0.0 if alpha_val is None else float(alpha_val)
-                    d_rev = alpha_val + beta * math.log(f_curr / f_prev)
-                    state.revenue = prev.revenue * math.exp(d_rev)
-                    return state
-
-        # ── Метод 3: EWA с clamp ──────────────────────────────────────────────
-        rev_series = {y: self._h.is_data.get(y, {}).get("revenue", 0)
-                      for y in self._h.years
-                      if self._h.is_data.get(y, {}).get("revenue", 0) > 0}
-
-        if len(rev_series) >= 2:
-            from .revenue_models import ewa_with_clamp
-            fc = ewa_with_clamp(rev_series, [year], halflife=5.0)
-            if fc.get(year):
-                state.revenue = fc[year]
-                return state
-
-        # Ultimate fallback
-        state.revenue = prev.revenue * 1.02
-        return state
+        from .blocks.revenue import solve_revenue
+        return solve_revenue(state, prev, self._h, self._c)
 
     def _solve_cogs(self, state: YearState, prev: YearState) -> YearState:
         """
@@ -559,62 +478,8 @@ class ThreeStatementModel:
         return state
 
     def _solve_sga(self, state: YearState, prev: YearState) -> YearState:
-        """
-        SGA = Revenue × sga_pct × (1 + cpi_uplift)
-        cpi_uplift линейный, только положительный beta.
-        """
-        sga_pct = self._c.sga_pct
-        if not sga_pct:
-            pp_mr = self._h.preprocess.get('margin_ratios', {})
-            # Prefer opex_ratio (sga + distribution_expenses) when available
-            rec = pp_mr.get('opex_ratio_recommended')
-            if isinstance(rec, dict):
-                rec = rec.get(-1)
-            if not rec:
-                rec = pp_mr.get('sga_ratio_recommended')
-                if isinstance(rec, dict):
-                    rec = rec.get(-1)
-            if not rec:
-                rec = pp_mr.get('sga_ratio_last')
-                if isinstance(rec, dict):
-                    rec = rec.get(-1)
-            if rec:
-                sga_pct = float(rec)
-            else:
-                # Derive from history median
-                hist_sga_raw = pp_mr.get('sga_ratio', {})
-                hist_vals_raw = [v for k, v in (hist_sga_raw.items() if isinstance(hist_sga_raw, dict) else [])
-                                 if isinstance(k, int) and k > 0 and v is not None]
-                sga_pct = sorted(hist_vals_raw)[len(hist_vals_raw) // 2] if hist_vals_raw else 0.05
-
-        # CPI uplift — только положительный beta
-        cpi_beta = self._h.preprocess.get("beta_coefficients", {}).get("cpi_beta")
-        if cpi_beta is not None and cpi_beta > 0:
-            cpi_series = self._h.macro_forecasts.get("cpi_us", {})
-            cpi_curr = cpi_series.get(state.year)
-            cpi_prev = cpi_series.get(state.year - 1)
-            if cpi_curr and cpi_prev and cpi_prev > 0:
-                cpi_growth = (cpi_curr / cpi_prev) - 1.0
-                beta_clamped = min(cpi_beta, 1.0)
-                uplift = cpi_growth * beta_clamped
-                uplift = max(-0.03, min(0.03, uplift))
-                sga_pct = sga_pct * (1.0 + uplift)
-
-        # Clamp в исторический диапазон
-        hist_sga = self._h.preprocess.get("margin_ratios", {}).get("opex_ratio") or \
-                   self._h.preprocess.get("margin_ratios", {}).get("sga_ratio", {})
-        if isinstance(hist_sga, dict):
-            hist_vals = [v for k, v in hist_sga.items()
-                        if isinstance(k, int) and k > 0 and v is not None]
-            if hist_vals:
-                hist_min = min(hist_vals) * 0.80
-                hist_max = max(hist_vals) * 1.20
-                sga_pct = max(hist_min, min(hist_max, sga_pct))
-        else:
-            sga_pct = max(0.01, min(0.30, sga_pct))
-
-        state.sga = -abs(state.revenue * sga_pct)
-        return state
+        from .blocks.sga import solve_sga
+        return solve_sga(state, prev, self._h, self._c)
 
     def _solve_ppe(self, state: YearState, prev: YearState) -> YearState:
         # Standard mode: простой % от Revenue без PPE corkscrew
@@ -768,43 +633,8 @@ class ThreeStatementModel:
         return state
 
     def _solve_is_subtotals(self, state: YearState) -> YearState:
-        """Вычисляет EBITDA, EBIT, EBT. Tax — через _solve_tax_block."""
-        # When da_in_cogs=True: D&A is embedded in COGS, so gross_profit+sga = EBIT directly.
-        # Subtracting total_da again would double-count D&A and understate NI/equity.
-        # When da_in_cogs=False (standard): DA stripped from COGS, so gross_profit+sga = EBITDA.
-        _da_in_cogs = True  # default — must match _solve_cogs default
-        try:
-            import yaml
-            from engine import ROOT as _root
-            _cfg_path = _root / "companies" / self._h.company_id / "configs" / "project.yaml"
-            if _cfg_path.exists():
-                with open(_cfg_path) as _fh:
-                    _da_in_cogs = (yaml.safe_load(_fh) or {}).get(
-                        'accounting_conventions', {}).get('da_in_cogs', True)
-        except Exception:
-            pass
-        if _da_in_cogs:
-            # DA already in COGS → gross_profit+sga = EBIT; add back DA for EBITDA metric
-            state.ebit   = state.gross_profit + state.sga
-            state.ebitda = state.ebit + state.total_da
-        else:
-            # DA not in COGS → standard formula
-            state.ebitda = state.gross_profit + state.sga
-            state.ebit   = state.ebitda - state.total_da
-
-        # EBT: EBIT + ниже-операционные статьи (US GAAP: investees, pension ниже EBIT)
-        state.ebt = (
-            state.ebit
-            + state.earnings_from_investees
-            + state.net_periodic_benefit
-            + (state.other_losses_gains or 0.0)
-            + (state.ppe_disposal_gain or 0.0)    # PPE disposal gain (not zeroed by _solve_other_is)
-            + state.interest_income
-            - state.interest_expense
-            - state.other_financial_costs
-            - state.loss_on_debt_extinguishment
-        )
-        return state
+        from .blocks.is_subtotals import solve_is_subtotals
+        return solve_is_subtotals(state, self._h)
 
     def _solve_tax_block(self, state: YearState, prev: YearState) -> YearState:
         """Tax через TaxBlock: NOL, DTA/DTL, taxes_payable, taxes_paid_cf."""
@@ -1737,163 +1567,16 @@ class ThreeStatementModel:
     # ── BS другие статьи ──────────────────────────────────────────────────────
 
     def _solve_bs_other(self, state: YearState, prev: YearState) -> YearState:
-        """Статичные / LAST статьи BS. Corkscrew-статьи уже рассчитаны."""
-        # LAST — статичные некорксрю-статьи
-        state.restricted_cash       = prev.restricted_cash
-        state.goodwill              = prev.goodwill
-        state.investments_lt        = prev.investments_lt
-        state.employee_benefits     = prev.employee_benefits
-        state.other_nca             = prev.other_nca
-        # other_ncl: carry forward, adjusted by finance lease overlay if set
-        _fl_adj = getattr(state, '_fl_ncl_adj', 0)
-        state.other_ncl             = (prev.other_ncl or 0) + _fl_adj
-        state.accounts_payable_rp   = prev.accounts_payable_rp
-
-        # Payroll payable: % от SGA (не corkscrew, достаточно DRIVER)
-        state.payroll_payable = abs(state.sga) * 0.10
-
-        # dta/dtl, taxes_payable, interest_payable, other_ca, other_cl,
-        # lease_liab_*, rou_*, intangibles — уже заполнены corkscrew-блоками
-        # (_solve_tax_block, _solve_wc, _solve_lease, _solve_interest_payable, _solve_ppe)
-
-        return state
-
-    def _estimate_cash_before_debt(self, state: YearState, prev: YearState) -> float:
-        """
-        Предварительная оценка cash до решения долгового блока.
-        Используется RC solver для корректного draw/repay решения.
-
-        Формула: cash_est = prev_cash + CFO_est + CFI_est
-        где CFO_est = NI_est + DA - WC_delta - interest_paid_est - taxes_paid_est
-        """
-        # Оценка NI без учёта RC (используем текущий interest_expense)
-        ebitda = state.ebitda if state.ebitda else 0.0
-        da     = state.total_da if state.total_da else 0.0
-        ebit   = ebitda - da
-
-        # Предварительный interest (без RC) — из предыдущего года
-        prev_total_debt = prev.short_term_debt + prev.long_term_debt
-        avg_rate = getattr(self._c.debt, 'avg_rate_pct', 0.05) or 0.05
-        int_est  = prev_total_debt * avg_rate
-
-        ebt_est  = ebit - int_est + (state.interest_income or 0)
-        tax_rate = self._c.tax_rate or 0.21
-        ni_est   = ebt_est * (1 - tax_rate) if ebt_est > 0 else ebt_est
-
-        # CFO estimate
-        wc_delta   = state.cfo_wc_delta or 0.0
-        taxes_paid = abs(ni_est * tax_rate) if ni_est > 0 else 0.0
-        cfo_est    = ni_est + da - wc_delta - int_est - taxes_paid
-
-        # CFI estimate (capex уже в state)
-        cfi_est = (state.cfi_capex or 0.0) + (state.cfi_disposal_proceeds or 0.0)
-
-        return prev.cash + cfo_est + cfi_est
+        from .blocks.bs_other import solve_bs_other
+        return solve_bs_other(state, prev)
 
     def _solve_cash_from_cf(self, state: YearState, prev: YearState) -> YearState:
-        """
-        Cash определяется из CF Bridge (принцип Rusal/правильная 3-Statement Model).
-
-        Cash_end = Cash_begin + CFO + CFI + CFF
-        BS.Cash = CF.Cash_end (прямая ссылка, нет plug)
-
-        Если cash отрицательный → RC должен был покрыть дефицит.
-        """
-        state.cf_cash_opening = prev.cash
-        state.cf_net_change   = state.cfo_total + state.cfi_total + state.cff_total
-        state.cf_cash_ending  = state.cf_cash_opening + state.cf_net_change
-
-        # Cash в BS = Cash ending из CF (нет plug)
-        state.cash = state.cf_cash_ending
-
-        # RC min_cash enforcement
-        min_cash = getattr(self._c, 'min_cash', 0.0) or 0.0
-        if state.cash < min_cash and min_cash > 0:
-            logger.debug(
-                f"  {state.year}: cash={state.cash/1e6:.0f}M < min_cash={min_cash/1e6:.0f}M"
-            )
-
-        return state
-
-    # ── BS Totals ─────────────────────────────────────────────────────────────
+        from .blocks.cash import solve_cash_from_cf
+        return solve_cash_from_cf(state, prev, self._c)
 
     def _solve_bs_totals(self, state: YearState) -> YearState:
-        """
-        Вычисляет итоги BS.
-
-        Cash уже установлен из CF (_solve_cash_from_cf).
-        BS баланс достигается через точные corkscrews.
-        Нет other_ncl plug — если diff ≠ 0, это ошибка в corkscrews.
-        """
-        # ── Current Assets ────────────────────────────────────────
-        state.total_ca = (
-            (state.cash or 0) +
-            (state.restricted_cash or 0) +
-            (state.accounts_receivable or 0) +
-            (state.inventory or 0) +
-            (state.other_ca or 0)
-        )
-
-        # ── Non-Current Assets ────────────────────────────────────
-        # rou_finance NOT added: finance lease assets are included in ppe_net per 10-K
-        state.total_nca = (
-            (state.ppe_net or 0) +
-            (state.rou_asset or 0) +
-            (state.intangibles or 0) +
-            (state.goodwill or 0) +
-            (state.dta or 0) +
-            (state.investments_lt or 0) +
-            (state.other_nca or 0)
-        )
-
-        state.total_assets = state.total_ca + state.total_nca
-
-        # ── Current Liabilities ───────────────────────────────────
-        # Finance lease liabilities NOT added separately: included in other_cl/other_ncl via loader plug
-        state.total_cl = (
-            (state.short_term_debt or 0) +
-            abs(state.accounts_payable or 0) +
-            abs(state.taxes_payable or 0) +
-            abs(state.interest_payable or 0) +
-            abs(state.payroll_payable or 0) +
-            abs(state.lease_liab_current or 0) +
-            abs(state.other_cl or 0)
-        )
-
-        # ── Non-Current Liabilities ───────────────────────────────
-        state.total_ncl = (
-            (state.long_term_debt or 0) +
-            abs(state.dtl or 0) +
-            abs(state.employee_benefits or 0) +
-            abs(state.lease_liab_noncurrent or 0) +
-            abs(state.other_ncl or 0)
-        )
-
-        state.total_liabilities = state.total_cl + state.total_ncl
-
-        # ── Equity ────────────────────────────────────────────────
-        state.total_equity = (
-            (state.share_capital or 0) +
-            (state.apic or 0) +
-            (state.retained_earnings or 0) +
-            -abs(state.treasury_stock or 0) +
-            (state.aoci or 0) +
-            (state.nci or 0)
-        )
-
-        state.total_liab_equity = state.total_liabilities + state.total_equity
-
-        # ── BS Check (без plug) ───────────────────────────────────
-        bs_diff = state.total_assets - state.total_liab_equity
-        if abs(bs_diff) > 100:  # > $100 → логируем
-            logger.debug(
-                f"  {state.year}: BS diff={bs_diff/1e6:.2f}M "
-                f"(assets={state.total_assets/1e6:.0f} L+E={state.total_liab_equity/1e6:.0f})"
-            )
-
-        return state
-
-    # ── CF Statement ──────────────────────────────────────────────────────────
+        from .blocks.bs_totals import solve_bs_totals
+        return solve_bs_totals(state)
 
     def _solve_cf(self, state: YearState, prev: YearState) -> YearState:
         """
