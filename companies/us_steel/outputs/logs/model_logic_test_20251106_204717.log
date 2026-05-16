@@ -1,0 +1,71 @@
+================================================================================
+ЮНИТ-ТЕСТЫ ДЛЯ ПРОВЕРКИ АЛГОРИТМА И ЛОГИКИ МОДЕЛИ
+================================================================================
+Компания: us_steel
+Корневая директория: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest
+Лог-файл: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest/companies/us_steel/outputs/logs/model_logic_test_20251106_204717.log
+ВАЖНО: Все операции выполняются через витрину данных (FinancialDataMart)
+Приоритет: БД (через витрину) → CSV (fallback только для чтения)
+
+✅ 2025: CFO=$-1,669, NI=$676
+✅ 2026: CFO=$675, NI=$716
+✅ 2027: CFO=$761, NI=$755
+✅ 2028: CFO=$838, NI=$806
+✅ 2029: CFO=$937, NI=$852
+✅ Тест 1 пройден: CFO расчет корректен
+❌ 2025: Balance Sheet не сходится! Assets=$14,163, L+E=$14,415, Diff=$251.47
+❌ 2026: Balance Sheet не сходится! Assets=$14,973, L+E=$15,227, Diff=$253.32
+❌ 2027: Balance Sheet не сходится! Assets=$15,821, L+E=$16,076, Diff=$255.15
+❌ 2028: Balance Sheet не сходится! Assets=$16,734, L+E=$16,992, Diff=$257.27
+❌ 2029: Balance Sheet не сходится! Assets=$17,689, L+E=$17,948, Diff=$259.29
+❌ Тест 2 не пройден: Balance Sheet не сходится
+✅ 2025: Cash Bridge сходится (Diff=$0.00)
+✅ 2026: Cash Bridge сходится (Diff=$0.00)
+✅ 2027: Cash Bridge сходится (Diff=$0.00)
+✅ 2028: Cash Bridge сходится (Diff=$0.00)
+✅ 2029: Cash Bridge сходится (Diff=$0.00)
+✅ Тест 3 пройден: Cash Bridge соблюден
+✅ 2025: Taxes Payable corkscrew сходится (Diff=$0.00)
+✅ 2026: Taxes Payable corkscrew сходится (Diff=$0.00)
+✅ 2027: Taxes Payable corkscrew сходится (Diff=$0.00)
+✅ 2028: Taxes Payable corkscrew сходится (Diff=$0.00)
+✅ 2029: Taxes Payable corkscrew сходится (Diff=$0.00)
+✅ Тест 4 пройден: Payables Corkscrews соблюдены
+✅ 2025: Retained Earnings сходится (Diff=$0.00)
+✅ 2025: Total Equity = сумма компонентов (Diff=$0.00)
+✅ 2026: Retained Earnings сходится (Diff=$0.00)
+✅ 2026: Total Equity = сумма компонентов (Diff=$0.00)
+✅ 2027: Retained Earnings сходится (Diff=$0.00)
+✅ 2027: Total Equity = сумма компонентов (Diff=$0.00)
+✅ 2028: Retained Earnings сходится (Diff=$0.00)
+✅ 2028: Total Equity = сумма компонентов (Diff=$0.00)
+✅ 2029: Retained Earnings сходится (Diff=$0.00)
+✅ 2029: Total Equity = сумма компонентов (Diff=$0.00)
+✅ Тест 5 пройден: Equity Reconciliation соблюдена
+✅ 2025: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2026: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2027: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2028: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2029: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ Тест 6 пройден: Total Assets компоненты проверены
+✅ CFO Variant A
+❌ Balance Sheet Identity
+✅ Cash Bridge
+✅ Payables Corkscrews
+✅ Equity Reconciliation
+✅ Total Assets Components
+⚠️  ТЕСТОВ ПРОЙДЕНО: 5/6
+ℹ️  Некоторые тесты не прошли. Проверьте вывод выше.
+ℹ️  📝 Полный лог сохранен в: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest/companies/us_steel/outputs/logs/model_logic_test_20251106_204717.log
+
+================================================================================
+ИТОГОВАЯ СВОДКА ТЕСТОВ
+================================================================================
+✅ ПРОЙДЕН: CFO Variant A
+❌ НЕ ПРОЙДЕН: Balance Sheet Identity
+✅ ПРОЙДЕН: Cash Bridge
+✅ ПРОЙДЕН: Payables Corkscrews
+✅ ПРОЙДЕН: Equity Reconciliation
+✅ ПРОЙДЕН: Total Assets Components
+
+Пройдено: 5/6

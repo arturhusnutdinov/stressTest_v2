@@ -1,0 +1,31 @@
+{
+  "operational": {
+    "2024": {
+      "al_production_kt": 3859,
+      "alumina_production_kt": null,
+      "bauxite_mt": null,
+      "al_sales_kt": 3859,
+      "alumina_external_sales_kt": null,
+      "avg_al_price_usd_t": null,
+      "total_cost_usd_t": null,
+      "alumina_cost_pct": 78,
+      "energy_cost_pct": 94,
+      "capacity_al_kt": null,
+      "vap_share_pct": null
+    },
+    "2023": {
+      "al_production_kt": 4000,
+      "alumina_production_kt": null,
+      "bauxite_mt": null,
+      "al_sales_kt": null,
+      "alumina_external_sales_kt": null,
+      "avg_al_price_usd_t": null,
+      "total_cost_usd_t": null,
+      "alumina_cost_pct": null,
+      "energy_cost_pct": null,
+      "capacity_al_kt": null,
+      "vap_share_pct": null
+    },
+    "2022": null
+  }
+}

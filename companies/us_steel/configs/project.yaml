@@ -1,0 +1,338 @@
+company:
+  name: United States Steel Corporation
+  industry: metals
+  currency: USD
+  cik: '0001163302'
+  accounting_standard: US_GAAP
+accounting_conventions:
+  da_in_cogs: false
+  interest_in_cff: true
+  da_presentation: separate_line
+  capitalize_interest: true
+  interest_cap_pct_source: preprocessor
+  is_income_sign: credit_negative    # US GAAP: income items stored as negative in DB
+macro_forecast:
+  profile: vecm_default
+  config: companies/us_steel/configs/macro_ecm.yaml
+  factors:
+  - gdp_us
+  - industrial_production_us
+  - dxy
+  - steel_price_hrc
+  - iron_ore_price
+  - cpi_us
+  - ppi_us
+  - gdp_world
+  policy:
+    factors:
+    - steel_price_hrc
+    - gdp_world
+    - gdp_us
+  file_map:
+    gdp_us: gdp_us.csv
+    industrial_production_us: industrial_production_us.csv
+    dxy: dxy.csv
+    steel_price_hrc: steel_price_hrc_usd.csv
+    iron_ore_price: iron_ore_price_usd.csv
+    cpi_us: cpi_us.csv
+    ppi_us: ppi_us.csv
+    gdp_world: world_gdp.csv
+  search_paths:
+  - companies/us_steel/drivers
+  - companies/us_steel/data/macro
+  - macro/industry/metallurgy/drivers
+  - macro/global/drivers
+history:
+  is: companies/us_steel/history/is_history_us_steel.csv
+  bs: companies/us_steel/history/bs_history_us_steel.csv
+  cf: companies/us_steel/history/cf_history_us_steel.csv
+model:
+  engine_version: v2
+  mode: custom
+  standard:
+    periods:
+      history_start_year: 2010
+      history_end_year: 2024
+      forecast_start_year: 2025
+      forecast_end_year: 2029
+      forecast_years: 5
+    transforms:
+      revenue_target: dln
+      revenue_features: dln
+      sga_base: dln
+      cogs_ppi: dln
+      wc_days: dln
+    revenue:
+      driver: steel_price_hrc
+      macro_factors:
+      - steel_price_hrc
+      - gdp_world
+      - gdp_us
+      drivers:
+      - steel_price_hrc
+      - gdp_world
+      - gdp_us
+      elasticity: 1.0
+      use_elastic_net: true
+      l1_ratio: 0.5
+      fallback_growth: ewa
+      target_transform: dln
+      feature_transform: dln
+      chainlink_anchor: history_last
+      segment_modeling: false
+      segment_volume_method: ewa
+      segment_price_method: elastic_net
+      segment_volume_factors: []
+      segment_price_factors: []
+    ewa:
+      sgna_halflife_years: 5
+      wc_days_halflife_years: 5
+    sgna:
+      base_method: ewa
+      ewa_halflife_years: 5
+      transform: dln
+      chainlink_anchor: history_last
+      index_by_cpi: true
+      cpi_series: cpi_us
+      cpi_beta: 1.0
+      cpi_transform: dln
+      demand_decline_adjustment: 0.0
+      clamp:
+        clamp_growth_to_history: true
+        clamp_growth_std_mult: 2.0
+        clamp_ratio_to_history: true
+        clamp_ratio_min_pct: 50.0
+        clamp_ratio_max_pct: 200.0
+    margins:
+      ebitda_margin_default: 0.15
+      tax_rate_delta_pct: 0.0
+    capex_policy:
+      method: ratio_to_revenue
+      ratio_default: 0.08
+      capex_pct_by_year:
+        2025: 0.08
+        2026: 0.07
+        2027: 0.06
+        2028: 0.06
+        2029: 0.06
+      maint_as_dep_ratio: 1.0
+      demand_growth_capex_multiplier: 0.0
+      demand_decline_capex_multiplier: 0.0
+      capex_useful_life_years: 30.0
+      disposals_ratio: history
+      clamp_ratio_to_history: true
+      clamp_ratio_min_pct: 50.0
+      clamp_ratio_max_pct: 200.0
+      clamp_growth_to_history: true
+      clamp_growth_std_mult: 2.0
+    ppe:
+      mode: full
+      net_pct_revenue: 0.75
+      useful_life_years: 12
+      min_capex_da_ratio: 0.9
+    wc:
+      method: days
+      dio_days: 55
+      transform_days: dln
+      floors:
+        ar_days: 5
+        inv_days: 10
+        ap_days: 5
+    cogs:
+      use_ppi_uplift: true
+      ppi_series: ppi_us
+      ppi_beta: 1.0
+      ppi_transform: dln
+      macro_factors:
+      - ppi_us
+      - steel_price_hrc
+      - iron_ore_price
+      cogs_macro_l1_ratio: 0.5
+      clamp:
+        min: 0.55
+        max: 0.98
+    leases:
+      enabled: false
+      default_discount_rate: 0.05
+      rate_delta_pct: 0.0
+      default_payment_frequency: annual
+    debt:
+      mode: full
+      target_pct_revenue: 0.267
+      version: v2_solver
+      interest_treatment: separate_line
+      general_rate_delta_pct: 0.0
+      absorb_nonmodeled_st_debt: true
+      rc:
+        enable: true
+        limit: 2000.0
+        min_cash: 596000000.0
+        rate_spread: 0.03
+        rate_delta_pct: 0.0
+      iter_max: 50
+      tol: 1e-6
+      refinancing:
+        enable: true
+        mode: simple
+        simple:
+          extend_years: 5
+          rate_adjustment: 0.0
+          fees_pct: 0.1
+        detailed:
+          default_tenor_years: 5
+          bonds_refinance_tenor_years: 3
+          loans_refinance_tenor_years: 5
+          refinance_rate_spread: 0.02
+          rate_delta_pct: 0.0
+          fees_pct: 0.1
+          fees_abs: 0.0
+          rules:
+            bullet:
+              refinance: true
+              new_tenor_years: 3
+              new_rate_spread: 0.02
+            amortizing:
+              refinance: true
+              new_tenor_years: 5
+              new_rate_spread: 0.02
+            callable:
+              refinance: true
+              new_tenor_years: 3
+              new_rate_spread: 0.02
+      payment_schedules:
+        bonds:
+          coupon_frequency: semiannual
+        loans:
+          method: level_payment
+      covenants:
+        icr_min: 2.0
+        lev_max: 3.25
+      lp_weights:
+        w_cash_def: 1000000.0
+        w_icr: 600000.0
+        w_lev: 600000.0
+        w_draw: 0.1
+        w_end_debt: 0.02
+    taxes:
+      mode: full
+      policy: statutory_with_floor
+      nol_opening_balance: 1014.0
+      nol_max_utilization_pct: 0.8
+      nol_expiration_years: 999
+      tax_paid_timing: next_year
+      accel_dep_excess_pct: 0.4
+    intangibles:
+      mode: full
+      additions_method: pct_of_revenue
+      additions_pct_of_revenue: 0.0
+      additions_fixed: 0.0
+      amortization_method: pct_of_balance
+      amortization_pct_of_balance: 10.0
+      amortization_fixed_rate: 0.0
+      amortization_useful_life_years: 10
+      track_gross_and_accum: true
+      clamp:
+        ratio_to_ppe: true
+        max_pct_of_ppe: 50.0
+        ratio_to_revenue: false
+        ratio_min_pct: 50.0
+        ratio_max_pct: 200.0
+        growth_to_history: true
+        growth_std_mult: 2.0
+    interest_payable:
+      mode: full
+      payment_timing: current_year
+      track_by_instrument: false
+    equity:
+      mode: full
+      dividend_payout_ratio: 0.03
+      buyback_pct_fcf: 0.15
+      buyback_leverage_max: 2.0
+    train_test:
+      train_end_year: 2022
+  custom:
+    revenue:
+      macro_factor: steel_ppi_iron_steel
+    ppe:
+      min_capex_da_ratio: 0.9
+      expansion_capex_pct_of_rev_growth: 0.15
+    equity:
+      dividend_pct_ni: 0.03
+      dividend_payout_ratio: 0.03
+      buyback_pct_fcf: 0.15
+      buyback_leverage_max: 2.0
+    tax:
+      nol:
+        enabled: true
+        opening_balance: 1014000000.0
+        max_utilization_pct: 0.8
+        expiration_years: 999
+      nol_opening_balance: 1014000000.0
+      nol_limit_pct: 0.8
+    debt:
+      mode: full
+      version: v2_solver
+      target_pct_revenue: 0.267
+      target_net_debt_ebitda: 0.0
+      max_voluntary_prepay_pct_fcf: 0.5
+solver:
+  max_iter: 10
+  tol: 1000.0
+outputs:
+  base: companies/us_steel/outputs
+covenants:
+  enabled: true
+  methodology: steel
+  warning_buffer: 0.1
+  acceleration_triggers:
+  - interest_coverage
+  - net_debt_ebitda
+  thresholds:
+    net_debt_ebitda_max: 3.5
+    interest_coverage_min: 2.5
+    debt_to_equity_max: 3.0
+    current_ratio_min: 1.0
+    ebitda_margin_min: 0.05
+features:
+  min_cash: 596000000.0
+forecast_methods:
+  is:
+    asset_impairment:
+      method: zero
+    restructuring:
+      method: zero
+    loss_on_debt_extinguishment:
+      method: zero
+    earnings_from_investees:
+      method: ewa
+      ewa_halflife_years: 3
+      sign: -1
+    net_periodic_benefit_income:
+      method: ewa
+      ewa_halflife_years: 3
+      sign: -1
+    other_financial_costs:
+      method: ewa
+      ewa_halflife_years: 3
+    interest_income:
+      method: ewa
+      ewa_halflife_years: 2
+      sign: -1
+  bs:
+    goodwill:
+      method: last
+    restricted_cash:
+      method: last
+    employee_benefits:
+      method: ewa
+      ewa_halflife_years: 5
+rating:
+  methodology: sp
+  industry_adjustment: -12.0
+  size_adjustment: 2.0
+  cycle_avg_ebitda_margin: 0.1
+  weights:
+    leverage: 0.35
+    coverage: 0.3
+    profitability: 0.2
+    liquidity: 0.15

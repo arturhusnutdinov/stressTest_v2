@@ -1,0 +1,388 @@
+{
+  "debt_notes": {
+    "debt_instruments": [
+      {
+        "name": "RUB KeyRate + 2.2%",
+        "currency": "RUB",
+        "amount_2025": 93,
+        "amount_2024": 98,
+        "rate": "KeyRate + 2.2%",
+        "maturity": "2027",
+        "type": "secured",
+        "rate_type": "floating"
+      },
+      {
+        "name": "RUB KeyRate + 2.95%",
+        "currency": "RUB",
+        "amount_2025": 146,
+        "amount_2024": 0,
+        "rate": "KeyRate + 2.95%",
+        "maturity": "2026",
+        "type": "secured",
+        "rate_type": "floating"
+      },
+      {
+        "name": "CNY 4.75%",
+        "currency": "CNY",
+        "amount_2025": 1127,
+        "amount_2024": 1564,
+        "rate": "4.75%",
+        "maturity": "2027",
+        "type": "secured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "RUB 14.3%",
+        "currency": "RUB",
+        "amount_2025": 314,
+        "amount_2024": 0,
+        "rate": "14.3%",
+        "maturity": "2026",
+        "type": "secured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "RUB 15.05%",
+        "currency": "RUB",
+        "amount_2025": 435,
+        "amount_2024": 0,
+        "rate": "15.05%",
+        "maturity": "2026",
+        "type": "secured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "RUB 15.18%",
+        "currency": "RUB",
+        "amount_2025": 102,
+        "amount_2024": 0,
+        "rate": "15.18%",
+        "maturity": "2026",
+        "type": "secured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "RUB KeyRate + 1.2%",
+        "currency": "RUB",
+        "amount_2025": 101,
+        "amount_2024": 0,
+        "rate": "KeyRate + 1.2%",
+        "maturity": "2026",
+        "type": "unsecured",
+        "rate_type": "floating"
+      },
+      {
+        "name": "RUB KeyRate + 2%",
+        "currency": "RUB",
+        "amount_2025": 175,
+        "amount_2024": 339,
+        "rate": "KeyRate + 2%",
+        "maturity": "2030",
+        "type": "unsecured",
+        "rate_type": "floating"
+      },
+      {
+        "name": "RUB KeyRate + 3%",
+        "currency": "RUB",
+        "amount_2025": 146,
+        "amount_2024": 97,
+        "rate": "KeyRate + 3%",
+        "maturity": "2028",
+        "type": "unsecured",
+        "rate_type": "floating"
+      },
+      {
+        "name": "EUR 6M Euribor",
+        "currency": "EUR",
+        "amount_2025": 23,
+        "amount_2024": 26,
+        "rate": "6M Euribor + 0.45%-0.67%",
+        "maturity": "2032",
+        "type": "unsecured",
+        "rate_type": "floating"
+      },
+      {
+        "name": "CNY 4.7%",
+        "currency": "CNY",
+        "amount_2025": 43,
+        "amount_2024": 47,
+        "rate": "4.7%",
+        "maturity": "2028",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 5.1%",
+        "currency": "CNY",
+        "amount_2025": 257,
+        "amount_2024": 0,
+        "rate": "5.1%",
+        "maturity": "2026",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 7.25%",
+        "currency": "CNY",
+        "amount_2025": 43,
+        "amount_2024": 0,
+        "rate": "7.25%",
+        "maturity": "2026",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 7.4%",
+        "currency": "CNY",
+        "amount_2025": 428,
+        "amount_2024": 0,
+        "rate": "7.4%",
+        "maturity": "2027",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 7.5%",
+        "currency": "CNY",
+        "amount_2025": 788,
+        "amount_2024": 0,
+        "rate": "7.5%",
+        "maturity": "2027",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 7.9%",
+        "currency": "CNY",
+        "amount_2025": 785,
+        "amount_2024": 0,
+        "rate": "7.9%",
+        "maturity": "2026",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 8%",
+        "currency": "CNY",
+        "amount_2025": 285,
+        "amount_2024": 0,
+        "rate": "8%",
+        "maturity": "2026",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "CNY 8.5%",
+        "currency": "CNY",
+        "amount_2025": 541,
+        "amount_2024": 0,
+        "rate": "8.5%",
+        "maturity": "2026",
+        "type": "unsecured",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-01",
+        "currency": "RUB",
+        "amount_2025": 0,
+        "amount_2024": 0,
+        "rate": "0.01%",
+        "maturity": "07.04.2026",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-05",
+        "currency": "CNY",
+        "amount_2025": 60,
+        "amount_2024": 0,
+        "rate": "8.0%",
+        "maturity": "28.07.2027",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-06",
+        "currency": "CNY",
+        "amount_2025": 14,
+        "amount_2024": 0,
+        "rate": "8.0%",
+        "maturity": "28.07.2027",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-001P-05",
+        "currency": "RUB",
+        "amount_2025": 86,
+        "amount_2024": 0,
+        "rate": "6.70%",
+        "maturity": "08.05.2026",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-001P-06",
+        "currency": "RUB",
+        "amount_2025": 143,
+        "amount_2024": 0,
+        "rate": "7.20%",
+        "maturity": "05.08.2026",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-001P-07",
+        "currency": "RUB",
+        "amount_2025": 128,
+        "amount_2024": 0,
+        "rate": "7.90%",
+        "maturity": "09.10.2026",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-001P-08",
+        "currency": "RUB",
+        "amount_2025": 85,
+        "amount_2024": 0,
+        "rate": "9.25%",
+        "maturity": "01.08.2027",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond B\u041e-001P-09",
+        "currency": "RUB",
+        "amount_2025": 383,
+        "amount_2024": 0,
+        "rate": "KeyRate + 2.2%",
+        "maturity": "17.06.2027",
+        "type": "bond",
+        "rate_type": "floating"
+      },
+      {
+        "name": "Bond B\u041e-001P-10",
+        "currency": "RUB",
+        "amount_2025": 128,
+        "amount_2024": 0,
+        "rate": "KeyRate + 2.25%",
+        "maturity": "06.03.2027",
+        "type": "bond",
+        "rate_type": "floating"
+      },
+      {
+        "name": "Bond B\u041e-001P-11",
+        "currency": "RUB",
+        "amount_2025": 128,
+        "amount_2024": 0,
+        "rate": "KeyRate + 2.5%",
+        "maturity": "22.08.2029",
+        "type": "bond",
+        "rate_type": "floating"
+      },
+      {
+        "name": "Bond BO-001\u0420\u0421-05",
+        "currency": "RUB",
+        "amount_2025": 383,
+        "amount_2024": 0,
+        "rate": "15.18%",
+        "maturity": "20.09.2027",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond BO-001\u0420-12",
+        "currency": "CNY",
+        "amount_2025": 93,
+        "amount_2024": 0,
+        "rate": "10.90%",
+        "maturity": "23.03.2026",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond BO-001\u0420-14",
+        "currency": "CNY",
+        "amount_2025": 1598,
+        "amount_2024": 0,
+        "rate": "12%",
+        "maturity": "14.05.2027",
+        "type": "bond",
+        "rate_type": "fixed"
+      },
+      {
+        "name": "Bond BO-001\u0420-15",
+        "currency": "CNY",
+        "amount_2025": 271,
+        "amount_2024": 0,
+        "rate": "7.25%",
+        "maturity": "13.03.2027",
+        "type": "bond",
+        "rate_type": "fixed"
+      }
+    ],
+    "debt_maturity": {
+      "2026": 3893,
+      "2027": 1915,
+      "2028": 177,
+      "2029": 3,
+      "2030": 7,
+      "after_2030": 1
+    }
+  },
+  "lease_ppe_notes": {
+    "ppe_2025": {
+      "land_buildings_gross": null,
+      "land_buildings_net": null,
+      "machinery_gross": null,
+      "machinery_net": null,
+      "electrolysers_gross": null,
+      "electrolysers_net": null,
+      "construction_in_progress": null,
+      "total_gross": null,
+      "total_accum_dep": null,
+      "total_net": null,
+      "depreciation_charge": null,
+      "capex": null
+    },
+    "ppe_2024": {
+      "total_gross": null,
+      "total_accum_dep": null,
+      "total_net": null,
+      "depreciation_charge": null,
+      "capex": null
+    },
+    "lease_2025": {
+      "rou_total": 49,
+      "rou_land": 18,
+      "rou_machinery": 31,
+      "lease_liab_current": 20,
+      "lease_liab_noncurrent": 51,
+      "depreciation_rou": 15,
+      "interest_leases": 8,
+      "lease_payments": 24
+    },
+    "lease_2024": {
+      "rou_total": 45,
+      "lease_liab_noncurrent": 42
+    }
+  },
+  "segments": {
+    "segments_2025": {
+      "primary_aluminium_revenue": 12156,
+      "alumina_revenue": 1691,
+      "other_revenue": 965,
+      "total_revenue": 13847,
+      "primary_aluminium_sales_kt": null,
+      "alumina_sales_kt": null,
+      "average_al_price_usd_t": null
+    },
+    "segments_2024": {
+      "primary_aluminium_revenue": 10009,
+      "alumina_revenue": 1213,
+      "other_revenue": 860,
+      "total_revenue": 11222
+    }
+  }
+}

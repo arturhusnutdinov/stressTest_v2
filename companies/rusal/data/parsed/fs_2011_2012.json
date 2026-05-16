@@ -1,0 +1,110 @@
+{
+  "years": {
+    "2012": {
+      "is": {
+        "revenue": 10891,
+        "cogs": -9232,
+        "gross_profit": 1659,
+        "sga": -718,
+        "distribution_expenses": -527,
+        "ebit": 60,
+        "interest_income": 25,
+        "interest_expense": -920,
+        "earnings_from_investees": 806,
+        "ebt": -29,
+        "tax_expense": -26,
+        "net_income": -55
+      },
+      "bs": {
+        "cash": 505,
+        "accounts_receivable": 925,
+        "inventory": 2624,
+        "ppe_net": 5453,
+        "ppe_gross": null,
+        "ppe_accum_dep": null,
+        "intangibles": 4051,
+        "goodwill": null,
+        "investments_lt": 11825,
+        "dta": 99,
+        "total_assets": 25586,
+        "short_term_debt": null,
+        "long_term_debt": null,
+        "accounts_payable": null,
+        "dtl": null,
+        "total_liabilities": null,
+        "total_equity": null,
+        "share_capital": null,
+        "apic": null,
+        "retained_earnings": null,
+        "aoci": null
+      },
+      "cf": {
+        "cfo_total": 1092,
+        "depreciation": 528,
+        "capex": null,
+        "cfi_total": null,
+        "proceeds_borrowings": null,
+        "repayments_borrowings": null,
+        "dividends_paid": null,
+        "cff_total": null,
+        "interest_paid": null
+      },
+      "ppe_note": {
+        "depreciation_charge": 528
+      }
+    },
+    "2011": {
+      "is": {
+        "revenue": 12291,
+        "cogs": -8786,
+        "gross_profit": 3505,
+        "sga": -759,
+        "distribution_expenses": -610,
+        "ebit": 1749,
+        "interest_income": 521,
+        "interest_expense": -1336,
+        "earnings_from_investees": -324,
+        "ebt": 610,
+        "tax_expense": -373,
+        "net_income": 237
+      },
+      "bs": {
+        "cash": 646,
+        "accounts_receivable": 1032,
+        "inventory": 3002,
+        "ppe_net": 5746,
+        "ppe_gross": null,
+        "ppe_accum_dep": null,
+        "intangibles": 3905,
+        "goodwill": null,
+        "investments_lt": 10816,
+        "dta": 66,
+        "total_assets": 25345,
+        "short_term_debt": null,
+        "long_term_debt": null,
+        "accounts_payable": null,
+        "dtl": null,
+        "total_liabilities": null,
+        "total_equity": null,
+        "share_capital": null,
+        "apic": null,
+        "retained_earnings": null,
+        "aoci": null
+      },
+      "cf": {
+        "cfo_total": 1781,
+        "depreciation": 501,
+        "capex": null,
+        "cfi_total": null,
+        "proceeds_borrowings": null,
+        "repayments_borrowings": null,
+        "dividends_paid": null,
+        "cff_total": null,
+        "interest_paid": null
+      },
+      "ppe_note": {
+        "depreciation_charge": 501
+      }
+    }
+  }
+}

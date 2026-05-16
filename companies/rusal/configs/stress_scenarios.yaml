@@ -1,0 +1,133 @@
+# ═══════════════════════════════════════════════════════════════
+# UC RUSAL — Stress Scenarios
+# ═══════════════════════════════════════════════════════════════
+# COGS flows through CogsBlock: macro_shocks → component costs
+# driver_shocks.cogs_pct removed — use macro_shocks instead
+#
+# Shock types: percentage | absolute | pp | basis_points
+# macro_shocks  → applied to macro forecast series
+# driver_shocks → applied to model drivers (ratios, days, rates)
+
+scenarios:
+
+  # ── Mild downside ─────────────────────────────────────────
+  lme_mild:
+    description: "LME Al -15% — mild commodity correction"
+    macro_shocks:
+      lme_aluminium:
+        type: percentage
+        value: -15.0
+
+  # ── Aluminium downturn ────────────────────────────────────
+  aluminium_downturn:
+    description: "LME Al -25%, alumina -15%, WC deterioration"
+    macro_shocks:
+      lme_aluminium:
+        type: percentage
+        value: -25.0
+      lme_alumina:
+        type: percentage
+        value: -15.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 15.0
+      dih_days:
+        type: percentage
+        value: 20.0
+
+  # ── Sanctions / FX shock ──────────────────────────────────
+  sanctions_shock:
+    description: "RUB devaluation +30%, power +20%, WC stress"
+    macro_shocks:
+      usd_rub:
+        type: percentage
+        value: 30.0
+      russian_power_price:
+        type: percentage
+        value: 20.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 10.0
+      dih_days:
+        type: percentage
+        value: 15.0
+
+  # ── Energy spike ──────────────────────────────────────────
+  energy_spike:
+    description: "Power price +40%, Brent +30%"
+    macro_shocks:
+      russian_power_price:
+        type: percentage
+        value: 40.0
+      brent:
+        type: percentage
+        value: 30.0
+
+  # ── Interest rate spike ───────────────────────────────────
+  rate_spike:
+    description: "Interest rate +200bp"
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+
+  # ── Severe combined stress ────────────────────────────────
+  severe:
+    description: "LME -30%, RUB +25%, rate +400bp, WC deterioration"
+    macro_shocks:
+      lme_aluminium:
+        type: percentage
+        value: -30.0
+      lme_alumina:
+        type: percentage
+        value: -20.0
+      usd_rub:
+        type: percentage
+        value: 25.0
+      russian_power_price:
+        type: percentage
+        value: 30.0
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 4.0
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0
+
+  # ── Commodity upside ──────────────────────────────────────
+  upside:
+    description: "LME Al +20%, alumina +15% — commodity supercycle"
+    macro_shocks:
+      lme_aluminium:
+        type: percentage
+        value: 20.0
+      lme_alumina:
+        type: percentage
+        value: 15.0
+
+  # ── Covenant breach (auto-trigger) ────────────────────────
+  covenant_breach:
+    description: "Combined: LME -20%, power +30%, rate +200bp"
+    macro_shocks:
+      lme_aluminium:
+        type: percentage
+        value: -20.0
+      russian_power_price:
+        type: percentage
+        value: 30.0
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+      dso_days:
+        type: percentage
+        value: 10.0
+      dih_days:
+        type: percentage
+        value: 10.0

@@ -1,0 +1,408 @@
+[
+  {
+    "name": "us_economy",
+    "factors": [
+      "gdp_us",
+      "industrial_production_us",
+      "cpi_us",
+      "ppi_us"
+    ],
+    "method": "manual",
+    "rank": null,
+    "history_years": null,
+    "score": null,
+    "note": "manual_config",
+    "selected": true,
+    "source": "manual"
+  },
+  {
+    "name": "metals_prices",
+    "factors": [
+      "steel_price_hrc",
+      "iron_ore_price"
+    ],
+    "method": "manual",
+    "rank": null,
+    "history_years": null,
+    "score": null,
+    "note": "manual_config",
+    "selected": true,
+    "source": "manual"
+  },
+  {
+    "name": "fx_and_global",
+    "factors": [
+      "dxy",
+      "gdp_world"
+    ],
+    "method": "manual",
+    "rank": null,
+    "history_years": null,
+    "score": null,
+    "note": "manual_config",
+    "selected": true,
+    "source": "manual"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "industrial_production_us",
+      "cpi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 265.9608184837525,
+    "note": "",
+    "aic": -265.9608184837525,
+    "source": "auto",
+    "selected": true,
+    "name": "auto_group_1"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "dxy",
+      "cpi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 253.15707598205506,
+    "note": "",
+    "aic": -253.15707598205506,
+    "source": "auto",
+    "selected": true,
+    "name": "auto_group_2"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "industrial_production_us",
+      "ppi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 233.4804927295711,
+    "note": "",
+    "aic": -233.4804927295711,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_3"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "dxy",
+      "gdp_world"
+    ],
+    "method": "vecm",
+    "rank": 3,
+    "history_years": 15,
+    "score": 214.89278566384485,
+    "note": "",
+    "aic": -214.89278566384485,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_4"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "industrial_production_us",
+      "gdp_world"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 208.56817737556116,
+    "note": "",
+    "aic": -208.56817737556116,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_5"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "dxy",
+      "ppi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 178.78575559385976,
+    "note": "",
+    "aic": -178.78575559385976,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_6"
+  },
+  {
+    "factors": [
+      "industrial_production_us",
+      "cpi_us"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 158.5752737528299,
+    "note": "",
+    "aic": -158.5752737528299,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_7"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "dxy",
+      "steel_price_hrc"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 156.77523708150594,
+    "note": "",
+    "aic": -156.77523708150594,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_8"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "industrial_production_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 149.89284240510233,
+    "note": "",
+    "aic": -149.89284240510233,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_9"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "dxy",
+      "iron_ore_price"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 145.01447108321898,
+    "note": "",
+    "aic": -145.01447108321898,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_10"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "cpi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 136.52888288298453,
+    "note": "",
+    "aic": -136.52888288298453,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_11"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "steel_price_hrc",
+      "iron_ore_price"
+    ],
+    "method": "vecm",
+    "rank": 3,
+    "history_years": 15,
+    "score": 130.62277829553076,
+    "note": "",
+    "aic": -130.62277829553076,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_12"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "ppi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 117.68933242987339,
+    "note": "",
+    "aic": -117.68933242987339,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_13"
+  },
+  {
+    "factors": [
+      "industrial_production_us",
+      "ppi_us"
+    ],
+    "method": "vecm",
+    "rank": 1,
+    "history_years": 15,
+    "score": 117.2538987936901,
+    "note": "",
+    "aic": -117.2538987936901,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_14"
+  },
+  {
+    "factors": [
+      "industrial_production_us",
+      "gdp_world"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 110.52302780823379,
+    "note": "",
+    "aic": -110.52302780823379,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_15"
+  },
+  {
+    "factors": [
+      "gdp_us",
+      "steel_price_hrc"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 88.12415625180557,
+    "note": "",
+    "aic": -88.12415625180557,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_16"
+  },
+  {
+    "factors": [
+      "steel_price_hrc",
+      "ppi_us"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 74.51599475155611,
+    "note": "",
+    "aic": -74.51599475155611,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_17"
+  },
+  {
+    "factors": [
+      "dxy",
+      "steel_price_hrc"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 66.52267169443392,
+    "note": "",
+    "aic": -66.52267169443392,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_18"
+  },
+  {
+    "factors": [
+      "iron_ore_price",
+      "ppi_us"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 65.68166378171959,
+    "note": "",
+    "aic": -65.68166378171959,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_19"
+  },
+  {
+    "factors": [
+      "dxy",
+      "iron_ore_price"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 62.681014845504436,
+    "note": "",
+    "aic": -62.681014845504436,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_20"
+  },
+  {
+    "factors": [
+      "iron_ore_price",
+      "gdp_world"
+    ],
+    "method": "vecm",
+    "rank": 2,
+    "history_years": 15,
+    "score": 53.28160084952982,
+    "note": "",
+    "aic": -53.28160084952982,
+    "source": "auto",
+    "selected": false,
+    "name": "auto_candidate_21"
+  },
+  {
+    "step": "macro_preprocess",
+    "auto_shock_candidates": [
+      [
+        2021,
+        1.4020723236903057
+      ],
+      [
+        2015,
+        1.3947641849244237
+      ],
+      [
+        2012,
+        1.380859160918369
+      ],
+      [
+        2022,
+        1.070728246092808
+      ],
+      [
+        2014,
+        0.24669055506652846
+      ]
+    ],
+    "selected_auto_shocks": [
+      2021,
+      2015
+    ],
+    "cyclical_factors": {
+      "gdp_us": 5,
+      "industrial_production_us": 6,
+      "dxy": 5,
+      "steel_price_hrc": 6,
+      "iron_ore_price": 5,
+      "cpi_us": 6,
+      "ppi_us": 6
+    }
+  }
+]

@@ -1,0 +1,2295 @@
+{
+  "metadata": {
+    "company": "us_steel",
+    "version": "v1.0",
+    "scenario": "base",
+    "statement_type": null,
+    "exported_at": "2026-03-19T13:14:00.956217",
+    "row_count": 326,
+    "column_count": 5
+  },
+  "data": [
+    {
+      "metric": "balance_identity",
+      "year": 2024,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Assets=20,235,000,000, Liab+Equity=20,235,000,000"
+    },
+    {
+      "metric": "balance_identity",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Assets=20,351,873,285, Liab+Equity=20,351,873,285"
+    },
+    {
+      "metric": "balance_identity",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Assets=22,027,212,884, Liab+Equity=22,027,212,884"
+    },
+    {
+      "metric": "balance_identity",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Assets=23,077,143,434, Liab+Equity=23,077,143,434"
+    },
+    {
+      "metric": "balance_identity",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Assets=24,028,208,132, Liab+Equity=24,028,208,132"
+    },
+    {
+      "metric": "balance_identity",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Assets=24,888,700,546, Liab+Equity=24,888,700,546"
+    },
+    {
+      "metric": "cash_bridge",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=1,367,000,000, CFO=4,550,283,499, CFI=-1,303,986,798, CFF=-3,758,000,000"
+    },
+    {
+      "metric": "cash_bridge",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=855,296,701, CFO=863,872,005, CFI=-1,294,230,251, CFF=75,061,545"
+    },
+    {
+      "metric": "cash_bridge",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=500,000,000, CFO=661,505,028, CFI=-1,284,546,704, CFF=623,041,676"
+    },
+    {
+      "metric": "cash_bridge",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=500,000,000, CFO=653,931,126, CFI=-1,274,935,609, CFF=621,004,483"
+    },
+    {
+      "metric": "cash_bridge",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=500,000,000, CFO=644,512,005, CFI=-1,265,396,426, CFF=620,884,421"
+    },
+    {
+      "metric": "is_dep_total",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "PP&E=0, ROU=0, Finance=0"
+    },
+    {
+      "metric": "is_ppe_dep_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "AccDep: 0→0, Δ=0"
+    },
+    {
+      "metric": "is_tax_total",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Current=1,556,814,408, Deferred=0"
+    },
+    {
+      "metric": "is_interest_debt",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "From DebtOptimizer=106,513,625"
+    },
+    {
+      "metric": "is_lease_expense_operating",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expense=0, Int=0, Dep=0"
+    },
+    {
+      "metric": "cf_lease_interest_finance",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "IS=0, CFO=0"
+    },
+    {
+      "metric": "cf_lease_payments_operating",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expected=0, CFO=-0"
+    },
+    {
+      "metric": "is_dep_total",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "PP&E=108,230,904, ROU=0, Finance=0"
+    },
+    {
+      "metric": "is_ppe_dep_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "AccDep: 0→108,230,904, Δ=108,230,904"
+    },
+    {
+      "metric": "is_tax_total",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Current=183,109,553, Deferred=0"
+    },
+    {
+      "metric": "is_interest_debt",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "From DebtOptimizer=1,876,539"
+    },
+    {
+      "metric": "is_lease_expense_operating",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expense=0, Int=0, Dep=0"
+    },
+    {
+      "metric": "cf_lease_interest_finance",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "IS=0, CFO=0"
+    },
+    {
+      "metric": "cf_lease_payments_operating",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expected=0, CFO=-0"
+    },
+    {
+      "metric": "is_dep_total",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "PP&E=206,668,850, ROU=0, Finance=0"
+    },
+    {
+      "metric": "is_ppe_dep_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "AccDep: 108,230,904→314,899,754, Δ=206,668,850"
+    },
+    {
+      "metric": "is_tax_total",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Current=135,883,135, Deferred=0"
+    },
+    {
+      "metric": "is_interest_debt",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "From DebtOptimizer=19,329,119"
+    },
+    {
+      "metric": "is_lease_expense_operating",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expense=0, Int=0, Dep=0"
+    },
+    {
+      "metric": "cf_lease_interest_finance",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "IS=0, CFO=0"
+    },
+    {
+      "metric": "cf_lease_payments_operating",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expected=0, CFO=-0"
+    },
+    {
+      "metric": "is_dep_total",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "PP&E=296,132,712, ROU=0, Finance=0"
+    },
+    {
+      "metric": "is_ppe_dep_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 5.960464477539063e-08,
+      "message": "AccDep: 314,899,754→611,032,466, Δ=296,132,712"
+    },
+    {
+      "metric": "is_tax_total",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Current=106,319,951, Deferred=0"
+    },
+    {
+      "metric": "is_interest_debt",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "From DebtOptimizer=50,430,273"
+    },
+    {
+      "metric": "is_lease_expense_operating",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expense=0, Int=0, Dep=0"
+    },
+    {
+      "metric": "cf_lease_interest_finance",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "IS=0, CFO=0"
+    },
+    {
+      "metric": "cf_lease_payments_operating",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expected=0, CFO=-0"
+    },
+    {
+      "metric": "is_dep_total",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "PP&E=377,373,352, ROU=0, Finance=0"
+    },
+    {
+      "metric": "is_ppe_dep_link",
+      "year": 2029,
+      "passed": true,
+      "difference": -5.960464477539063e-08,
+      "message": "AccDep: 611,032,466→988,405,819, Δ=377,373,352"
+    },
+    {
+      "metric": "is_tax_total",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Current=78,701,080, Deferred=0"
+    },
+    {
+      "metric": "is_interest_debt",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "From DebtOptimizer=81,477,496"
+    },
+    {
+      "metric": "is_lease_expense_operating",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expense=0, Int=0, Dep=0"
+    },
+    {
+      "metric": "cf_lease_interest_finance",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "IS=0, CFO=0"
+    },
+    {
+      "metric": "cf_lease_payments_operating",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Expected=0, CFO=-0"
+    },
+    {
+      "metric": "bs_cash_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Cash from CF vs BS"
+    },
+    {
+      "metric": "bs_ppe_net_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Gross=1,303,986,798, AccDep=0"
+    },
+    {
+      "metric": "bs_taxes_payable_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=131,000,000, Current=1,556,814,408, Paid=1,556,814,408"
+    },
+    {
+      "metric": "bs_interest_payable_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Expense=106,513,625, Paid=106,513,625"
+    },
+    {
+      "metric": "bs_lease_cur_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_lease_ncur_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_debt_st_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_debt_lt_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_retained_earnings_link",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=7,219,000,000, NI=5,106,467,826, Div=0"
+    },
+    {
+      "metric": "bs_cash_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Cash from CF vs BS"
+    },
+    {
+      "metric": "bs_ppe_net_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Gross=2,598,217,050, AccDep=108,230,904"
+    },
+    {
+      "metric": "bs_taxes_payable_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=131,000,000, Current=183,109,553, Paid=183,109,553"
+    },
+    {
+      "metric": "bs_interest_payable_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Expense=1,876,539, Paid=1,876,539"
+    },
+    {
+      "metric": "bs_lease_cur_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_lease_ncur_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_debt_st_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=75,061,545, BS=75,061,545"
+    },
+    {
+      "metric": "bs_debt_lt_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_retained_earnings_link",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=12,325,467,826, NI=600,613,043, Div=0"
+    },
+    {
+      "metric": "bs_cash_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Cash from CF vs BS"
+    },
+    {
+      "metric": "bs_ppe_net_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Gross=3,882,763,753, AccDep=314,899,754"
+    },
+    {
+      "metric": "bs_taxes_payable_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=131,000,000, Current=135,883,135, Paid=135,883,135"
+    },
+    {
+      "metric": "bs_interest_payable_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Expense=19,329,119, Paid=19,329,119"
+    },
+    {
+      "metric": "bs_lease_cur_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_lease_ncur_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_debt_st_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=698,103,222, BS=698,103,222"
+    },
+    {
+      "metric": "bs_debt_lt_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_retained_earnings_link",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=12,926,080,869, NI=445,706,858, Div=0"
+    },
+    {
+      "metric": "bs_cash_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Cash from CF vs BS"
+    },
+    {
+      "metric": "bs_ppe_net_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Gross=5,157,699,363, AccDep=611,032,466"
+    },
+    {
+      "metric": "bs_taxes_payable_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=131,000,000, Current=106,319,951, Paid=106,319,951"
+    },
+    {
+      "metric": "bs_interest_payable_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Expense=50,430,273, Paid=50,430,273"
+    },
+    {
+      "metric": "bs_lease_cur_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_lease_ncur_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_debt_st_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,319,107,705, BS=1,319,107,705"
+    },
+    {
+      "metric": "bs_debt_lt_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_retained_earnings_link",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=13,371,787,727, NI=348,737,401, Div=0"
+    },
+    {
+      "metric": "bs_cash_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Cash from CF vs BS"
+    },
+    {
+      "metric": "bs_ppe_net_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Gross=6,423,095,789, AccDep=988,405,819"
+    },
+    {
+      "metric": "bs_taxes_payable_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=131,000,000, Current=78,701,080, Paid=78,701,080"
+    },
+    {
+      "metric": "bs_interest_payable_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Expense=81,477,496, Paid=81,477,496"
+    },
+    {
+      "metric": "bs_lease_cur_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_lease_ncur_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_debt_st_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,939,992,126, BS=1,939,992,126"
+    },
+    {
+      "metric": "bs_debt_lt_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=0, BS=0"
+    },
+    {
+      "metric": "bs_retained_earnings_link",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=13,720,525,128, NI=258,145,435, Div=0"
+    },
+    {
+      "metric": "cf_cff_components",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Debt=-3,758,000,000, Lease=-0, Equity=0"
+    },
+    {
+      "metric": "cf_net_change",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "CFO=4,550,283,499, CFI=-1,303,986,798, CFF=-3,758,000,000"
+    },
+    {
+      "metric": "cf_cff_components",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Debt=75,061,545, Lease=-0, Equity=0"
+    },
+    {
+      "metric": "cf_net_change",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "CFO=863,872,005, CFI=-1,294,230,251, CFF=75,061,545"
+    },
+    {
+      "metric": "cf_cff_components",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Debt=623,041,676, Lease=-0, Equity=0"
+    },
+    {
+      "metric": "cf_net_change",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "CFO=661,505,028, CFI=-1,284,546,704, CFF=623,041,676"
+    },
+    {
+      "metric": "cf_cff_components",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Debt=621,004,483, Lease=-0, Equity=0"
+    },
+    {
+      "metric": "cf_net_change",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "CFO=653,931,126, CFI=-1,274,935,609, CFF=621,004,483"
+    },
+    {
+      "metric": "cf_cff_components",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Debt=620,884,421, Lease=-0, Equity=0"
+    },
+    {
+      "metric": "cf_net_change",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "CFO=644,512,005, CFI=-1,265,396,426, CFF=620,884,421"
+    },
+    {
+      "metric": "cork_ppe_gross",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, CapEx=1,303,986,798, Proceeds=0"
+    },
+    {
+      "metric": "cork_ppe_accdep",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Dep=0"
+    },
+    {
+      "metric": "cork_lease_liability_finance",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability_operating",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_deferred_tax",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "DTA: 0→0, DTL: 657,000,000→657,000,000"
+    },
+    {
+      "metric": "cork_ppe_gross",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=1,303,986,798, CapEx=1,294,230,251, Proceeds=0"
+    },
+    {
+      "metric": "cork_ppe_accdep",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Dep=108,230,904"
+    },
+    {
+      "metric": "cork_lease_liability_finance",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability_operating",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_deferred_tax",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "DTA: 0→0, DTL: 657,000,000→657,000,000"
+    },
+    {
+      "metric": "cork_ppe_gross",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=2,598,217,050, CapEx=1,284,546,704, Proceeds=0"
+    },
+    {
+      "metric": "cork_ppe_accdep",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=108,230,904, Dep=206,668,850"
+    },
+    {
+      "metric": "cork_lease_liability_finance",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability_operating",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_deferred_tax",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "DTA: 0→0, DTL: 657,000,000→657,000,000"
+    },
+    {
+      "metric": "cork_ppe_gross",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=3,882,763,753, CapEx=1,274,935,609, Proceeds=0"
+    },
+    {
+      "metric": "cork_ppe_accdep",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=314,899,754, Dep=296,132,712"
+    },
+    {
+      "metric": "cork_lease_liability_finance",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability_operating",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_deferred_tax",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "DTA: 0→0, DTL: 657,000,000→657,000,000"
+    },
+    {
+      "metric": "cork_ppe_gross",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=5,157,699,363, CapEx=1,265,396,426, Proceeds=0"
+    },
+    {
+      "metric": "cork_ppe_accdep",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=611,032,466, Dep=377,373,352"
+    },
+    {
+      "metric": "cork_lease_liability_finance",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability_operating",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_lease_liability",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, New=0, Int=0, Princ=0"
+    },
+    {
+      "metric": "cork_deferred_tax",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "DTA: 0→0, DTL: 657,000,000→657,000,000"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Agreement",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Facility, $2.0 billion",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Arkansas Teacher Retirement System Notes Payable",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Big River Steel ABL Facility",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Credit Facility Agreement",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_ECA Credit Agreement",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=84,000,000, Refi=0, Draw=0, Repay=84,000,000"
+    },
+    {
+      "metric": "debt_cork_Export-Import Credit Agreement",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Recovery Zone Facility Bonds",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Third Amended and Restated Credit Agreement",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Agreement",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Facility",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Revolver",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK credit facilities",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSS credit facilities",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2013 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2014 Senior Convertible Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2017 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2018 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2019 Senior Convertible Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2020 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Secured Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2022 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Secured Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Convertible Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=349,000,000, Refi=0, Draw=0, Repay=349,000,000"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=475,000,000, Refi=0, Draw=0, Repay=475,000,000"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Secured Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=720,000,000, Refi=0, Draw=0, Repay=720,000,000"
+    },
+    {
+      "metric": "debt_cork_2037 Senior Notes",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=274,000,000, Refi=0, Draw=0, Repay=274,000,000"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=1,104,000,000, Refi=0, Draw=0, Repay=1,104,000,000"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds - Big River Steel",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=752,000,000, Refi=0, Draw=0, Repay=752,000,000"
+    },
+    {
+      "metric": "debt_cork_Province Note (C$150 million)",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cff_calculation",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Draws=0, Repays=3,758,000,000, Fees=0"
+    },
+    {
+      "metric": "debt_change_bs_vs_cff",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "ST: 95,000,000→0, LT: 4,078,000,000→0"
+    },
+    {
+      "metric": "debt_min_cash_constraint",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "MinCash=500,000,000, Actual=855,296,701, Shortfall=-355,296,701"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Agreement",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=85,061,545, Repay=10,000,000"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Facility, $2.0 billion",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Arkansas Teacher Retirement System Notes Payable",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Big River Steel ABL Facility",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Credit Facility Agreement",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_ECA Credit Agreement",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Export-Import Credit Agreement",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Recovery Zone Facility Bonds",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Third Amended and Restated Credit Agreement",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Agreement",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Facility",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Revolver",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK credit facilities",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSS credit facilities",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2013 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2014 Senior Convertible Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2017 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2018 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2019 Senior Convertible Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2020 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Secured Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2022 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Secured Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Convertible Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Secured Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2037 Senior Notes",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds - Big River Steel",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Province Note (C$150 million)",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cff_calculation",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Draws=85,061,545, Repays=10,000,000, Fees=0"
+    },
+    {
+      "metric": "debt_change_bs_vs_cff",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "ST: 0→75,061,545, LT: 0→0"
+    },
+    {
+      "metric": "debt_min_cash_constraint",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "MinCash=500,000,000, Actual=500,000,000, Shortfall=-0"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Agreement",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=75,061,545, Refi=0, Draw=633,041,676, Repay=10,000,000"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Facility, $2.0 billion",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Arkansas Teacher Retirement System Notes Payable",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Big River Steel ABL Facility",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Credit Facility Agreement",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_ECA Credit Agreement",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Export-Import Credit Agreement",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Recovery Zone Facility Bonds",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Third Amended and Restated Credit Agreement",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Agreement",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Facility",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Revolver",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK credit facilities",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSS credit facilities",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2013 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2014 Senior Convertible Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2017 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2018 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2019 Senior Convertible Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2020 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Secured Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2022 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Secured Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Convertible Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Secured Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2037 Senior Notes",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds - Big River Steel",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Province Note (C$150 million)",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cff_calculation",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Draws=633,041,676, Repays=10,000,000, Fees=0"
+    },
+    {
+      "metric": "debt_change_bs_vs_cff",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "ST: 75,061,545→698,103,222, LT: 0→0"
+    },
+    {
+      "metric": "debt_min_cash_constraint",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "MinCash=500,000,000, Actual=500,000,000, Shortfall=-0"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Agreement",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=698,103,222, Refi=0, Draw=631,004,483, Repay=10,000,000"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Facility, $2.0 billion",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Arkansas Teacher Retirement System Notes Payable",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Big River Steel ABL Facility",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Credit Facility Agreement",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_ECA Credit Agreement",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Export-Import Credit Agreement",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Recovery Zone Facility Bonds",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Third Amended and Restated Credit Agreement",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Agreement",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Facility",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Revolver",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK credit facilities",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSS credit facilities",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2013 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2014 Senior Convertible Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2017 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2018 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2019 Senior Convertible Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2020 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Secured Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2022 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Secured Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Convertible Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Secured Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2037 Senior Notes",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds - Big River Steel",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Province Note (C$150 million)",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cff_calculation",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Draws=631,004,483, Repays=10,000,000, Fees=0"
+    },
+    {
+      "metric": "debt_change_bs_vs_cff",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "ST: 698,103,222→1,319,107,705, LT: 0→0"
+    },
+    {
+      "metric": "debt_min_cash_constraint",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "MinCash=500,000,000, Actual=500,000,000, Shortfall=-0"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Agreement",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=1,319,107,705, Refi=0, Draw=630,884,421, Repay=10,000,000"
+    },
+    {
+      "metric": "debt_cork_Amended Credit Facility, $2.0 billion",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Arkansas Teacher Retirement System Notes Payable",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Big River Steel ABL Facility",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Credit Facility Agreement",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_ECA Credit Agreement",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Export-Import Credit Agreement",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Recovery Zone Facility Bonds",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Third Amended and Restated Credit Agreement",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Agreement",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Credit Facility",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK Revolver",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSK credit facilities",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_USSS credit facilities",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2013 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2014 Senior Convertible Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2017 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2018 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2019 Senior Convertible Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2020 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2021 Senior Secured Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2022 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2025 Senior Secured Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Convertible Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2026 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2029 Senior Secured Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_2037 Senior Notes",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Environmental Revenue Bonds - Big River Steel",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cork_Province Note (C$150 million)",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Open=0, Refi=0, Draw=0, Repay=0"
+    },
+    {
+      "metric": "debt_cff_calculation",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Draws=630,884,421, Repays=10,000,000, Fees=0"
+    },
+    {
+      "metric": "debt_change_bs_vs_cff",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "ST: 1,319,107,705→1,939,992,126, LT: 0→0"
+    },
+    {
+      "metric": "debt_min_cash_constraint",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "MinCash=500,000,000, Actual=500,000,000, Shortfall=-0"
+    },
+    {
+      "metric": "wc_ar_level",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,592,135,103, BS=1,592,135,103"
+    },
+    {
+      "metric": "wc_inv_level",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,298,454,684, BS=1,298,454,684"
+    },
+    {
+      "metric": "wc_ap_level",
+      "year": 2025,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,515,405,460, BS=1,515,405,460"
+    },
+    {
+      "metric": "wc_ar_level",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,580,222,604, BS=1,580,222,604"
+    },
+    {
+      "metric": "wc_inv_level",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,155,004,134, BS=2,155,004,134"
+    },
+    {
+      "metric": "wc_ap_level",
+      "year": 2026,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,515,070,469, BS=2,515,070,469"
+    },
+    {
+      "metric": "wc_ar_level",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,568,399,236, BS=1,568,399,236"
+    },
+    {
+      "metric": "wc_inv_level",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,138,880,199, BS=2,138,880,199"
+    },
+    {
+      "metric": "wc_ap_level",
+      "year": 2027,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,496,252,485, BS=2,496,252,485"
+    },
+    {
+      "metric": "wc_ar_level",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,556,664,331, BS=1,556,664,331"
+    },
+    {
+      "metric": "wc_inv_level",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,122,876,904, BS=2,122,876,904"
+    },
+    {
+      "metric": "wc_ap_level",
+      "year": 2028,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,477,575,299, BS=2,477,575,299"
+    },
+    {
+      "metric": "wc_ar_level",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=1,545,017,228, BS=1,545,017,228"
+    },
+    {
+      "metric": "wc_inv_level",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,106,993,347, BS=2,106,993,347"
+    },
+    {
+      "metric": "wc_ap_level",
+      "year": 2029,
+      "passed": true,
+      "difference": 0.0,
+      "message": "Model=2,459,037,857, BS=2,459,037,857"
+    }
+  ]
+}

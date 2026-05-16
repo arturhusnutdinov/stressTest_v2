@@ -1,0 +1,757 @@
+{
+  "phase": "phase9_model_closure",
+  "converged": true,
+  "validation": {
+    "passed": false,
+    "checks": [
+      {
+        "name": "BS Identity",
+        "passed": true,
+        "year": 2024,
+        "message": "",
+        "expected": 20235000000.0,
+        "actual": 20235000000.0,
+        "difference": 0.0
+      },
+      {
+        "name": "BS Identity",
+        "passed": true,
+        "year": 2025,
+        "message": "",
+        "expected": 20351873285.322723,
+        "actual": 20351873285.322723,
+        "difference": 0.0
+      },
+      {
+        "name": "BS Identity",
+        "passed": true,
+        "year": 2026,
+        "message": "",
+        "expected": 22027212883.54754,
+        "actual": 22027212883.54754,
+        "difference": 0.0
+      },
+      {
+        "name": "BS Identity",
+        "passed": true,
+        "year": 2027,
+        "message": "",
+        "expected": 23077143433.8266,
+        "actual": 23077143433.8266,
+        "difference": 0.0
+      },
+      {
+        "name": "BS Identity",
+        "passed": true,
+        "year": 2028,
+        "message": "",
+        "expected": 24028208132.139114,
+        "actual": 24028208132.139114,
+        "difference": 0.0
+      },
+      {
+        "name": "BS Identity",
+        "passed": true,
+        "year": 2029,
+        "message": "",
+        "expected": 24888700546.389446,
+        "actual": 24888700546.389446,
+        "difference": 0.0
+      },
+      {
+        "name": "Cash Bridge",
+        "passed": true,
+        "year": 2025,
+        "message": "",
+        "expected": 855296700.8635135,
+        "actual": 855296700.863514,
+        "difference": 4.76837158203125e-07
+      },
+      {
+        "name": "Cash Bridge",
+        "passed": true,
+        "year": 2026,
+        "message": "",
+        "expected": 500000000.0083538,
+        "actual": 500000000.0083537,
+        "difference": -1.1920928955078125e-07
+      },
+      {
+        "name": "Cash Bridge",
+        "passed": true,
+        "year": 2027,
+        "message": "",
+        "expected": 500000000.00757277,
+        "actual": 500000000.00757265,
+        "difference": -1.1920928955078125e-07
+      },
+      {
+        "name": "Cash Bridge",
+        "passed": true,
+        "year": 2028,
+        "message": "",
+        "expected": 500000000.00641656,
+        "actual": 500000000.00641656,
+        "difference": 0.0
+      },
+      {
+        "name": "Cash Bridge",
+        "passed": true,
+        "year": 2029,
+        "message": "",
+        "expected": 500000000.0052624,
+        "actual": 500000000.0052624,
+        "difference": 0.0
+      },
+      {
+        "name": "RE Bridge",
+        "passed": true,
+        "year": 2025,
+        "message": "",
+        "expected": 12325467825.632467,
+        "actual": 12325467825.632467,
+        "difference": 0.0
+      },
+      {
+        "name": "RE Bridge",
+        "passed": true,
+        "year": 2026,
+        "message": "",
+        "expected": 12926080868.924057,
+        "actual": 12926080868.924057,
+        "difference": 0.0
+      },
+      {
+        "name": "RE Bridge",
+        "passed": true,
+        "year": 2027,
+        "message": "",
+        "expected": 13371787727.11676,
+        "actual": 13371787727.11676,
+        "difference": 0.0
+      },
+      {
+        "name": "RE Bridge",
+        "passed": true,
+        "year": 2028,
+        "message": "",
+        "expected": 13720525128.324638,
+        "actual": 13720525128.324638,
+        "difference": 0.0
+      },
+      {
+        "name": "RE Bridge",
+        "passed": true,
+        "year": 2029,
+        "message": "",
+        "expected": 13978670563.102114,
+        "actual": 13978670563.102114,
+        "difference": 0.0
+      },
+      {
+        "name": "Debt Reconciliation",
+        "passed": true,
+        "year": 2025,
+        "message": "",
+        "expected": 0.0,
+        "actual": 0.0,
+        "difference": 0.0
+      },
+      {
+        "name": "Debt Reconciliation",
+        "passed": true,
+        "year": 2026,
+        "message": "",
+        "expected": 75061545.28615236,
+        "actual": 75061545.28615236,
+        "difference": 0.0
+      },
+      {
+        "name": "Debt Reconciliation",
+        "passed": true,
+        "year": 2027,
+        "message": "",
+        "expected": 698103221.5707598,
+        "actual": 698103221.5707598,
+        "difference": 0.0
+      },
+      {
+        "name": "Debt Reconciliation",
+        "passed": true,
+        "year": 2028,
+        "message": "",
+        "expected": 1319107705.017835,
+        "actual": 1319107705.017835,
+        "difference": 0.0
+      },
+      {
+        "name": "Debt Reconciliation",
+        "passed": true,
+        "year": 2029,
+        "message": "",
+        "expected": 1939992126.439588,
+        "actual": 1939992126.439588,
+        "difference": 0.0
+      },
+      {
+        "name": "CF Identity",
+        "passed": true,
+        "year": 2025,
+        "message": "",
+        "expected": -511703299.13648653,
+        "actual": -511703299.13648653,
+        "difference": 0.0
+      },
+      {
+        "name": "CF Identity",
+        "passed": true,
+        "year": 2026,
+        "message": "",
+        "expected": -355296700.8551601,
+        "actual": -355296700.8551601,
+        "difference": 0.0
+      },
+      {
+        "name": "CF Identity",
+        "passed": true,
+        "year": 2027,
+        "message": "",
+        "expected": -0.000780940055847168,
+        "actual": -0.000780940055847168,
+        "difference": 0.0
+      },
+      {
+        "name": "CF Identity",
+        "passed": true,
+        "year": 2028,
+        "message": "",
+        "expected": -0.0011560916900634766,
+        "actual": -0.0011560916900634766,
+        "difference": 0.0
+      },
+      {
+        "name": "CF Identity",
+        "passed": true,
+        "year": 2029,
+        "message": "",
+        "expected": -0.001154184341430664,
+        "actual": -0.001154184341430664,
+        "difference": 0.0
+      },
+      {
+        "name": "Plug Control",
+        "passed": false,
+        "year": 2024,
+        "message": "other_ncl plug ratio 5.56% > max 5.00%",
+        "expected": null,
+        "actual": 1383000000.0,
+        "difference": null
+      },
+      {
+        "name": "Plug Control",
+        "passed": false,
+        "year": 2025,
+        "message": "other_ncl plug ratio 5.56% > max 5.00%",
+        "expected": null,
+        "actual": 1383000000.0,
+        "difference": null
+      },
+      {
+        "name": "Plug Control",
+        "passed": false,
+        "year": 2026,
+        "message": "other_ncl plug ratio 5.56% > max 5.00%",
+        "expected": null,
+        "actual": 1383000000.0,
+        "difference": null
+      },
+      {
+        "name": "Plug Control",
+        "passed": false,
+        "year": 2027,
+        "message": "other_ncl plug ratio 5.56% > max 5.00%",
+        "expected": null,
+        "actual": 1383000000.0,
+        "difference": null
+      },
+      {
+        "name": "Plug Control",
+        "passed": false,
+        "year": 2028,
+        "message": "other_ncl plug ratio 5.56% > max 5.00%",
+        "expected": null,
+        "actual": 1383000000.0,
+        "difference": null
+      },
+      {
+        "name": "Plug Control",
+        "passed": false,
+        "year": 2029,
+        "message": "other_ncl plug ratio 5.56% > max 5.00%",
+        "expected": null,
+        "actual": 1383000000.0,
+        "difference": null
+      }
+    ],
+    "violations": [],
+    "plug_magnitudes": {
+      "other_nca": {
+        "2024": 13667000000.0,
+        "2025": 13667000000.0,
+        "2026": 13667000000.0,
+        "2027": 13667000000.0,
+        "2028": 13667000000.0,
+        "2029": 13667000000.0
+      },
+      "other_ncl": {
+        "2024": 1383000000.0,
+        "2025": 1383000000.0,
+        "2026": 1383000000.0,
+        "2027": 1383000000.0,
+        "2028": 1383000000.0,
+        "2029": 1383000000.0
+      }
+    }
+  },
+  "constraints": {
+    "passed": true,
+    "constraints": [],
+    "violations": []
+  },
+  "ingestion": {
+    "passed": true,
+    "issues": [],
+    "required_present": {
+      "IS": {
+        "2010": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2011": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2012": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2013": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2014": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2015": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2016": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2017": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2018": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2019": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2020": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2021": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2022": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2023": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ],
+        "2024": [
+          "sga",
+          "revenue",
+          "cogs",
+          "ebitda",
+          "net_income"
+        ]
+      },
+      "BS": {
+        "2010": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2011": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2012": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2013": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2014": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2015": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2016": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2017": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2018": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2019": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2020": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2021": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2022": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2023": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ],
+        "2024": [
+          "cash",
+          "total_assets",
+          "total_liabilities",
+          "total_equity"
+        ]
+      },
+      "CF": {
+        "2010": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2011": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2012": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2013": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2014": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2015": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2016": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2017": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2018": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2019": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2020": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2021": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2022": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2023": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ],
+        "2024": [
+          "net_change",
+          "cfo",
+          "cfi",
+          "cff"
+        ]
+      }
+    },
+    "years_covered": {
+      "IS": [
+        2010,
+        2011,
+        2012,
+        2013,
+        2014,
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024
+      ],
+      "BS": [
+        2010,
+        2011,
+        2012,
+        2013,
+        2014,
+        2015,
+        2016,
+        2017,
+        2018,
+        2019,
+        2020,
+        2021,
+        2022,
+        2023,
+        2024
+      ],
+      "CF": [
+        2010,
+        2010,
+        2011,
+        2011,
+        2012,
+        2012,
+        2013,
+        2013,
+        2014,
+        2014,
+        2015,
+        2015,
+        2016,
+        2016,
+        2017,
+        2017,
+        2018,
+        2018,
+        2019,
+        2019,
+        2020,
+        2020,
+        2021,
+        2021,
+        2022,
+        2022,
+        2023,
+        2023,
+        2024,
+        2024
+      ]
+    },
+    "nan_counts": {
+      "IS": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 0,
+        "2013": 0,
+        "2014": 0,
+        "2015": 0,
+        "2016": 0,
+        "2017": 0,
+        "2018": 0,
+        "2019": 0,
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "BS": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 0,
+        "2013": 0,
+        "2014": 0,
+        "2015": 0,
+        "2016": 0,
+        "2017": 0,
+        "2018": 0,
+        "2019": 0,
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      },
+      "CF": {
+        "2010": 0,
+        "2011": 0,
+        "2012": 0,
+        "2013": 0,
+        "2014": 0,
+        "2015": 0,
+        "2016": 0,
+        "2017": 0,
+        "2018": 0,
+        "2019": 0,
+        "2020": 0,
+        "2021": 0,
+        "2022": 0,
+        "2023": 0,
+        "2024": 0
+      }
+    }
+  },
+  "plugs": {
+    "other_nca": {
+      "2024": 13667000000.0,
+      "2025": 13667000000.0,
+      "2026": 13667000000.0,
+      "2027": 13667000000.0,
+      "2028": 13667000000.0,
+      "2029": 13667000000.0
+    },
+    "other_ncl": {
+      "2024": 1383000000.0,
+      "2025": 1383000000.0,
+      "2026": 1383000000.0,
+      "2027": 1383000000.0,
+      "2028": 1383000000.0,
+      "2029": 1383000000.0
+    }
+  }
+}

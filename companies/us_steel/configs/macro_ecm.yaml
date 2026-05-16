@@ -1,0 +1,131 @@
+# Конфигурация VECM для US Steel
+# Базируется на общем шаблоне, но с группами факторов для сталелитейной отрасли
+
+run:
+  use_log: true                  # уровни в ln для коинтеграции
+  short_run_transform: dln       # Δ-часть в Δln (не уровни)
+  require_span_years: 15
+  start_year_required: 2006
+  require_min_history_years: 12
+  max_lag: 2
+  criterion: "aic"
+  resid_ar1: true                  # применять AR1 к остаткам VECM для корректировки прогноза
+  resid_arma: false                # использовать ARMA(1,1) вместо AR1 для остатков (более гибко, но сложнее)
+  johansen_alpha: 0.05
+  output_dir: "companies/us_steel/outputs/macro_forecast"
+
+preprocess:
+  enabled: true
+  history_window: 3
+  z_threshold: 2.5
+  dummy_z_threshold: 3.0
+  large_delta_threshold: 0.25
+  detect_recent_years: 2
+  smoothing:
+    method: winsorize
+    limit: 0.2
+  normalize:
+    enabled: true
+    scale: 1.0e12
+  detect_cycle:
+    enabled: true
+    max_period: 6
+    acf_threshold: 0.35
+    fft_threshold: 0.2
+
+frequency:
+  target: "Y"
+  aggregation: "avg"
+
+vecm:
+  groups:
+    - name: "us_economy"
+      factors: ["gdp_us", "industrial_production_us", "cpi_us", "ppi_us"]
+    - name: "metals_prices"
+      factors: ["steel_price_hrc", "iron_ore_price"]
+    - name: "fx_and_global"
+      factors: ["dxy", "gdp_world"]
+  horizon_periods: 120
+  horizon_years: 5
+  auto_select:
+    enabled: true             # подбирать оптимальные группы автоматически
+    min_group_size: 2         # минимальный размер группы факторов
+    max_group_size: 4         # максимальный размер группы факторов
+    max_groups: 5             # сколько групп оставить после отбора
+    max_combinations: 40      # ограничение на количество комбинаций
+    prefer_manual: true       # оставить вручную заданные группы в приоритете
+    score_metric: "aic"       # критерий сравнения (aic | span | rank)
+
+lag_search:
+  p_min: 1
+  p_max: 2
+
+rank_test:
+  method: johansen_trace
+  alpha: 0.05
+
+diagnostics:
+  ljung_box_alpha: 0.05
+
+deterministic: "ci"  # constant intercept
+
+cointegration_testing:
+  use_dummies: true                    # использовать dummy переменные для шоков
+  shock_years:
+    - 2008  # Глобальный финансовый кризис и структурный разрыв спроса
+    - 2015  # Обвал сырьевых рынков, ребалансировка китайского спроса
+    - 2020  # COVID-19 и локдауны
+    - 2022  # Геополитический шок и санкционная турбулентность
+  max_dummies: 4                      # максимум dummy переменных (штрафуется по AIC)
+  dummy_aic_penalty: 10               # штраф по AIC за каждую dummy переменную
+  check_forecast_stability: true      # проверять стабильность прогноза
+  stability_max_change_pct: 5.0       # максимальное изменение YoY в % (строгий порог для VECM -> ARIMA011 fallback)
+  stability_max_volatility: 0.15      # максимальная волатильность (std)
+  stability_max_trend_slope: 0.05     # максимальный средний наклон тренда
+  switch_to_univariate_if_unstable: true  # переключиться на univariate ECM если нестабильно
+  auto_detect_shocks: true
+  max_auto_dummies: 2
+  merge_with_manual: true
+
+io:
+  summary_file: "_summary.csv"
+  forecast_suffix: "_forecast.csv"
+
+reconstruction:
+  method: chainlink            # восстановление уровней из Δln
+  anchor: history_last         # якорь — последний исторический уровень
+
+fallback:
+  order: ["auto_arima", "ets", "arima011", "rw_drift"]
+  auto_arima:
+    enabled: true
+    max_p: 3
+    max_q: 3
+    max_d: 2
+    seasonal: false
+  ets:
+    enabled: true
+    trend: "add"
+    damped_trend: true
+    seasonal: null
+  linear_reg:
+    enabled: true
+    window: 8       # количество последних наблюдений для подгонки
+  cyclical:
+    order: ["seasonal_ets", "stl_arima", "auto_arima", "ets", "linear_reg", "arima011", "rw_drift"]
+    seasonal_ets:
+      enabled: true
+      min_points: 8
+      trend: "add"
+      damped_trend: false
+    stl_arima:
+      enabled: true
+      min_points: 10
+      auto_arima:
+        max_p: 3
+        max_q: 3
+        max_d: 2
+        seasonal: false
+      linear_reg:
+        window: null
+

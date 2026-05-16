@@ -1,0 +1,28 @@
+# Accounting conventions and reporting peculiarities (шаблон)
+# Скопируйте в companies/{company}/configs/accounting_conventions.yaml
+# и заполните для своей компании.
+#
+# Особенности отчётности: 10-K может использовать разные определения
+# cash в CF и BS. Например, United Company RUSAL: CF — «Cash and restricted cash»,
+# BS — cash и restricted_cash отдельно. Без учёта конвенции верификация
+# выдаст WARNING. См. docs/refactoring/checkpoints/V3_TRANSITION_D1_CF_BS_CASH_ANALYSIS.md
+
+company: _COMPANY_
+
+# Cash reporting in Cash Flow Statement
+# type: "cash_only" — CF.cash_ending = BS.cash (обычная схема)
+# type: "cash_and_restricted" — CF.cash_ending = BS.cash + BS.restricted_cash (10-K: "Cash and restricted cash")
+cash_in_cf:
+  type: "cash_only"  # или "cash_and_restricted" для United Company RUSAL и подобных
+  description: ""
+
+# BS cash definition (для справки)
+cash_in_bs:
+  current: "cash"
+  noncurrent: "restricted_cash"
+
+# Reconciliation settings (для verify_cf_bs_cash)
+reconciliation:
+  enabled: true
+  variance_threshold: 100000000  # $100M warn-only
+  materiality_threshold: 1000000  # $1M — допустимое расхождение (округление 10-K)

@@ -1,0 +1,37 @@
+{
+  "ppe_2025": {
+    "land_buildings_gross": null,
+    "land_buildings_net": null,
+    "machinery_gross": null,
+    "machinery_net": null,
+    "electrolysers_gross": null,
+    "electrolysers_net": null,
+    "construction_in_progress": null,
+    "total_gross": null,
+    "total_accum_dep": null,
+    "total_net": null,
+    "depreciation_charge": null,
+    "capex": null
+  },
+  "ppe_2024": {
+    "total_gross": null,
+    "total_accum_dep": null,
+    "total_net": null,
+    "depreciation_charge": null,
+    "capex": null
+  },
+  "lease_2025": {
+    "rou_total": 49,
+    "rou_land": 18,
+    "rou_machinery": 31,
+    "lease_liab_current": 20,
+    "lease_liab_noncurrent": 51,
+    "depreciation_rou": 15,
+    "interest_leases": 8,
+    "lease_payments": 24
+  },
+  "lease_2024": {
+    "rou_total": 45,
+    "lease_liab_noncurrent": 42
+  }
+}

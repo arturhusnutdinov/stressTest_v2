@@ -1,0 +1,174 @@
+{
+  "metadata": {
+    "company": "us_steel",
+    "version": "v1.0",
+    "scenario": "base",
+    "statement_type": null,
+    "exported_at": "2026-03-19T13:14:00.953960",
+    "row_count": 23,
+    "column_count": 5
+  },
+  "data": [
+    {
+      "metric": "goodwill_2025_vs_2024",
+      "historical_2024": 920000000.0,
+      "forecast_2025": 920000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "share_capital_2025_vs_2024",
+      "historical_2024": 288000000.0,
+      "forecast_2025": 288000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "treasury_stock_2025_vs_2024",
+      "historical_2024": -1446000000.0,
+      "forecast_2025": -1446000000.0,
+      "difference": 0.0,
+      "pct_change": -0.0
+    },
+    {
+      "metric": "apic_2025_vs_2024",
+      "historical_2024": 5307000000.0,
+      "forecast_2025": 5307000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "aoci_2025_vs_2024",
+      "historical_2024": -21000000.0,
+      "forecast_2025": -21000000.0,
+      "difference": 0.0,
+      "pct_change": -0.0
+    },
+    {
+      "metric": "nci_2025_vs_2024",
+      "historical_2024": 93000000.0,
+      "forecast_2025": 93000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "other_noncurrent_assets_2025_vs_2024",
+      "historical_2024": 13667000000.0,
+      "forecast_2025": 13667000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "other_noncurrent_liabilities_2025_vs_2024",
+      "historical_2024": 1383000000.0,
+      "forecast_2025": 1383000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "cash_2025_vs_2024",
+      "historical_2024": 1367000000.0,
+      "forecast_2025": 855296700.863514,
+      "difference": -511703299.13648605,
+      "pct_change": -37.43257491854324
+    },
+    {
+      "metric": "accounts_receivable_2025_vs_2024",
+      "historical_2024": 1398000000.0,
+      "forecast_2025": 1592135102.672243,
+      "difference": 194135102.67224312,
+      "pct_change": 13.886631092435131
+    },
+    {
+      "metric": "inventory_2025_vs_2024",
+      "historical_2024": 2168000000.0,
+      "forecast_2025": 1298454683.5237095,
+      "difference": -869545316.4762905,
+      "pct_change": -40.10817880425694
+    },
+    {
+      "metric": "accounts_payable_2025_vs_2024",
+      "historical_2024": 2747000000.0,
+      "forecast_2025": 1515405459.6902542,
+      "difference": -1231594540.3097458,
+      "pct_change": -44.83416601054772
+    },
+    {
+      "metric": "ppe_net_2025_vs_2024",
+      "historical_2024": 0.0,
+      "forecast_2025": 1303986798.2632556,
+      "difference": 1303986798.2632556,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "intangibles_2025_vs_2024",
+      "historical_2024": 416000000.0,
+      "forecast_2025": 416000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "rou_asset_2025_vs_2024",
+      "historical_2024": 0.0,
+      "forecast_2025": 0.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "lease_liab_current_2025_vs_2024",
+      "historical_2024": 0.0,
+      "forecast_2025": 0.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "lease_liab_noncurrent_2025_vs_2024",
+      "historical_2024": 0.0,
+      "forecast_2025": 0.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "deferred_tax_assets_2025_vs_2024",
+      "historical_2024": 0.0,
+      "forecast_2025": 0.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "deferred_tax_liabilities_2025_vs_2024",
+      "historical_2024": 657000000.0,
+      "forecast_2025": 657000000.0,
+      "difference": 0.0,
+      "pct_change": 0.0
+    },
+    {
+      "metric": "retained_earnings_2025_vs_2024",
+      "historical_2024": 7219000000.0,
+      "forecast_2025": 12325467825.632467,
+      "difference": 5106467825.632467,
+      "pct_change": 70.73649848500439
+    },
+    {
+      "metric": "total_assets_2025_vs_2024",
+      "historical_2024": 20235000000.0,
+      "forecast_2025": 20351873285.322723,
+      "difference": 116873285.32272339,
+      "pct_change": 0.5775798632207728
+    },
+    {
+      "metric": "total_liabilities_2025_vs_2024",
+      "historical_2024": 8795000000.0,
+      "forecast_2025": 3805405459.690254,
+      "difference": -4989594540.309746,
+      "pct_change": -56.732172146785054
+    },
+    {
+      "metric": "total_equity_2025_vs_2024",
+      "historical_2024": 11347000000.0,
+      "forecast_2025": 16453467825.63247,
+      "difference": 5106467825.632469,
+      "pct_change": 45.00280096618022
+    }
+  ]
+}

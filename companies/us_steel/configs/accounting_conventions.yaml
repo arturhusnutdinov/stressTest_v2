@@ -1,0 +1,28 @@
+# Accounting conventions and quirks for US Steel (Phase 2 reconciliation)
+# Шаблон: templates/accounting_conventions_template.yaml
+# CF↔BS cash: 10-K CF = "Cash and restricted cash"; BS — cash и restricted_cash отдельно.
+# VerificationService и HistoryValidator учитывают type при сравнении CF.cash_ending с BS.
+# При type: cash_and_restricted загрузка (_fill_cf_cash_opening_from_bs) подставляет в CF
+# cash_ending = BS.cash + BS.restricted_cash, чтобы CF и BS совпадали. См. docs/refactoring/PHASE_7_8_9_ENGINE_AND_DATA_REQUIREMENTS.md §1.5.
+company: us_steel
+
+# Cash reporting in Cash Flow Statement
+cash_in_cf:
+  type: "cash_and_restricted"
+  description: "CF reports combined cash + restricted cash"
+  notes:
+    2024: "Per Note 9: Cash, cash equivalents and restricted cash"
+    2023: "Per Note 9: Cash, cash equivalents and restricted cash"
+
+# BS cash definition
+cash_in_bs:
+  current: "cash"
+  noncurrent: "restricted_cash"
+
+# Reconciliation settings
+reconciliation:
+  enabled: true
+  variance_threshold: 100000000 # $100M warn-only
+  materiality_threshold: 1000000 # $1M for restricted cash inclusion
+
+# Extend with other accounting quirks as discovered (leases, debt, tax, etc.)

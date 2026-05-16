@@ -1,0 +1,122 @@
+{
+  "years": {
+    "2023": {
+      "is": {
+        "revenue": 12213,
+        "cogs": -10445,
+        "gross_profit": 1768,
+        "sga": -1358,
+        "distribution_expenses": -755,
+        "asset_impairment": -321,
+        "ebit": -79,
+        "interest_income": 144,
+        "interest_expense": -573,
+        "earnings_from_investees": 752,
+        "ebt": 244,
+        "tax_expense": 38,
+        "net_income": 282,
+        "ebitda": 786
+      },
+      "bs": {
+        "cash": 2087,
+        "accounts_receivable": 1154,
+        "inventory": 3599,
+        "total_ca": 7942,
+        "ppe_net": 5806,
+        "ppe_gross": 16514,
+        "ppe_accum_dep": -10708,
+        "intangibles": 2337,
+        "goodwill": 2156,
+        "investments_lt": 4521,
+        "dta": 229,
+        "total_nca": 13522,
+        "total_assets": 21464,
+        "short_term_debt": 1966,
+        "long_term_debt": 5900,
+        "accounts_payable": 1183,
+        "total_cl": 3719,
+        "dtl": 405,
+        "total_ncl": 6729,
+        "total_liabilities": 10448,
+        "share_capital": 152,
+        "apic": 15786,
+        "retained_earnings": 3002,
+        "aoci": -7924,
+        "total_equity": 11016
+      },
+      "cf": {
+        "cfo_total": 1760,
+        "depreciation": 521,
+        "interest_paid": -422,
+        "capex": -1022,
+        "cfi_total": -1030,
+        "proceeds_borrowings": 3521,
+        "repayments_borrowings": -4814,
+        "dividends_paid": 0,
+        "cff_total": -1747
+      },
+      "ppe_note": {
+        "depreciation_charge": 542
+      }
+    },
+    "2022": {
+      "is": {
+        "revenue": 13974,
+        "cogs": -10770,
+        "gross_profit": 3204,
+        "sga": -1466,
+        "distribution_expenses": -697,
+        "asset_impairment": -196,
+        "ebit": 1316,
+        "interest_income": 133,
+        "interest_expense": -838,
+        "earnings_from_investees": 1555,
+        "ebt": 2166,
+        "tax_expense": -373,
+        "net_income": 1793,
+        "ebitda": 2028
+      },
+      "bs": {
+        "cash": 3196,
+        "accounts_receivable": 1286,
+        "inventory": 4489,
+        "total_ca": 10115,
+        "ppe_net": 5829,
+        "ppe_gross": 18623,
+        "ppe_accum_dep": -12794,
+        "intangibles": 2605,
+        "goodwill": 2434,
+        "investments_lt": 5174,
+        "dta": 58,
+        "total_nca": 14516,
+        "total_assets": 24631,
+        "short_term_debt": 2547,
+        "long_term_debt": 6910,
+        "accounts_payable": 1439,
+        "total_cl": 4591,
+        "dtl": 427,
+        "total_ncl": 7733,
+        "total_liabilities": 12324,
+        "share_capital": 152,
+        "apic": 15786,
+        "retained_earnings": 2720,
+        "aoci": -6351,
+        "total_equity": 12307
+      },
+      "cf": {
+        "cfo_total": -412,
+        "depreciation": 491,
+        "interest_paid": -428,
+        "capex": -1202,
+        "cfi_total": 472,
+        "proceeds_borrowings": 6036,
+        "repayments_borrowings": -3645,
+        "dividends_paid": -302,
+        "cff_total": 1415
+      },
+      "ppe_note": {
+        "depreciation_charge": 518
+      }
+    }
+  }
+}

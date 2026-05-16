@@ -1,0 +1,20 @@
+scenarios:
+  covenant_breach:
+    description: "Auto-triggered on covenant breach — severe combined shock"
+    macro_shocks:
+      steel_price_hrc:
+        type: percentage
+        value: -15.0
+      steel_ppi_iron_steel:
+        type: percentage
+        value: -10.0
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+      dso_days:
+        type: percentage
+        value: 10.0
+      dih_days:
+        type: percentage
+        value: 10.0

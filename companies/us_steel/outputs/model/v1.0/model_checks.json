@@ -1,0 +1,261 @@
+{
+  "metadata": {
+    "company": "us_steel",
+    "version": "v1.0",
+    "scenario": "base",
+    "statement_type": null,
+    "exported_at": "2026-03-19T13:14:00.952294",
+    "row_count": 62,
+    "column_count": 2
+  },
+  "data": [
+    {
+      "metric": "bs_identity_2024",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_liab_equity_check_2024",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_identity_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_liab_equity_check_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_identity_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_liab_equity_check_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_identity_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_liab_equity_check_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_identity_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_liab_equity_check_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_identity_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "bs_liab_equity_check_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "cash_bridge_2025",
+      "value": -4.76837158203125e-07
+    },
+    {
+      "metric": "cash_bridge_2026",
+      "value": 1.1920928955078125e-07
+    },
+    {
+      "metric": "cash_bridge_2027",
+      "value": 1.1920928955078125e-07
+    },
+    {
+      "metric": "cash_bridge_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "cash_bridge_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "re_roll_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "re_roll_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "re_roll_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "re_roll_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "re_roll_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_cork_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "cff_sync_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_change_bs_vs_cff_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_cork_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "cff_sync_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_change_bs_vs_cff_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_cork_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "cff_sync_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_change_bs_vs_cff_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_cork_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "cff_sync_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_change_bs_vs_cff_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_cork_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "cff_sync_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "debt_change_bs_vs_cff_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "taxes_paid_implied_2025",
+      "value": 1556814408.4945338
+    },
+    {
+      "metric": "interest_paid_implied_2025",
+      "value": 106513625.0
+    },
+    {
+      "metric": "dep_link_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "lease_link_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "tax_link_2025",
+      "value": 0.0
+    },
+    {
+      "metric": "taxes_paid_implied_2026",
+      "value": 183109552.75827792
+    },
+    {
+      "metric": "interest_paid_implied_2026",
+      "value": 1876538.632153809
+    },
+    {
+      "metric": "dep_link_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "lease_link_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "tax_link_2026",
+      "value": 0.0
+    },
+    {
+      "metric": "taxes_paid_implied_2027",
+      "value": 135883135.36731014
+    },
+    {
+      "metric": "interest_paid_implied_2027",
+      "value": 19329119.171422806
+    },
+    {
+      "metric": "dep_link_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "lease_link_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "tax_link_2027",
+      "value": 0.0
+    },
+    {
+      "metric": "taxes_paid_implied_2028",
+      "value": 106319951.3871645
+    },
+    {
+      "metric": "interest_paid_implied_2028",
+      "value": 50430273.16471487
+    },
+    {
+      "metric": "dep_link_2028",
+      "value": -5.960464477539063e-08
+    },
+    {
+      "metric": "lease_link_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "tax_link_2028",
+      "value": 0.0
+    },
+    {
+      "metric": "taxes_paid_implied_2029",
+      "value": 78701079.89936934
+    },
+    {
+      "metric": "interest_paid_implied_2029",
+      "value": 81477495.78643559
+    },
+    {
+      "metric": "dep_link_2029",
+      "value": 5.960464477539063e-08
+    },
+    {
+      "metric": "lease_link_2029",
+      "value": 0.0
+    },
+    {
+      "metric": "tax_link_2029",
+      "value": 0.0
+    }
+  ]
+}

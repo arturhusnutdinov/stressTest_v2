@@ -1,0 +1,32 @@
+[
+  {
+    "test": "STRUCTURE_CHECK",
+    "status": "OK",
+    "details": "missing=0"
+  },
+  {
+    "test": "MACRO_SPAN_CHECK",
+    "status": "OK",
+    "details": "files=4 span_ok=4"
+  },
+  {
+    "test": "HISTORY_COVERAGE_CHECK",
+    "status": "OK",
+    "details": "years 2020-2024 present"
+  },
+  {
+    "test": "VECM_CONFIG_CHECK",
+    "status": "OK",
+    "details": "schema valid"
+  },
+  {
+    "test": "SCENARIOS_CHECK",
+    "status": "OK",
+    "details": "count=2"
+  },
+  {
+    "test": "PACKAGING_CHECK",
+    "status": "OK",
+    "details": "manifest created"
+  }
+]

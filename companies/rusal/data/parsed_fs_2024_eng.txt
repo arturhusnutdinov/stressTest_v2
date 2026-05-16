@@ -1,0 +1,173 @@
+Based on the RUSAL 2024 consolidated financial statements, here is the extracted financial data:
+
+## 1. INCOME STATEMENT (USD millions)
+
+| Item | 2024 | 2023 |
+|------|------|------|
+| **Revenue** | 12,082 | 12,213 |
+| Cost of sales | (9,261) | (10,445) |
+| **Gross profit** | 2,821 | 1,768 |
+| Distribution expenses | (848) | (755) |
+| Administrative expenses | (695) | (603) |
+| Impairment of non-current assets | (580) | (321) |
+| Expected credit losses | (44) | (1) |
+| Net other operating expenses | (286) | (167) |
+| **Results from operating activities (EBIT)** | 368 | (79) |
+| Finance income | 457 | 144 |
+| Finance expenses | (531) | (573) |
+| Share of profits of associates and joint ventures | 564 | 752 |
+| **Profit before taxation (EBT)** | 858 | 244 |
+| Current income tax expense | (120) | (132) |
+| Deferred income tax credit | 65 | 170 |
+| **Income tax** | (55) | 38 |
+| **Profit for the year** | 803 | 282 |
+| **Adjusted EBITDA** | 1,494 | 786 |
+
+### Depreciation and Amortisation (from Cash Flow):
+| Item | 2024 | 2023 |
+|------|------|------|
+| Depreciation | 512 | 521 |
+| Amortisation | 26 | 19 |
+| **Total** | 538 | 540 |
+
+## 2. BALANCE SHEET (USD millions)
+
+### Assets
+| Item | 2024 | 2023 |
+|------|------|------|
+| **Cash and cash equivalents** | 1,503 | 2,087 |
+| Trade and other receivables | 1,470 | 1,154 |
+| **Inventories** | 4,477 | 3,599 |
+| Prepayments and input VAT | 721 | 538 |
+| Current income tax receivables | 30 | 8 |
+| Dividends receivable | 29 | 412 |
+| Short-term investments | 112 | 125 |
+| Other current assets | 19 | 19 |
+| **Total current assets** | 8,361 | 7,942 |
+
+| **Property, plant and equipment (net)** | 6,005 | 5,806 |
+| **Intangible assets** | 2,201 | 2,337 |
+| - Goodwill | 2,014 | 2,156 |
+| - Other intangible assets | 187 | 181 |
+| **Interests in associates and joint ventures** | 4,868 | 4,521 |
+| Deferred tax assets | 328 | 229 |
+| Investments in equity securities (FVTPL) | 217 | 339 |
+| Other non-current assets | 221 | 277 |
+| **Total non-current assets** | 13,840 | 13,522 |
+
+| **TOTAL ASSETS** | 22,201 | 21,464 |
+
+### Equity and Liabilities
+| Item | 2024 | 2023 |
+|------|------|------|
+| Share capital | 152 | 152 |
+| Share premium | 15,786 | 15,786 |
+| Other reserves | 2,856 | 2,689 |
+| Currency translation reserve | (11,205) | (10,613) |
+| Retained earnings | 3,627 | 3,002 |
+| **Total equity** | 11,216 | 11,016 |
+
+| **Non-current liabilities** | 4,226 | 6,729 |
+| - Loans and borrowings | 3,398 | 5,900 |
+| - Provisions | 243 | 269 |
+| - Deferred tax liabilities | 466 | 405 |
+| - Other non-current liabilities | 119 | 155 |
+
+| **Current liabilities** | 6,759 | 3,719 |
+| - Loans and borrowings | 4,520 | 1,966 |
+| - Trade and other payables | 1,535 | 1,183 |
+| - Advances received | 420 | 218 |
+| - Other tax payable | 157 | 233 |
+| - Dividends payable | 5 | 5 |
+| - Derivative financial liabilities | 26 | - |
+| - Provisions | 96 | 114 |
+
+| **TOTAL LIABILITIES** | 10,985 | 10,448 |
+| **TOTAL EQUITY AND LIABILITIES** | 22,201 | 21,464 |
+
+## 3. CASH FLOW STATEMENT (USD millions)
+
+| Item | 2024 | 2023 |
+|------|------|------|
+| **Net cash generated from operating activities** | 483 | 1,760 |
+| - Depreciation | 512 | 521 |
+| - Amortisation | 26 | 19 |
+| - Income tax paid | (127) | (125) |
+| - Interest paid | (494) | (422) |
+| - Interest received | 116 | 61 |
+
+| **Net cash used in investing activities** | (1,078) | (1,030) |
+| - Acquisition of property, plant and equipment | (1,332) | (1,022) |
+| - Proceeds from disposal of property, plant and equipment | 14 | 10 |
+| - Dividends from associates and joint ventures | 416 | - |
+| - Acquisition of a joint venture | (303) | - |
+
+| **Net cash generated from/(used in) financing activities** | 113 | (1,747) |
+| - Proceeds from borrowings | 2,628 | 3,521 |
+| - Repayment of borrowings | (2,069) | (4,814) |
+| - Refinancing fees and other expenses | (15) | (30) |
+
+| **Net decrease in cash and cash equivalents** | (482) | (1,017) |
+| Effect of exchange rate fluctuations | (102) | (91) |
+
+## 4. DEBT DETAILS (USD millions)
+
+### Major Debt Instruments as at 31 December 2024:
+
+**Secured Bank Loans:**
+- CNY 4.75% fixed rate: $1,564 million
+- RUB KeyRate + 3.15%: $218 million
+- RUB KeyRate + 5.95%: $133 million
+
+**Unsecured Bank Loans:**
+- CNY 5.25% fixed rate: $729 million
+- RUB KeyRate + 2.45%: $492 million
+- CNY LPR1Y + 3.1%: $333 million
+
+**Bonds:**
+- Various RUB, CNY, USD bonds: $3,620 million total
+
+### Debt Maturity Profile:
+| Year | Amount (USD millions) |
+|------|----------------------|
+| 2025 | 1,807 |
+| 2026 | 997 |
+| 2027 | 840 |
+| 2028 | 262 |
+| 2029 | 182 |
+| 2030-2035 | 210 |
+
+## 5. LEASE DETAILS (IFRS 16) (USD millions)
+
+### Right-of-Use Assets:
+| Category | 2024 | 2023 |
+|----------|------|------|
+| Land and buildings | 18 | 19 |
+| Machinery and equipment | 27 | 12 |
+| **Total ROU assets** | 45 | 31 |
+
+### Other Lease Information:
+- Total depreciation charges on ROU assets: $14 million (2024), $15 million (2023)
+- Interest costs on leases: $5 million (2024), $4 million (2023)
+- Non-current lease liabilities: $42 million (2024), $30 million (2023)
+
+## 6. PPE DETAILS (USD millions)
+
+### Property, Plant and Equipment:
+| Category | Cost 2024 | Accumulated Depreciation 2024 | Net 2024 | Net 2023 |
+|----------|------------|------------------------------|----------|----------|
+| Land and buildings | 4,379 | 2,426 | 1,953 | 1,650 |
+| Machinery and equipment | 7,838 | 6,294 | 1,544 | 1,350 |
+| Electrolysers | 1,839 | 1,171 | 668 | 461 |
+| Other | 244 | 176 | 68 | 37 |
+| Mining assets | 341 | 323 | 18 | 15 |
+| Construction in progress | 2,700 | 946 | 1,754 | 2,293 |
+| **Total** | 17,341 | 11,336 | 6,005 | 5,806 |
+
+### Capital Expenditure:
+- 2024: $1,503 million
+- 2023: $1,121 million
+
+### Depreciation Charge:
+- 2024: $556 million
+- 2023: $542 million

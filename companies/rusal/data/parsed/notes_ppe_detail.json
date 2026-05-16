@@ -1,0 +1,23 @@
+{
+  "ppe_2025": {
+    "total_gross": null,
+    "total_accum_dep": null,
+    "total_net": null,
+    "depreciation_charge": 664,
+    "capex": 1439,
+    "land_gross": null,
+    "land_net": null,
+    "machinery_gross": null,
+    "machinery_net": null,
+    "electrolysers_gross": null,
+    "electrolysers_net": null,
+    "cip": null
+  },
+  "ppe_2024": {
+    "total_gross": null,
+    "total_accum_dep": null,
+    "total_net": null,
+    "depreciation_charge": 512,
+    "capex": 1332
+  }
+}

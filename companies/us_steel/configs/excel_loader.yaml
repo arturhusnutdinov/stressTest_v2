@@ -1,0 +1,2292 @@
+meta:
+  sheet: meta
+  fields:
+    template_version:
+      required: true
+      expected: 1.1.0
+    company_code:
+      required: true
+    company_name:
+      required: false
+    base_currency:
+      required: true
+    author:
+      required: false
+    created_at:
+      required: false
+history:
+  IS:
+    sheet: history_is
+    metric_column: metric
+    year_column: year
+    value_column: value
+    unit_column: unit
+    source_column: source
+    required_metrics:
+      revenue:
+        aliases:
+        - revenue
+        - sales_revenue_net
+        - revenue_total
+        - net_sales
+        - revenues
+        required_for:
+        - standard
+        - custom
+      revenue_related_parties:
+        aliases:
+        - net_sales_to_related_parties
+        - related_party_revenue
+        - sales_to_related_parties
+        - revenue_from_related_parties
+        required_for: []
+      revenue_product:
+        aliases:
+        - sales_revenue_goods_net
+        - product_revenue
+        required_for: []
+      revenue_service:
+        aliases:
+        - service_revenue
+        - revenue_from_services
+        required_for: []
+      revenue_other:
+        aliases:
+        - other_revenue
+        required_for: []
+      cogs:
+        aliases:
+        - cost_of_goods_and_services_sold
+        - cost_of_revenue
+        - cost_of_sales
+        - cogs
+        - cost_of_goods_sold
+        - cogs_total
+        required_for:
+        - standard
+        - custom
+      cogs_materials:
+        aliases:
+        - cost_of_materials
+        required_for: []
+      cogs_labor:
+        aliases:
+        - cost_of_labor
+        - labor_costs
+        required_for: []
+      cogs_overhead:
+        aliases:
+        - overhead_costs
+        - manufacturing_overhead
+        required_for: []
+      cogs_services:
+        aliases:
+        - cost_of_services
+        required_for: []
+      cogs_other:
+        aliases:
+        - other_cogs
+        required_for: []
+      gross_profit:
+        aliases:
+        - gross_profit
+        combine_from:
+        - revenue
+        - cogs
+        required_for: []
+      gross_margin:
+        aliases: []
+        required_for: []
+      sga:
+        aliases:
+        - selling_and_marketing_expense
+        - general_and_administrative_expense
+        - sga
+        - selling_general_and_administrative_expense
+        - sga_total
+        required_for:
+        - standard
+        - custom
+      sga_selling:
+        aliases:
+        - selling_expense
+        - sales_expense
+        required_for: []
+      sga_general_admin:
+        aliases:
+        - general_and_administrative_expense
+        - administrative_expense
+        required_for: []
+      sga_marketing:
+        aliases:
+        - marketing_expense
+        - advertising_expense
+        required_for: []
+      sga_it:
+        aliases:
+        - it_expense
+        - information_technology_expense
+        required_for: []
+      sga_other:
+        aliases:
+        - oci_other
+        - other_sga
+        required_for: []
+      rnd_total:
+        aliases:
+        - oci_total
+        - research_and_development_expense
+        - rnd
+        - total_da
+        required_for: []
+      depreciation_owned:
+        aliases:
+        - depreciation_owned
+        - depreciation_and_amortization
+        - depreciation_ppe
+        - depreciation_depletion_and_amortization
+        - depreciation
+        - depreciationexpense
+        required_for:
+        - standard
+        - custom
+      depreciation_rou:
+        aliases:
+        - operating_lease_cost
+        - depreciation_rou
+        - depreciation_right_of_use_asset
+        - depreciation_right_of_use
+        - depreciation_right_of_use_assets
+        - rou_depreciation
+        - right_of_use_asset_depreciation
+        - right-of-use_asset_depreciation
+        - amortization_of_right_of_use_asset
+        - operating_lease_right_of_use_asset_depreciation_expense
+        - depreciation_finance_leases
+        - finance_lease_depreciation
+        - lease_depreciation
+        required_for: []
+      amortization:
+        aliases:
+        - amortization
+        - amortization_intangibles
+        - amortization_of_intangible_assets
+        required_for:
+        - custom
+      earnings_from_investees:
+        aliases:
+        - equity_in_earnings_of_affiliates
+        - income_from_equity_method_investments
+        - earnings_from_investments
+        - earnings_from_investees
+        required_for: []
+      asset_impairment_charges:
+        aliases:
+        - asset_impairment_charges
+        - impairment_of_assets
+        - impairment_charges
+        - asset_impairment
+        required_for: []
+      restructuring_and_other_charges:
+        aliases:
+        - other_restructuring_charges
+        - restructuring_charges
+        - restructuring_and_other_charges
+        - restructuring_costs
+        required_for: []
+      other_losses_gains_net:
+        aliases:
+        - other_gains_losses
+        - other_income_expense_net
+        - other_losses_gains
+        - other_income_expense
+        - other_gains_losses_net
+        - net_other_income_expense
+        required_for: []
+      operating_margin:
+        aliases: []
+        required_for: []
+      total_da:
+        aliases:
+        - depr_amort
+        - depreciation_and_amortization
+        - total_da
+        - oci_total
+        required_for: []
+      ebit:
+        aliases:
+        - operating_income
+        - operating_income_loss
+        - ebit
+        - earnings_before_interest_and_taxes
+        combine_from:
+        - revenue
+        - cogs
+        - sga
+        - total_da
+        - earnings_from_investees
+        - asset_impairment_charges
+        - restructuring_and_other_charges
+        - gain_on_equity_investee_transactions
+        - other_losses_gains_net
+        required_for:
+        - standard
+        - custom
+      ebitda:
+        aliases:
+        - ebitda
+        - earnings_before_interest_taxes_depreciation_amortization
+        combine_from:
+        - ebit
+        - total_da
+        required_for:
+        - standard
+        - custom
+      interest_income:
+        aliases:
+        - investment_income_interest
+        - finance_income
+        - interest_income
+        required_for: []
+      interest_expense_debt:
+        aliases:
+        - interest_expense
+        - interest_and_debt_expense
+        required_for: []
+      net_interest_and_other_financial_costs:
+        aliases:
+        - net_interest_and_other_financial_costs
+        - net_interest
+        - net_financial_costs
+        combine_from:
+        - interest_income
+        - interest_expense_debt
+        - interest_expense_lease
+        - loss_on_debt_extinguishment
+        - net_periodic_benefit_cost_other_than_service_cost
+        - other_financial_costs
+        required_for: []
+      other_financial_costs:
+        aliases:
+        - other_financial_expenses
+        - financial_costs_other
+        - other_financial_charges
+        - other_financial_costs
+        required_for: []
+      interest_expense_lease:
+        aliases:
+        - lease_interest
+        - interest_on_lease_liability
+        - interest_on_lease_liabilities
+        - finance_cost_on_lease
+        - lease_finance_cost
+        - interest_expense_lease
+        - lease_interest_expense
+        required_for: []
+      lease_interest_finance:
+        aliases:
+        - finance_lease_interest
+        required_for: []
+      lease_expense_operating:
+        aliases:
+        - operating_lease_expense
+        required_for: []
+      current_tax_expense:
+        aliases:
+        - current_tax
+        - income_tax_expense_current
+        required_for: []
+      deferred_tax_expense:
+        aliases:
+        - deferred_tax
+        - income_tax_expense_deferred
+        required_for: []
+      tax_expense:
+        aliases:
+        - income_tax_expense
+        - income_tax_expense_benefit
+        - tax_expense
+        - total_tax_expense
+        required_for:
+        - standard
+        - custom
+      ebt:
+        aliases:
+        - ebt
+        - earnings_before_taxes
+        - pretax_income
+        - income_before_taxes
+        combine_from:
+        - ebit
+        - interest_expense
+        - interest_income
+        - loss_on_debt_extinguishment
+        - other_financial_costs
+        - net_periodic_benefit_income
+        - net_gain_from_investments_related_to_active_employee_benefits
+        required_for:
+        - standard
+        - custom
+      net_income:
+        aliases:
+        - net_income_parent
+        - net_income_nci
+        - net_income_to_sh
+        - net_income
+        combine_from:
+        - ebt
+        - tax_expense
+        required_for:
+        - standard
+        - custom
+      net_sales_to_related_parties:
+        aliases:
+        - net_sales_to_related_parties
+        required_for: []
+      rnd:
+        aliases:
+        - rnd
+        - research_and_development
+        - r_d
+        - r&d
+        - research_development
+        - rnd_total
+        - research_and_development_expense
+        required_for: []
+      gain_loss_on_disposal:
+        aliases:
+        - gain_loss_on_disposal
+        required_for: []
+      gain_on_equity_investee_transactions:
+        aliases:
+        - gain_on_equity_investee_transactions
+        - gain_on_sale_of_equity_investee
+        required_for: []
+      net_gain_from_investments_related_to_active_employee_benefits:
+        aliases:
+        - net_gain_from_investments_related_to_active_employee_benefits
+        - employee_benefit_investment_gains
+        required_for: []
+      net_interest_and_other_financial_benefits_costs:
+        aliases:
+        - net_interest_and_other_financial_benefits_costs
+        - net_financial_income
+        - net_interest_benefits
+        required_for: []
+      interest_expense:
+        aliases:
+        - interest_expense
+        required_for: []
+      lease_interest:
+        aliases:
+        - lease_interest
+        - interest_expense_lease
+        - lease_interest_expense
+        - interest_on_lease_liability
+        - interest_on_lease_liabilities
+        - finance_cost_on_lease
+        - lease_finance_cost
+        required_for: []
+      net_periodic_benefit_income:
+        aliases:
+        - net_periodic_benefit_income
+        required_for: []
+      net_periodic_benefit_cost_other_than_service_cost:
+        aliases:
+        - net_periodic_benefit_cost_other_than_service_cost
+        - net_periodic_benefit_income
+        - net_periodic_benefit_cost
+        required_for: []
+      loss_on_debt_extinguishment:
+        aliases:
+        - loss_on_debt_extinguishment
+        required_for: []
+      other_income:
+        aliases:
+        - other_income
+        - other_comprehensive_income_other
+        required_for: []
+      other_expenses:
+        aliases:
+        - other_expenses
+        - other_operating_expenses
+        - other_costs
+        - other_expense
+        required_for: []
+      cfo_stock_compensation:
+        aliases:
+        - cfo_stock_compensation
+        - stock_based_compensation
+        - stock_compensation
+        - stock_based_comp
+        required_for: []
+      eps_basic:
+        aliases:
+        - eps_basic
+        required_for: []
+      eps_diluted:
+        aliases:
+        - eps_diluted
+        required_for: []
+      dep_ppe:
+        aliases:
+        - dep_ppe
+        - depreciation_ppe
+        - depreciation_property_plant_equipment
+        - depreciation_of_property_plant_and_equipment
+        required_for: []
+      amort_intangibles:
+        aliases:
+        - amort_intangibles
+        - amortization_intangibles
+        - amortization_of_intangible_assets
+        required_for: []
+      other_losses_gains:
+        aliases:
+        - other_losses_gains
+        - other_losses_gains_net
+        - other_losses_and_gains
+        - other_income_loss_net
+        required_for: []
+      restructuring:
+        aliases:
+        - restructuring
+        - restructuring_charges
+        - restructuring_and_other_charges
+        - restructuring_costs
+        - other_restructuring_charges
+        required_for: []
+      asset_impairment:
+        aliases:
+        - asset_impairment
+        - asset_impairment_charges
+        - impairment_charges
+        - impairment_of_assets
+        required_for: []
+      net_periodic_benefit:
+        aliases:
+        - net_periodic_benefit
+        - net_periodic_benefit_income
+        - net_periodic_benefit_cost_other_than_service_cost
+        - net_periodic_benefit_cost
+        required_for: []
+  BS:
+    sheet: history_bs
+    metric_column: metric
+    year_column: year
+    value_column: value
+    unit_column: unit
+    source_column: source
+    required_metrics:
+      cash:
+        aliases:
+        - cash_and_equivalents
+        - cash
+        required_for:
+        - standard
+        - custom
+      restricted_cash:
+        aliases:
+        - restricted_cash
+        - long_term_restricted_cash
+        - long_term_restricted_cash_note_9
+        - restricted_cash_long_term
+        required_for: []
+      accounts_receivable:
+        aliases:
+        - accounts_receivable_net
+        - receivables_less_allowance
+        - accounts_receivable
+        - ar
+        required_for:
+        - standard
+        - custom
+      accounts_receivable_gross:
+        aliases:
+        - ar_gross
+        required_for: []
+      allowance_for_doubtful_accounts:
+        aliases:
+        - allowance_for_bad_debts
+        required_for: []
+      receivables_related_parties:
+        aliases:
+        - receivables_from_related_parties
+        - receivables_related_parties
+        required_for: []
+      inventory:
+        aliases:
+        - inv
+        - inventory_total
+        - inventory
+        required_for:
+        - standard
+        - custom
+      inventory_raw_materials:
+        aliases:
+        - raw_materials
+        required_for: []
+      inventory_wip:
+        aliases:
+        - work_in_progress
+        - wip
+        - inventory
+        required_for: []
+      inventory_finished_goods:
+        aliases:
+        - finished_goods
+        required_for: []
+      other_current_assets:
+        aliases:
+        - other_non_current_assets
+        - other_current_assets
+        required_for: []
+      short_term_investments:
+        aliases:
+        - short_term_investments
+        required_for: []
+      prepaid_expenses:
+        aliases:
+        - prepaids
+        required_for: []
+      ppe_gross:
+        aliases:
+        - ppe_gross
+        - property_plant_and_equipment_gross
+        - ppe_gross_cost
+        required_for: []
+      ppe_accumulated_depreciation:
+        aliases:
+        - ppe_accum_dep
+        - accumulated_depreciation_ppe
+        required_for: []
+      ppe_net:
+        aliases:
+        - property_plant_and_equipment_net
+        - net_ppe
+        - ppe_net
+        combine_from:
+        - ppe_gross
+        - ppe_accumulated_depreciation
+        required_for:
+        - standard
+        - custom
+      rou_asset_total:
+        aliases:
+        - rou_asset
+        - right_of_use_asset
+        required_for: []
+      rou_finance_asset:
+        aliases:
+        - finance_lease_right_of_use_asset
+        - financeleaserightofuseasset
+        required_for: []
+      rou_operating_asset:
+        aliases:
+        - operating_lease_right_of_use_asset
+        - operatingleaserightofuseasset
+        required_for: []
+      intangibles_total:
+        aliases:
+        - intangibles
+        - intangible_assets
+        required_for: []
+      intangibles_finite_life:
+        aliases:
+        - finite_life_intangibles
+        required_for: []
+      intangibles_indefinite_life:
+        aliases:
+        - indefinite_life_intangibles
+        required_for: []
+      goodwill:
+        aliases:
+        - goodwill
+        required_for: []
+      longterm_investments:
+        aliases:
+        - long_term_investments
+        required_for: []
+      investments_and_long_term_receivables:
+        aliases:
+        - investments_and_long_term_receivables
+        - investments_and_receivables
+        - long_term_investments_and_receivables
+        - investments_and_long_term_receivables_less_allowance
+        - long_term_receivables
+        - investments_long_term
+        required_for: []
+      long_term_receivables_related_parties:
+        aliases:
+        - long_term_receivables_related_parties
+        - lt_receivables_related_parties
+        required_for: []
+      equity_method_investments:
+        aliases:
+        - investments_in_associates
+        required_for: []
+      deferred_tax_assets:
+        aliases:
+        - dta
+        - deferredtaxassetsnet
+        - deferred_tax_assets
+        required_for:
+        - custom
+      other_non_current_assets:
+        aliases:
+        - other_non_current_assets
+        - other_current_assets
+        required_for: []
+      long_term_debt:
+        aliases:
+        - long_term_debt_total
+        - lt_debt
+        - long_term_debt
+        required_for:
+        - standard
+        - custom
+      total_debt:
+        aliases:
+        - total_debt
+        - total_borrowings
+        combine_from:
+        - short_term_debt
+        - long_term_debt
+        required_for: []
+      total_lease_liability:
+        aliases:
+        - total_lease_liability
+        - total_lease_liabilities
+        combine_from:
+        - lease_liab_current
+        - lease_liab_noncurrent
+        required_for: []
+      lt_debt_bonds:
+        aliases:
+        - bonds_payable
+        required_for: []
+      lt_debt_bank:
+        aliases:
+        - bank_loans_long_term
+        required_for: []
+      lt_debt_other:
+        aliases:
+        - other_long_term_debt
+        required_for: []
+      short_term_debt:
+        aliases:
+        - st_debt
+        - current_debt
+        - short_term_debt
+        required_for:
+        - custom
+      current_portion_of_lt_debt:
+        aliases:
+        - current_maturities_of_long_term_debt
+        required_for: []
+      accounts_payable:
+        aliases:
+        - accounts_payable
+        - ap
+        required_for: []
+      accrued_liabilities:
+        aliases:
+        - accrued
+        - accrued_liabilities
+        required_for: []
+      accrued_compensation:
+        aliases:
+        - accrued_wages
+        - accrued_salaries
+        required_for: []
+      accrued_taxes:
+        aliases:
+        - accrued_taxes_payable
+        - taxes_accrued
+        - accrued_taxes
+        - taxes_payable
+        required_for: []
+      taxes_payable:
+        aliases:
+        - taxes_payable
+        - income_taxes_payable
+        - accrued_taxes
+        required_for: []
+      accrued_interest:
+        aliases:
+        - accrued_interest
+        - interest_accrued
+        - interest_payable
+        required_for: []
+      interest_payable:
+        aliases:
+        - interest_payable
+        - interest_payable_current
+        - accrued_interest
+        required_for: []
+      payroll_and_benefits_payable:
+        aliases:
+        - payroll_and_benefits_payable
+        - accrued_compensation
+        - accrued_payroll
+        - payroll_and_benefits
+        - compensation_and_benefits_payable
+        - accrued_liabilities
+        required_for: []
+      other_current_liabilities:
+        aliases:
+        - other_current_liabilities
+        - other_current_liab
+        required_for: []
+      lease_liab_current_total:
+        aliases:
+        - current_lease_liability
+        - lease_liab_cur
+        - operatingleaseliabilitycurrent
+        - financeleaseliabilitycurrent
+        - lease_liab_current
+        required_for:
+        - custom
+      current_finance_lease_liability:
+        aliases:
+        - financeleaseliabilitycurrent
+        - finance_lease_liability_current
+        required_for: []
+      current_operating_lease_liability:
+        aliases:
+        - operatingleaseliabilitycurrent
+        - operating_lease_liability_current
+        required_for: []
+      lease_liab_noncurrent_total:
+        aliases:
+        - long_term_lease_liability
+        - lease_liab_ncur
+        - operatingleaseliabilitynoncurrent
+        - financeleaseliabilitynoncurrent
+        - lease_liab_noncurrent
+        required_for:
+        - custom
+      noncurrent_finance_lease_liability:
+        aliases:
+        - financeleaseliabilitynoncurrent
+        - finance_lease_liability_noncurrent
+        required_for: []
+      noncurrent_operating_lease_liability:
+        aliases:
+        - operatingleaseliabilitynoncurrent
+        - operating_lease_liability_noncurrent
+        required_for: []
+      deferred_tax_liabilities:
+        aliases:
+        - dtl
+        - deferredtaxliabilitiesnet
+        - deferred_tax_liabilities
+        required_for:
+        - custom
+      employee_benefits:
+        aliases:
+        - employee_benefits
+        required_for: []
+      other_non_current_liabilities:
+        aliases:
+        - other_non_current_liabilities
+        - deferred_credits_and_other_noncurrent
+        required_for: []
+      share_capital:
+        aliases:
+        - share_capital
+        - common_stock
+        required_for: []
+      additional_paid_in_capital:
+        aliases:
+        - additional_paid_in_capital
+        - apic
+        required_for: []
+      treasury_stock:
+        aliases:
+        - treasury_stock
+        required_for: []
+      retained_earnings:
+        aliases:
+        - retained_earnings
+        required_for: []
+      aoci:
+        aliases:
+        - accumulated_other_comprehensive_income
+        - aoci
+        required_for: []
+      noncontrolling_interests:
+        aliases:
+        - nci
+        - noncontrolling_interests
+        required_for: []
+      total_current_assets:
+        aliases:
+        - total_current_assets
+        combine_from:
+        - cash
+        - short_term_investments
+        - accounts_receivable
+        - inventory
+        - other_current_assets
+        required_for: []
+      total_non_current_assets:
+        aliases:
+        - total_non_current_assets
+        combine_from:
+        - restricted_cash
+        - investments_and_long_term_receivables
+        - long_term_receivables_related_parties
+        - rou_asset
+        - ppe_net
+        - intangibles
+        - goodwill
+        - dta_noncurrent
+        - other_non_current_assets
+        required_for: []
+      total_assets:
+        aliases:
+        - total_assets
+        combine_from:
+        - total_current_assets
+        - total_non_current_assets
+        required_for: []
+      total_current_liabilities:
+        aliases:
+        - total_current_liabilities
+        combine_from:
+        - short_term_debt
+        - accounts_payable
+        - accounts_payable_related_parties
+        - payroll_and_benefits_payable
+        - accrued_taxes
+        - accrued_interest
+        - lease_liab_current
+        - other_current_liabilities
+        required_for: []
+      total_non_current_liabilities:
+        aliases:
+        - total_non_current_liabilities
+        combine_from:
+        - lease_liab_noncurrent
+        - long_term_debt
+        - employee_benefits
+        - dtl_noncurrent
+        - other_non_current_liabilities
+        - other_ncl_balancing_plug
+        required_for: []
+      total_liabilities:
+        aliases:
+        - total_liabilities
+        combine_from:
+        - total_current_liabilities
+        - total_non_current_liabilities
+        required_for: []
+      total_equity:
+        aliases:
+        - total_equity
+        combine_from:
+        - share_capital
+        - additional_paid_in_capital
+        - retained_earnings
+        - aoci
+        - treasury_stock
+        required_for: []
+      total_liab_equity:
+        aliases:
+        - total_liab_equity
+        combine_from:
+        - total_liabilities
+        - total_equity
+        - noncontrolling_interests
+        required_for: []
+      ppe_accum_dep:
+        aliases:
+        - ppe_accum_dep
+        required_for: []
+      rou_asset:
+        aliases:
+        - rou_asset
+        - right_of_use_asset
+        - right_of_use_assets
+        - right-of-use_asset
+        - right-of-use_assets
+        - rou_assets
+        - ROU_asset
+        - ROU_assets
+        - assets_under_lease
+        - leased_assets_right_of_use
+        required_for: []
+      intangibles:
+        aliases:
+        - intangibles
+        required_for: []
+      dta:
+        aliases:
+        - dta
+        required_for: []
+      dta_noncurrent:
+        aliases:
+        - dta_noncurrent
+        - dta
+        required_for: []
+      accounts_payable_related_parties:
+        aliases:
+        - accounts_payable_related_parties
+        - ap_related_parties
+        - accounts_payable_to_related_parties
+        - payables_to_related_parties
+        - related_party_payables
+        required_for: []
+      st_debt:
+        aliases:
+        - st_debt
+        - short_term_debt
+        - short_term_debt_total
+        required_for: []
+      lease_liab_current:
+        aliases:
+        - short_term_lease_liability
+        - current_lease_liabilities
+        - current_operating_lease_liabilities
+        - operating_lease_liability_current
+        - lease_liab_current
+        - finance_lease_liability_current
+        - lease_liability_current
+        - short_term_lease_liabilities
+        - current_lease_liability
+        - lease_obligation_current
+        required_for: []
+      lease_liab_noncurrent:
+        aliases:
+        - lease_liab_noncurrent
+        - long_term_lease_liability
+        - long_term_lease_liabilities
+        - noncurrent_operating_lease_liabilities
+        - noncurrent_lease_liability
+        - noncurrent_lease_liabilities
+        - lease_liability_noncurrent
+        - lease_obligation_noncurrent
+        - finance_lease_liability_noncurrent
+        - operating_lease_liability_noncurrent
+        required_for: []
+      deferred_credits:
+        aliases:
+        - deferred_credits
+        required_for: []
+      dtl:
+        aliases:
+        - dtl
+        required_for: []
+      dtl_noncurrent:
+        aliases:
+        - dtl_noncurrent
+        - deferred_tax_liabilities
+        - dtl
+        required_for: []
+      common_stock_par:
+        aliases:
+        - common_stock_par
+        required_for: []
+      apic:
+        aliases:
+        - apic
+        - additional_paid_in_capital
+        required_for: []
+      nci:
+        aliases:
+        - nci
+        - noncontrolling_interests
+        required_for: []
+      investments_lt:
+        aliases:
+        - investments_lt
+        - investments_and_long_term_receivables
+        - investments_and_receivables
+        - long_term_investments_and_receivables
+        - long_term_receivables
+        required_for: []
+      other_ncl:
+        aliases:
+        - other_ncl
+        - other_non_current_liabilities
+        - deferred_credits_and_other_noncurrent
+        - other_noncurrent_liabilities
+        required_for: []
+      other_cl:
+        aliases:
+        - other_cl
+        - other_current_liabilities
+        - other_current_liab
+        required_for: []
+    exclusive_groups:
+    - - dta_noncurrent
+      - dta
+      - deferred_tax_asset
+    - - investments_and_long_term_receivables
+      - investments_long_term
+    - - long_term_receivables_related_parties
+      - lt_receivables_related_parties
+    - - dtl_noncurrent
+      - dtl
+      - deferred_tax_liability
+    - - lease_liab_noncurrent
+      - lease_liability_non_current
+    - - employee_benefits
+      - pension_liability
+    - - additional_paid_in_capital
+      - apic
+    - - share_capital
+      - common_stock
+    - - accrued_interest
+      - interest_payable
+    - - accrued_taxes
+      - taxes_payable
+    - - st_debt
+      - short_term_debt
+  CF:
+    sheet: history_cf
+    metric_column: metric
+    year_column: year
+    value_column: value
+    unit_column: unit
+    source_column: source
+    required_metrics:
+      cfo_total:
+        aliases:
+        - cfo_total
+        - cfo
+        - cash_flow_from_operations
+        - cash_flow_from_operating_activities
+        - net_cash_from_operating_activities
+        combine_from:
+        - net_income
+        - total_da
+        - gain_on_sale_of_transtar
+        - gain_loss_associated_with_us_steel_canada
+        - asset_impairment_charges
+        - gain_on_equity_investee_transactions
+        - restructuring_and_other_charges
+        - loss_on_debt_extinguishment
+        - pensions_and_other_postretirement_benefits
+        - active_employee_benefit_investments
+        - deferred_income_taxes
+        - gain_loss_on_disposal
+        - gain_loss_reversal
+        - equity_investees_earnings_net_of_distributions_received
+        - provision_for_doubtful_accounts
+        - currency_remeasurement_loss_gain
+        - changes_in_current_receivables
+        - wc_accounts_receivable_change
+        - changes_in_inventories
+        - wc_inventory_change
+        - changes_in_current_accounts_payable_and_accrued_expenses
+        - wc_accounts_payable_change
+        - changes_in_income_taxes_receivable_payable
+        - wc_income_taxes_receivable_payable_change
+        - changes_in_all_other_net
+        - wc_all_other_net
+        - changes_in_bank_checks_outstanding
+        required_for:
+        - standard
+        - custom
+      net_income:
+        aliases:
+        - net_income
+        required_for: []
+      total_da:
+        aliases:
+        - depr_amort
+        - depreciation_and_amortization
+        - depreciation_depletion_and_amortization
+        - total_da
+        combine_from:
+        - depreciation_owned
+        - depreciation_rou
+        - amortization
+        required_for: []
+      depreciation_owned:
+        aliases:
+        - depreciation_owned
+        - depreciation_ppe
+        - depreciation_property_plant_equipment
+        - depreciation
+        required_for: []
+      depreciation_rou:
+        aliases:
+        - depreciation_right_of_use_asset
+        - depreciation_right_of_use
+        - depreciation_right_of_use_assets
+        - depreciation
+        - depreciation_finance_leases
+        - right_of_use_asset_depreciation
+        - rou_depreciation
+        - depreciation_rou
+        required_for: []
+      impairment:
+        aliases:
+        - impairment
+        - impairment_charges
+        - cfi_impairment
+        - impairment_of_goodwill
+        - impairment_of_intangible_assets
+        required_for: []
+      stock_based_comp:
+        aliases:
+        - stock_based_compensation
+        required_for: []
+      deferred_tax:
+        aliases:
+        - deferred_tax_expense
+        - deferred_tax
+        - deferred_income_taxes
+        - tax_deferred_adjustment
+        required_for: []
+      gain_loss_disposal:
+        aliases:
+        - gain_loss_on_disposal
+        - gain_loss_reversal
+        required_for: []
+      change_ar:
+        aliases:
+        - wc_accounts_receivable_change
+        - change_ar
+        - changes_in_current_receivables
+        - change_in_accounts_receivable
+        required_for: []
+      change_inventory:
+        aliases:
+        - change_inventory
+        - wc_inventory_change
+        - changes_in_inventories
+        required_for: []
+      change_ap:
+        aliases:
+        - wc_accounts_payable_change
+        - change_ap
+        - changes_in_current_accounts_payable_and_accrued_expenses
+        required_for: []
+      change_other_wc:
+        aliases:
+        - change_other_wc
+        - wc_other_change
+        - wc_all_other_net
+        - changes_in_all_other_net
+        required_for: []
+      changes_in_bank_checks_outstanding:
+        aliases:
+        - changes_in_bank_checks_outstanding
+        required_for: []
+      change_taxes_payable:
+        aliases:
+        - wc_income_taxes_receivable_payable_change
+        - change_taxes_payable
+        - changes_in_income_taxes_receivable_payable
+        required_for: []
+      change_interest_payable:
+        aliases: []
+        required_for: []
+      lease_interest_paid:
+        aliases: []
+        required_for: []
+      interest_paid:
+        aliases:
+        - interest_paid
+        - cf_interest_paid
+        - interestpaidnet
+        - interest_paid_cash
+        - cash_interest_paid
+        - cash_paid_for_interest
+        required_for: []
+      taxes_paid:
+        aliases:
+        - tax_paid
+        - incometaxespaidnet
+        required_for:
+        - custom
+      lease_payments_cfo_operating:
+        aliases:
+        - lease_payments_cfo
+        - operatingleasepayments
+        required_for:
+        - custom
+      lease_interest_cfo_finance:
+        aliases: []
+        required_for: []
+      lease_interest_cfo_operating:
+        aliases: []
+        required_for: []
+      other_operating:
+        aliases: []
+        required_for: []
+      cfi_total:
+        aliases:
+        - cfi_total
+        - cfi
+        - cash_flow_from_investing
+        - net_cash_used_in_investing_activities
+        - net_cash_from_investing_activities
+        combine_from:
+        - capex
+        - proceeds_from_cost_reimbursement_government_grants
+        - disposal_of_assets
+        - ppe_disposal_proceeds
+        - proceeds_from_sale_of_ownership_interests_in_equity_investees
+        - other_investing
+        - investments_net
+        - acquisition_of_big_river_steel
+        - acquisitions
+        - change_in_restricted_cash_net
+        - investment_in_big_river_steel
+        - proceeds_from_sale_of_transtar
+        required_for:
+        - standard
+        - custom
+      capex:
+        aliases:
+        - cfi_acquisitions
+        - paymentstoacquirepropertyplantandequipment
+        - capex
+        - capex_cf
+        required_for:
+        - standard
+        - custom
+      ppe_disposal_proceeds:
+        aliases:
+        - ppe_disposal_proceeds
+        - disposal_proceeds
+        - proceedsfromsaleofpropertyplantandequipment
+        - disposal_of_assets
+        required_for: []
+      acquisitions:
+        aliases:
+        - cfi_acquisitions
+        - acquisitions
+        - acquisition_of_big_river_steel
+        required_for: []
+      investment_in_big_river_steel:
+        aliases:
+        - investment_in_big_river_steel
+        required_for: []
+      divestitures:
+        aliases:
+        - divestitures
+        - divestment
+        - disposal_of_businesses
+        - sale_of_businesses
+        - proceeds_from_sale_of_transtar
+        required_for: []
+      proceeds_from_stelco_option_agreement:
+        aliases:
+        - proceeds_from_stelco_option_agreement
+        required_for: []
+      gain_on_sale_of_transtar:
+        aliases:
+        - gain_on_sale_of_transtar
+        required_for: []
+      gain_loss_associated_with_us_steel_canada:
+        aliases:
+        - gain_loss_associated_with_us_steel_canada
+        - losses_associated_with_us_steel_canada
+        required_for: []
+      investments_purchases:
+        aliases:
+        - investments_purchases
+        - purchases_of_investments
+        - purchases_of_marketable_securities
+        - purchases_of_short_term_investments
+        required_for: []
+      investments_sales:
+        aliases:
+        - investments_sales
+        - sales_of_investments
+        - sales_of_marketable_securities
+        - sales_of_short_term_investments
+        - proceeds_from_sale_of_investments
+        required_for: []
+      other_investing:
+        aliases:
+        - cfi_other
+        required_for: []
+      change_in_restricted_cash_net:
+        aliases:
+        - change_in_restricted_cash_net
+        - change_restricted_cash
+        - restricted_cash_change
+        required_for: []
+      investments_net:
+        aliases:
+        - investments_net
+        - net_investments
+        - investments_purchases_sales_net
+        required_for: []
+      cff_total:
+        aliases:
+        - cff_total
+        - cff
+        - cash_flow_from_financing
+        - net_cash_from_financing_activities
+        - net_cash_from_financing_activities
+        combine_from:
+        - debt_issuance
+        - debt_repayments
+        - common_stock_repurchased
+        - net_proceeds_from_public_offering_of_common_stock
+        - other_financing_activities
+        - revolving_credit_facilities_borrowings_net_of_financing_costs
+        - revolving_credit_facilities_repayments
+        - issuance_of_short_term_debt
+        - repayment_of_short_term_debt
+        - proceeds_from_stelco_option_agreement
+        - proceeds_from_cost_reimbursement_government_grants
+        - proceeds_from_government_incentives
+        - payments_on_proceeds_from_receivables_purchase_agreement
+        - cff_equity_issuance
+        - distributions_from_noncontrolling_interests
+        - dividends_paid
+        - cff_dividends
+        required_for:
+        - standard
+        - custom
+      debt_issuance:
+        aliases:
+        - debt_issuance
+        - issuance_of_long_term_debt_net_of_financing_costs
+        required_for: []
+      debt_repayment:
+        aliases:
+        - debt_repayment
+        required_for: []
+      revolver_draws:
+        aliases:
+        - revolver_draws
+        - revolving_credit_facilities_borrowings_net_of_financing_costs
+        - cff_borrowings
+        required_for: []
+      revolver_repayments:
+        aliases:
+        - revolver_repayments
+        - revolving_credit_facilities_repayments
+        - cff_repayments
+        required_for: []
+      finance_lease_principal:
+        aliases:
+        - lease_payments_cff
+        - lease_payments_cff_finance
+        - financeleaseprincipalpayments
+        required_for:
+        - custom
+      dividends_paid:
+        aliases:
+        - cff_dividends
+        - dividends_paid
+        - dividends
+        required_for: []
+      share_buybacks:
+        aliases:
+        - treasury_stock_purchases
+        - common_stock_repurchased
+        required_for: []
+      equity_issuance:
+        aliases:
+        - cff_equity_issuance
+        - equity_issuance
+        - net_proceeds_from_public_offering_of_common_stock
+        - receipts_from_exercise_of_stock_options
+        required_for: []
+      other_financing:
+        aliases:
+        - cff_other
+        - other_financing_activities
+        - settlement_of_contingent_consideration
+        - taxes_paid_for_equity_compensation_plans
+        required_for: []
+      issuance_of_long_term_debt_net_of_financing_costs:
+        aliases:
+        - issuance_of_long_term_debt_net_of_financing_costs
+        - long_term_debt_issuance_net
+        - proceeds_from_long_term_debt
+        required_for: []
+      repayment_of_long_term_debt:
+        aliases:
+        - repayment_of_long_term_debt
+        - repayment_of_long_term_debt_net
+        - payments_of_long_term_debt
+        required_for: []
+      payments_on_proceeds_from_receivables_purchase_agreement:
+        aliases:
+        - payments_on_proceeds_from_receivables_purchase_agreement
+        - receivables_purchase_agreement_payments
+        required_for: []
+      cff_borrowings:
+        aliases:
+        - cff_borrowings
+        - debt_borrowings
+        required_for:
+        - custom
+      cff_repayments:
+        aliases:
+        - debt_repayments
+        - cff_repayments
+        required_for:
+        - custom
+      fx_effect:
+        aliases:
+        - cf_fx_effect
+        - fx_effect
+        required_for: []
+      net_change_in_cash:
+        aliases:
+        - net_change_in_cash
+        - net_change_in_cash_and_cash_equivalents
+        - net_change_in_cash_cash_equivalents_restricted_cash
+        - net_change
+        - change_in_cash
+        - net_change_in_cash_total
+        combine_from:
+        - cfo_total
+        - cfi_total
+        - cff_total
+        - effect_of_exchange_rate_changes_on_cash
+        required_for: []
+      cash_beginning:
+        aliases:
+        - cash_beginning
+        - opening_cash
+        - cash_opening
+        - beginning_cash
+        required_for: []
+      cash_ending:
+        aliases:
+        - ending_cash
+        - closing_cash
+        - cash_ending
+        required_for: []
+      depreciation:
+        aliases:
+        - depreciation
+        - depreciation
+        required_for: []
+      amortization:
+        aliases:
+        - amortization
+        - amortization
+        required_for: []
+      asset_impairment_charges_cf:
+        aliases:
+        - asset_impairment_charges_cf
+        - asset_impairment_charges
+        - impairment_of_goodwill
+        - impairment_of_intangible_assets
+        required_for: []
+      gain_on_equity_investee_transactions_cf:
+        aliases:
+        - gain_on_equity_investee_transactions_cf
+        - gain_on_equity_investee_transactions
+        required_for: []
+      restructuring_and_other_charges_cf:
+        aliases:
+        - restructuring_and_other_charges_cf
+        - restructuring_and_other_charges
+        - non_cash_restructuring_and_other_charges
+        required_for: []
+      loss_on_debt_extinguishment_cf:
+        aliases:
+        - loss_on_debt_extinguishment_cf
+        - loss_on_debt_extinguishment
+        required_for: []
+      pensions_and_other_post_employment_benefits:
+        aliases:
+        - pensions_and_other_post_employment_benefits
+        - pensions_and_other_postretirement_benefits
+        required_for: []
+      provision_for_doubtful_accounts:
+        aliases:
+        - provision_for_doubtful_accounts
+        - allowance_for_doubtful_accounts
+        required_for: []
+      currency_remeasurement_loss_gain:
+        aliases:
+        - currency_remeasurement_loss_gain
+        - currency_remeasurement
+        required_for: []
+      distributions_from_noncontrolling_interests:
+        aliases:
+        - distributions_from_noncontrolling_interests
+        - distributions_from_nci
+        required_for: []
+      effect_of_exchange_rate_changes_on_cash:
+        aliases:
+        - effect_of_exchange_rate_changes_on_cash
+        - cf_fx_effect
+        - fx_effect
+        required_for: []
+      active_employee_benefit_investments:
+        aliases:
+        - active_employee_benefit_investments
+        required_for: []
+      equity_investees_earnings_net_of_distributions:
+        aliases:
+        - equity_investees_earnings_net_of_distributions
+        - equity_investees_earnings_net_of_distributions_received
+        - distributions_received_net_of_equity_investees_income
+        required_for: []
+      gain_loss_reversal:
+        aliases:
+        - gain_loss_reversal
+        required_for: []
+      tax_deferred_adjustment:
+        aliases:
+        - tax_deferred_adjustment
+        - deferred_tax
+        - deferred_income_taxes
+        - deferred_income_taxes_and_other
+        required_for: []
+      wc_delta:
+        aliases:
+        - wc_delta
+        required_for: []
+      wc_accounts_receivable_change:
+        aliases:
+        - wc_accounts_receivable_change
+        required_for: []
+      wc_inventory_change:
+        aliases:
+        - wc_inventory_change
+        - change_inventory
+        required_for: []
+      wc_accounts_payable_change:
+        aliases:
+        - wc_accounts_payable_change
+        required_for: []
+      wc_income_taxes_receivable_payable_change:
+        aliases:
+        - wc_income_taxes_receivable_payable_change
+        - changes_in_income_taxes_receivable_payable
+        required_for: []
+      wc_all_other_net:
+        aliases:
+        - wc_all_other_net
+        - cfi_other
+        - cff_other
+        - cfo_other
+        - changes_in_all_other_net
+        required_for: []
+      tax_paid:
+        aliases:
+        - tax_paid
+        required_for: []
+      cfo_other:
+        aliases:
+        - cfo_other
+        - wc_all_other_net
+        - cfi_other
+        - cff_other
+        - gain_loss_associated_with_us_steel_canada
+        - losses_associated_with_us_steel_canada
+        required_for: []
+      cfo_stock_compensation:
+        aliases:
+        - cfo_stock_compensation
+        - stock_based_compensation
+        - stock_compensation
+        - stock_based_comp
+        required_for: []
+      lease_payments_cfo:
+        aliases:
+        - lease_payments_cfo
+        - lease_payments_cff
+        required_for: []
+      lease_interest_cfo:
+        aliases:
+        - lease_interest_cfo
+        required_for: []
+      cfo:
+        aliases:
+        - cfo
+        required_for: []
+      disposal_proceeds:
+        aliases:
+        - disposal_proceeds
+        - ppe_disposal_proceeds
+        required_for: []
+      proceeds_from_cost_reimbursement_government_grants:
+        aliases:
+        - proceeds_from_cost_reimbursement_government_grants
+        required_for: []
+      proceeds_from_sale_of_ownership_interests_in_equity_investees:
+        aliases:
+        - proceeds_from_sale_of_ownership_interests_in_equity_investees
+        required_for: []
+      cfi_other:
+        aliases:
+        - cfi_other
+        - wc_all_other_net
+        - cff_other
+        - cfo_other
+        required_for: []
+      cfi_acquisitions:
+        aliases:
+        - cfi_acquisitions
+        - acquisitions
+        required_for: []
+      cfi_intangible_acquisitions:
+        aliases:
+        - cfi_intangible_acquisitions
+        required_for: []
+      cfi_impairment:
+        aliases:
+        - cfi_impairment
+        - impairment
+        required_for: []
+      cfi:
+        aliases:
+        - cfi
+        required_for: []
+      debt_borrowings:
+        aliases:
+        - debt_borrowings
+        required_for: []
+      debt_repayments:
+        aliases:
+        - debt_repayments
+        - repayment_of_long_term_debt
+        required_for: []
+      cff_dividends:
+        aliases:
+        - cff_dividends
+        required_for: []
+      cff_equity_issuance:
+        aliases:
+        - cff_equity_issuance
+        - equity_issuance
+        required_for: []
+      cff_share_repurchases:
+        aliases:
+        - cff_share_repurchases
+        required_for: []
+      proceeds_from_government_incentives:
+        aliases:
+        - proceeds_from_government_incentives
+        required_for: []
+      cff_other:
+        aliases:
+        - cff_other
+        - wc_all_other_net
+        - cfi_other
+        - cfo_other
+        required_for: []
+      issuance_of_short_term_debt:
+        aliases:
+        - issuance_of_short_term_debt
+        required_for: []
+      repayment_of_short_term_debt:
+        aliases:
+        - repayment_of_short_term_debt
+        required_for: []
+      cff_short_term_debt_net:
+        aliases:
+        - cff_short_term_debt_net
+        required_for: []
+      cff_amortization_financing_costs:
+        aliases:
+        - cff_amortization_financing_costs
+        required_for: []
+      lease_payments_cff:
+        aliases:
+        - lease_payments_cff
+        - lease_payments_cfo
+        required_for: []
+      cff:
+        aliases:
+        - cff
+        required_for: []
+      cf_fx_effect:
+        aliases:
+        - cf_fx_effect
+        - fx_effect
+        required_for: []
+      net_change:
+        aliases:
+        - net_change
+        - net_change_in_cash
+        required_for: []
+      cash_opening:
+        aliases:
+        - cash_opening
+        - cash_beginning
+        required_for: []
+      deferred_income_taxes:
+        aliases:
+        - deferred_income_taxes
+        - deferred_taxes
+        - deferred_income_tax_expense
+        - deferred_tax_expense_benefit
+        required_for: []
+      changes_in_current_receivables:
+        aliases:
+        - changes_in_current_receivables
+        - change_in_accounts_receivable
+        - decrease_increase_in_accounts_receivable
+        - changes_in_receivables
+        required_for: []
+      changes_in_inventories:
+        aliases:
+        - changes_in_inventories
+        - change_in_inventories
+        - decrease_increase_in_inventories
+        required_for: []
+      changes_in_payables:
+        aliases:
+        - changes_in_payables
+        - changes_in_accounts_payable
+        - changes_in_current_accounts_payable_and_accrued_expenses
+        - change_in_accounts_payable_and_accrued_liabilities
+        required_for: []
+      share_buyback:
+        aliases:
+        - share_buyback
+        - common_stock_repurchased
+        - treasury_stock_purchases
+        - share_buybacks
+        - repurchase_of_common_stock
+        required_for: []
+      net_periodic_benefit_cf:
+        aliases:
+        - net_periodic_benefit_cf
+        - pensions_and_other_postretirement_benefits
+        - pensions_and_other_post_employment_benefits
+        - net_periodic_benefit_income
+        required_for: []
+      asset_impairment_cf:
+        aliases:
+        - asset_impairment_cf
+        - asset_impairment_charges_cf
+        - asset_impairment_charges
+        - impairment_of_goodwill
+        required_for: []
+      income_taxes_receivable:
+        aliases:
+        - income_taxes_receivable
+        - changes_in_income_taxes_receivable_payable
+        - wc_income_taxes_receivable_payable_change
+        - income_taxes_receivable_payable
+        required_for: []
+      all_other_operating:
+        aliases:
+        - all_other_operating
+        - all_other_net
+        - changes_in_all_other_net
+        - wc_all_other_net
+        - other_operating_changes
+        required_for: []
+    exclusive_groups:
+    - - asset_impairment_charges
+      - asset_impairment_charges_cf
+      - impairment_of_goodwill
+      - impairment_of_intangible_assets
+    - - gain_on_equity_investee_transactions
+      - gain_on_equity_investee_transactions_cf
+    - - restructuring_and_other_charges
+      - restructuring_and_other_charges_cf
+    - - loss_on_debt_extinguishment
+      - loss_on_debt_extinguishment_cf
+    - - pensions_and_other_post_employment_benefits
+      - pensions_and_other_postretirement_benefits
+      - net_periodic_benefit_cf
+    - - tax_deferred_adjustment
+      - deferred_tax
+      - deferred_income_taxes
+    - - gain_loss_reversal
+      - gain_loss_on_disposal
+      - gain_loss_disposal
+    - - equity_investees_earnings_net_of_distributions
+      - equity_investees_earnings_net_of_distributions_received
+    - - gain_on_sale_of_transtar
+      - gain_loss_associated_with_us_steel_canada
+      - losses_associated_with_us_steel_canada
+    - - wc_accounts_receivable_change
+      - changes_in_current_receivables
+      - change_ar
+    - - wc_inventory_change
+      - changes_in_inventories
+      - change_inventory
+    - - wc_accounts_payable_change
+      - changes_in_current_accounts_payable_and_accrued_expenses
+      - change_ap
+    - - wc_income_taxes_receivable_payable_change
+      - changes_in_income_taxes_receivable_payable
+      - change_taxes_payable
+      - income_taxes_receivable
+    - - wc_all_other_net
+      - changes_in_all_other_net
+      - change_other_wc
+      - all_other_operating
+    - - proceeds_from_government_incentives
+      - proceeds_from_cost_reimbursement_government_grants
+    - - other_investing
+      - investments_net
+    - - cf_fx_effect
+      - effect_of_exchange_rate_changes_on_cash
+    - - common_stock_repurchased
+      - share_buybacks
+      - share_buyback
+    - - proceeds_from_stelco_option_agreement
+      - divestitures
+    - - disposal_of_assets
+      - ppe_disposal_proceeds
+      - disposal_proceeds
+    - - acquisition_of_big_river_steel
+      - acquisitions
+    - - revolving_credit_facilities_borrowings_net_of_financing_costs
+      - cff_borrowings
+      - revolver_draws
+    - - revolving_credit_facilities_repayments
+      - cff_repayments
+      - revolver_repayments
+    - - debt_issuance
+      - issuance_of_long_term_debt_net_of_financing_costs
+    - - debt_repayments
+      - repayment_of_long_term_debt
+    - - dividends_paid
+      - cff_dividends
+    total_aliases:
+      cfo_total:
+      - cfo
+      cfi_total:
+      - cfi
+      cff_total:
+      - cff
+      net_change_in_cash:
+      - net_change
+      common_stock_repurchased:
+      - share_buybacks
+schedules:
+  leases:
+    sheet: schedule_leases
+    group_columns:
+      lease_type: lease_type
+    rules:
+    - target_statement: schedule_leases
+      target_metric: rou_asset_finance
+      filter:
+        lease_type: finance
+      components:
+      - metric: financeleaserightofuseasset
+    - target_statement: schedule_leases
+      target_metric: rou_asset_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: operatingleaserightofuseasset
+    - target_statement: schedule_leases
+      target_metric: lease_liab_current_finance
+      filter:
+        lease_type: finance
+      components:
+      - metric: financeleaseliabilitycurrent
+    - target_statement: schedule_leases
+      target_metric: lease_liab_current_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: operatingleaseliabilitycurrent
+    - target_statement: schedule_leases
+      target_metric: lease_liab_noncurrent_finance
+      filter:
+        lease_type: finance
+      components:
+      - metric: financeleaseliabilitynoncurrent
+    - target_statement: schedule_leases
+      target_metric: lease_liab_noncurrent_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: operatingleaseliabilitynoncurrent
+    - target_statement: BS
+      target_metric: lease_liab_current
+      components:
+      - metric: current_lease_liability
+      - metric: lease_liab_current
+      - metric: lease_liab_cur
+      - metric: operatingleaseliabilitycurrent
+      - metric: financeleaseliabilitycurrent
+    - target_statement: BS
+      target_metric: lease_liab_noncurrent
+      components:
+      - metric: long_term_lease_liability
+      - metric: lease_liab_noncurrent
+      - metric: lease_liab_ncur
+      - metric: operatingleaseliabilitynoncurrent
+      - metric: financeleaseliabilitynoncurrent
+    - target_statement: CF
+      target_metric: lease_payments_cff_finance
+      filter:
+        lease_type: finance
+      components:
+      - metric: financeleaseprincipalpayments
+    - target_statement: CF
+      target_metric: lease_payments_cfo_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: operatingleasepayments
+    - target_statement: IS
+      target_metric: lease_interest_finance
+      filter:
+        lease_type: finance
+      components:
+      - metric: lease_interest_finance
+    - target_statement: IS
+      target_metric: lease_interest_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: lease_interest_operating
+    - target_statement: IS
+      target_metric: dep_rou_finance
+      filter:
+        lease_type: finance
+      components:
+      - metric: dep_rou_finance
+    - target_statement: IS
+      target_metric: dep_rou_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: dep_rou_operating
+    - target_statement: IS
+      target_metric: lease_expense_operating
+      filter:
+        lease_type: operating
+      components:
+      - metric: lease_expense_operating
+    - target_statement: schedule_leases
+      target_metric: finance_lease_rate
+      filter:
+        lease_type: finance
+      components:
+      - metric: finance_lease_rate
+    - target_statement: schedule_leases
+      target_metric: finance_principal_share
+      filter:
+        lease_type: finance
+      components:
+      - metric: finance_principal_share
+    - target_statement: schedule_leases
+      target_metric: finance_lease_avg_remaining_term
+      filter:
+        lease_type: finance
+      components:
+      - metric: finance_lease_avg_remaining_term
+    - target_statement: schedule_leases
+      target_metric: finance_lease_weighted_avg_discount_rate
+      filter:
+        lease_type: finance
+      components:
+      - metric: finance_lease_weighted_avg_discount_rate
+    - target_statement: schedule_leases
+      target_metric: operating_lease_rate
+      filter:
+        lease_type: operating
+      components:
+      - metric: operating_lease_rate
+    - target_statement: schedule_leases
+      target_metric: operating_principal_share
+      filter:
+        lease_type: operating
+      components:
+      - metric: operating_principal_share
+    - target_statement: schedule_leases
+      target_metric: operating_lease_avg_remaining_term
+      filter:
+        lease_type: operating
+      components:
+      - metric: operating_lease_avg_remaining_term
+    - target_statement: schedule_leases
+      target_metric: operating_lease_weighted_avg_discount_rate
+      filter:
+        lease_type: operating
+      components:
+      - metric: operating_lease_weighted_avg_discount_rate
+  ppe:
+    sheet: schedule_ppe
+    rules:
+    - target_statement: IS
+      target_metric: depreciation_owned
+      components:
+      - metric: depreciation_owned
+      - metric: depreciation
+    - target_statement: CF
+      target_metric: capex
+      components:
+      - metric: paymentstoacquirepropertyplantandequipment
+    - target_statement: CF
+      target_metric: disposal_proceeds
+      components:
+      - metric: proceedsfromsaleofpropertyplantandequipment
+    - target_statement: BS
+      target_metric: ppe_gross
+      components:
+      - metric: propertyplantandequipmentgross
+    - target_statement: BS
+      target_metric: ppe_accum_dep
+      components:
+      - metric: accumulateddepreciationdepletionandamortizationpropertyplantandequipment
+  tax:
+    sheet: schedule_tax
+    rules:
+    - target_statement: IS
+      target_metric: tax_expense
+      components:
+      - metric: incometaxexpensebenefit
+    - target_statement: CF
+      target_metric: tax_paid
+      components:
+      - metric: incometaxespaidnet
+    - target_statement: BS
+      target_metric: dta
+      components:
+      - metric: deferredtaxassetsnet
+      - metric: deferred_tax_assets
+      - metric: dta
+      - metric: dta_noncurrent
+    - target_statement: BS
+      target_metric: dtl
+      components:
+      - metric: deferredtaxliabilitiesnet
+      - metric: deferred_tax_liabilities
+      - metric: dtl
+      - metric: dtl_noncurrent
+    # NOL carryforward — loaded from project.yaml (taxes.nol_opening_balance, $M)
+    # Not loaded from Excel; configured in project.yaml
+    # Model fields: nol_opening_balance, nol_max_utilization_pct (TCJA 80% rule)
+  # Capitalized interest — loaded from IS (interest_capitalized) or BS (capitalized_interest_balance)
+  capitalized_interest:
+    sheet: schedule_capint
+    optional: true
+    rules:
+    - target_statement: IS
+      target_metric: interest_capitalized
+      components:
+      - metric: interest_capitalized
+      - metric: capitalized_interest
+      - metric: interestcosts_capitalized
+    - target_statement: BS
+      target_metric: capitalized_interest_balance
+      components:
+      - metric: capitalized_interest_balance
+      - metric: unamortized_capitalized_interest
+  # Lease_Schedule sheet (new v3 export format) — maturity schedule from 10-K
+  lease_maturity_schedule:
+    sheet: Lease_Schedule
+    optional: true
+    columns:
+      year: Year
+      lease_type: Type
+      lease_id: Lease_ID
+      lease_name: Lease_Name
+      rou_open: ROU_open $M
+      rou_dep: ROU_dep $M
+      rou_close: ROU_close $M
+      liab_open: Liab_open $M
+      interest_exp: Int_exp $M
+      payment: Payment $M
+      liab_close: Liab_close $M
+      discount_rate: Disc_rate
+    unit: M
+    # Values in sheet are $M — loader multiplies by 1e6 for DB storage
+  debt:
+    instruments_sheet: debt_instruments
+    cashflows_sheet: debt_cashflows
+    instrument_columns:
+      id: instrument_id
+      name: instrument_name
+      type: instrument_type
+      currency: currency
+      opening_balance: opening_balance
+      committed_amount: committed_amount
+      maturity_date: maturity_date
+      interest_rate: interest_rate
+      rate_type: rate_type
+      spread: spread
+      base_rate: base_rate
+      payment_frequency: payment_frequency
+      amortization_profile: amortization_profile
+      security_type: security_type
+      priority_rank: priority_rank
+      covenant_package: covenant_package
+      callable_flag: callable_flag
+      call_schedule: call_schedule
+    cashflow_columns:
+      instrument_id: instrument_id
+      year: year
+      period: period
+      cashflow_type: cashflow_type
+      amount: amount
+      currency: currency
+      note: note
+    cashflow_mapping:
+      principal:
+        aliases:
+        - principal_payment
+      interest:
+        aliases:
+        - interest_payment
+      drawdown:
+        aliases:
+        - drawdown
+      fee:
+        aliases:
+        - fee
+notes:
+  ppe_components:
+    sheet: ppe_components
+    category_column: category
+    value_type_column: value_type
+    year_column: year
+    value_column: value
+    useful_life_column: useful_life
+    unit_column: unit
+    default_unit: USD
+  intangible_assets:
+    sheet: intangible_assets
+    category_column: category
+    year_column: year
+    gross_column: gross_amount
+    accumulated_column: accumulated_amortization
+    net_column: net_amount
+    useful_life_column: useful_life
+    unit_column: unit
+    default_unit: USD
+segments:
+  financial:
+    sheet: segments_financial
+    segment_column: segment_name
+    metric_column: metric
+    year_column: year
+    value_column: value
+    unit_column: unit
+    source_column: source
+    metric_type: financial
+    sanitize_metric_names: true
+  operational:
+    sheet: segments_operational
+    segment_column: segment_name
+    metric_column: metric
+    year_column: year
+    value_column: value
+    unit_column: unit
+    source_column: source
+    metric_type: operational
+    sanitize_metric_names: true
+  mdna:
+    sheet: segments_mdna
+    segment_column: segment_name
+    metric_column: metric
+    year_column: year
+    period_column: quarter
+    value_column: value
+    unit_column: unit
+    source_column: source
+    metric_type: mdna
+    sanitize_metric_names: true
+operational_drivers:
+  sheet: operational_drivers
+  driver_column: driver_name
+  metric_column: metric
+  year_column: year
+  value_column: value
+  unit_column: unit
+  source_column: source
+macro:
+  sheet: macro_factors
+  factor_column: factor_name
+  geography_column: geography
+  year_column: year
+  value_column: value
+  unit_column: unit
+  source_column: source
+validation:
+  dictionaries:
+    metrics:
+      sheet: dictionary_metrics
+      key_column: canonical_metric
+      aliases_column: accepted_aliases
+      required_standard_column: required_for_standard
+      required_custom_column: required_for_custom
+    debt_types:
+      sheet: dictionary_debt_types
+      key_column: instrument_type
+    segments:
+      sheet: dictionary_segments
+      key_column: segment_name
+    units:
+      sheet: dictionary_units
+      key_column: unit
+  allowed_values:
+    instrument_type:
+    - revolver
+    - term_loan
+    - bond
+    - note
+    - lease
+    - other
+    rate_type:
+    - fixed
+    - floating
+    payment_frequency:
+    - monthly
+    - quarterly
+    - semi_annual
+    - annual
+    amortization_profile:
+    - bullet
+    - level_payment
+    - equal_principal
+    - revolving
+    - custom
+    lease_type:
+    - operating
+    - finance
+    cashflow_type:
+    - principal
+    - interest
+    - drawdown
+    - fee
+loader_defaults:
+  history:
+    scale: auto
+    sign: auto
+  schedules:
+    scale: auto
+    sign: auto
+  segments:
+    scale: auto
+    sign: auto
+extensibility:
+  auto_classify_new_metrics: true
+  auto_add_to_groups: true
+  min_confidence_threshold: 0.6
+  classification_rules:
+  - rule_name: revenue_components
+    pattern: ^revenue_
+    target_group: revenue_total
+    statement_type: IS
+    priority: 10
+    is_active: true
+    description: Все компоненты revenue добавляются к revenue_total
+  - rule_name: sga_components
+    pattern: ^sga_
+    target_group: sga_total
+    statement_type: IS
+    priority: 10
+    is_active: true
+    description: Все компоненты SGA добавляются к sga_total
+  - rule_name: cogs_components
+    pattern: ^cogs_
+    target_group: cogs_total
+    statement_type: IS
+    priority: 10
+    is_active: true
+    description: Все компоненты COGS добавляются к cogs_total

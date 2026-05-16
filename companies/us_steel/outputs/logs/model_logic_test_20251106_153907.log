@@ -1,0 +1,71 @@
+================================================================================
+ЮНИТ-ТЕСТЫ ДЛЯ ПРОВЕРКИ АЛГОРИТМА И ЛОГИКИ МОДЕЛИ
+================================================================================
+Компания: us_steel
+Корневая директория: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest
+Лог-файл: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest/companies/us_steel/outputs/logs/model_logic_test_20251106_153907.log
+ВАЖНО: Все операции выполняются через витрину данных (FinancialDataMart)
+Приоритет: БД (через витрину) → CSV (fallback только для чтения)
+
+✅ 2025: CFO=$-2,138, NI=$207
+✅ 2026: CFO=$173, NI=$214
+✅ 2027: CFO=$241, NI=$236
+✅ 2028: CFO=$266, NI=$234
+✅ 2029: CFO=$323, NI=$238
+✅ Тест 1 пройден: CFO расчет корректен
+❌ 2025: Balance Sheet не сходится! Assets=$13,447, L+E=$25,919, Diff=$12,472.23
+❌ 2026: Balance Sheet не сходится! Assets=$13,102, L+E=$26,628, Diff=$13,526.65
+❌ 2027: Balance Sheet не сходится! Assets=$12,604, L+E=$26,866, Diff=$14,261.94
+❌ 2028: Balance Sheet не сходится! Assets=$12,435, L+E=$27,502, Diff=$15,066.69
+❌ 2029: Balance Sheet не сходится! Assets=$11,991, L+E=$28,142, Diff=$16,151.40
+❌ Тест 2 не пройден: Balance Sheet не сходится
+❌ 2025: Cash Bridge не сходится! Opening=$1,987, CFO=$-2,138, CFI=$-1,297, CFF=$351, Expected=$-1,097, Actual=$-1,696, Diff=$599.08
+❌ 2026: Cash Bridge не сходится! Opening=$-1,696, CFO=$173, CFI=$-1,367, CFF=$-13, Expected=$-2,902, Actual=$-3,541, Diff=$639.71
+❌ 2027: Cash Bridge не сходится! Opening=$-3,541, CFO=$241, CFI=$-1,435, CFF=$-160, Expected=$-4,896, Actual=$-5,562, Diff=$665.86
+❌ 2028: Cash Bridge не сходится! Opening=$-5,562, CFO=$266, CFI=$-1,515, CFF=$227, Expected=$-6,584, Actual=$-7,321, Diff=$737.34
+❌ 2029: Cash Bridge не сходится! Opening=$-7,321, CFO=$323, CFI=$-1,591, CFF=$0, Expected=$-8,589, Actual=$-9,374, Diff=$784.36
+❌ Тест 3 не пройден: Cash Bridge не сходится
+❌ 2025: Taxes Payable corkscrew не сходится! Open=$0, Expense=$52, Paid=$52, Expected=$0, Actual=$52, Diff=$51.80
+❌ 2026: Taxes Payable corkscrew не сходится! Open=$52, Expense=$54, Paid=$54, Expected=$52, Actual=$105, Diff=$53.53
+❌ 2027: Taxes Payable corkscrew не сходится! Open=$105, Expense=$59, Paid=$59, Expected=$105, Actual=$164, Diff=$58.95
+❌ 2028: Taxes Payable corkscrew не сходится! Open=$164, Expense=$59, Paid=$59, Expected=$164, Actual=$223, Diff=$58.56
+❌ 2029: Taxes Payable corkscrew не сходится! Open=$223, Expense=$59, Paid=$59, Expected=$223, Actual=$282, Diff=$59.43
+❌ Тест 4 не пройден: Payables Corkscrews не сходятся
+❌ 2025: Retained Earnings не сходится! Open=$17,289, NI=$207, Div=$0, Expected=$17,496, Actual=$18,979, Diff=$1,483.10
+❌ 2025: Total Equity не равен сумме компонентов! Components=$13,385, Total=$11,902, Diff=$1,483.10
+❌ 2026: Retained Earnings не сходится! Open=$18,979, NI=$214, Div=$0, Expected=$19,193, Actual=$20,805, Diff=$1,611.30
+❌ 2026: Total Equity не равен сумме компонентов! Components=$15,211, Total=$12,116, Diff=$3,094.46
+❌ 2027: Retained Earnings не сходится! Open=$20,805, NI=$236, Div=$0, Expected=$21,041, Actual=$22,712, Diff=$1,670.79
+❌ 2027: Total Equity не равен сумме компонентов! Components=$17,118, Total=$12,352, Diff=$4,765.36
+❌ 2028: Retained Earnings не сходится! Open=$22,712, NI=$234, Div=$0, Expected=$22,946, Actual=$24,594, Diff=$1,648.20
+❌ 2028: Total Equity не равен сумме компонентов! Components=$19,000, Total=$12,586, Diff=$6,413.68
+❌ 2029: Retained Earnings не сходится! Open=$24,594, NI=$238, Div=$0, Expected=$24,832, Actual=$26,899, Diff=$2,067.10
+❌ 2029: Total Equity не равен сумме компонентов! Components=$21,305, Total=$12,824, Diff=$8,480.90
+❌ Тест 5 не пройден: Equity Reconciliation не сходится
+✅ 2025: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2026: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2027: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2028: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ 2029: Total Assets ≈ сумма компонентов (Diff=$0.00)
+✅ Тест 6 пройден: Total Assets компоненты проверены
+✅ CFO Variant A
+❌ Balance Sheet Identity
+❌ Cash Bridge
+❌ Payables Corkscrews
+❌ Equity Reconciliation
+✅ Total Assets Components
+⚠️  ТЕСТОВ ПРОЙДЕНО: 2/6
+ℹ️  Некоторые тесты не прошли. Проверьте вывод выше.
+ℹ️  📝 Полный лог сохранен в: /Users/arturhusnutdinov/Documents/IT Development/Docker/stressTest/companies/us_steel/outputs/logs/model_logic_test_20251106_153907.log
+
+================================================================================
+ИТОГОВАЯ СВОДКА ТЕСТОВ
+================================================================================
+✅ ПРОЙДЕН: CFO Variant A
+❌ НЕ ПРОЙДЕН: Balance Sheet Identity
+❌ НЕ ПРОЙДЕН: Cash Bridge
+❌ НЕ ПРОЙДЕН: Payables Corkscrews
+❌ НЕ ПРОЙДЕН: Equity Reconciliation
+✅ ПРОЙДЕН: Total Assets Components
+
+Пройдено: 2/6

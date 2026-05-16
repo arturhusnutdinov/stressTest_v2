@@ -1,0 +1,17 @@
+{
+  "segments_2025": {
+    "primary_aluminium_revenue": 12156,
+    "alumina_revenue": 1691,
+    "other_revenue": 965,
+    "total_revenue": 13847,
+    "primary_aluminium_sales_kt": null,
+    "alumina_sales_kt": null,
+    "average_al_price_usd_t": null
+  },
+  "segments_2024": {
+    "primary_aluminium_revenue": 10009,
+    "alumina_revenue": 1213,
+    "other_revenue": 860,
+    "total_revenue": 11222
+  }
+}
