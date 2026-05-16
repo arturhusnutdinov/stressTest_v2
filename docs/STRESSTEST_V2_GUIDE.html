@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stressTest Engine v2 — Methodology Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0F2B5B; --navy-mid: #1B3A6B; --navy-light: #2E5090;
+  --gold: #C8A84B; --gold-light: #E8C97A;
+  --ink: #1A1A2E; --ink-2: #3A3A52; --ink-3: #6B6B85;
+  --bg: #F7F8FC; --bg-2: #EEF0F8; --bg-card: #FFFFFF;
+  --rule: #D8DCE8; --rule-strong: #B8BCCF;
+  --blue: #2563EB; --blue-light: #DBEAFE;
+  --teal: #0F766E; --teal-light: #CCFBF1;
+  --purple: #7C3AED; --purple-light: #EDE9FE;
+  --amber: #D97706; --amber-light: #FEF3C7;
+  --coral: #DC4A2D; --coral-light: #FEE2DA;
+  --green: #16A34A; --green-light: #DCFCE7;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.6; }
+
+.hero { background: var(--navy); color: white; padding: 48px 64px 40px; position: relative; overflow: hidden; }
+.hero::before { content: ''; position: absolute; right: -80px; top: -80px; width: 400px; height: 400px; border: 1px solid rgba(200,168,75,0.15); border-radius: 50%; }
+.hero::after { content: ''; position: absolute; right: 40px; top: 40px; width: 200px; height: 200px; border: 1px solid rgba(200,168,75,0.1); border-radius: 50%; }
+.hero-label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.15em; color: var(--gold); margin-bottom: 12px; text-transform: uppercase; }
+.hero h1 { font-size: 28px; font-weight: 600; line-height: 1.3; margin-bottom: 8px; }
+.hero-sub { font-size: 14px; color: rgba(255,255,255,0.6); font-weight: 300; }
+.hero-meta { display: flex; gap: 32px; margin-top: 28px; flex-wrap: wrap; }
+.hero-stat { display: flex; flex-direction: column; gap: 2px; }
+.hero-stat-val { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 500; color: var(--gold-light); }
+.hero-stat-lbl { font-size: 11px; color: rgba(255,255,255,0.5); letter-spacing: 0.05em; }
+
+.nav { background: var(--navy-mid); padding: 0 64px; display: flex; gap: 0; border-bottom: 1px solid rgba(200,168,75,0.2); overflow-x: auto; }
+.nav a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 12px; font-weight: 500; padding: 12px 16px; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; letter-spacing: 0.03em; }
+.nav a:hover { color: white; border-bottom-color: var(--gold); }
+
+.page { max-width: 1100px; margin: 0 auto; padding: 48px 64px; }
+
+.section { margin-bottom: 56px; }
+.section-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid var(--navy); }
+.section-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.15em; font-weight: 500; }
+.section-title { font-size: 20px; font-weight: 600; color: var(--navy); }
+.section-desc { font-size: 13px; color: var(--ink-3); margin-top: -16px; margin-bottom: 24px; max-width: 760px; font-style: italic; font-family: 'IBM Plex Serif', serif; }
+
+.node { display: inline-flex; flex-direction: column; gap: 2px; padding: 8px 14px; border-radius: 6px; border: 1px solid; font-size: 12px; min-width: 100px; cursor: default; }
+.node-title { font-weight: 600; font-size: 12px; }
+.node-sub { font-size: 11px; opacity: 0.75; }
+.node-blue   { background: var(--blue-light);   border-color: #93C5FD; color: #1E40AF; }
+.node-teal   { background: var(--teal-light);   border-color: #5EEAD4; color: #0F5A54; }
+.node-purple { background: var(--purple-light); border-color: #C4B5FD; color: #5B21B6; }
+.node-amber  { background: var(--amber-light);  border-color: #FCD34D; color: #92400E; }
+.node-coral  { background: var(--coral-light);  border-color: #FCA5A5; color: #991B1B; }
+.node-green  { background: var(--green-light);  border-color: #86EFAC; color: #14532D; }
+
+.arch-flow { display: flex; flex-direction: column; gap: 0; }
+.arch-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
+.arch-arrow { text-align: center; padding: 4px 0; color: var(--ink-3); font-size: 18px; }
+
+.formula { background: var(--navy); color: #A8C4F0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 14px 16px; border-radius: 6px; line-height: 1.8; margin: 8px 0; }
+.formula .hl { color: var(--gold-light); font-weight: 500; }
+.formula .comment { color: rgba(168,196,240,0.5); font-size: 11px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--rule); }
+th { background: var(--navy); color: white; padding: 10px 14px; text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; }
+td { padding: 8px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+tr:nth-child(even) td { background: var(--bg); }
+
+code { font-family: 'IBM Plex Mono', monospace; background: var(--bg-2); padding: 2px 6px; border-radius: 3px; font-size: 12px; color: var(--navy); }
+pre { background: var(--navy); color: #A8C4F0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 16px; border-radius: 6px; overflow-x: auto; line-height: 1.6; }
+pre .kw { color: var(--gold-light); }
+pre .str { color: #86EFAC; }
+
+.result-strip { background: var(--navy); color: white; padding: 10px 16px; border-radius: 6px; font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+.result-item { display: flex; flex-direction: column; gap: 1px; }
+.result-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--gold-light); font-weight: 500; }
+.result-lbl { font-size: 10px; color: rgba(255,255,255,0.5); }
+
+.why-box { background: linear-gradient(135deg, #EEF0F8 0%, #E8EAF2 100%); border-left: 3px solid var(--navy-light); padding: 12px 16px; border-radius: 0 6px 6px 0; font-size: 12px; color: var(--ink-2); margin-top: 8px; }
+.why-box strong { color: var(--navy); }
+
+h3 { font-size: 15px; font-weight: 600; color: var(--navy); margin: 24px 0 12px; }
+.footer { text-align: center; padding: 32px; color: var(--ink-3); font-size: 12px; border-top: 1px solid var(--rule); margin-top: 48px; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-label">Financial Modeling Engine</div>
+  <h1>stressTest Engine<br>v2.1.0</h1>
+  <div class="hero-sub">Universal three-statement model with stress testing, credit rating, and covenant monitoring</div>
+  <div class="hero-meta">
+    <div class="hero-stat"><span class="hero-stat-val">2</span><span class="hero-stat-lbl">Production Companies</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">10</span><span class="hero-stat-lbl">Forecast Methods</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">45</span><span class="hero-stat-lbl">Automated Tests</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">0</span><span class="hero-stat-lbl">BS / CF Diff</span></div>
+  </div>
+</div>
+
+<nav class="nav">
+  <a href="#quickstart">Quick Start</a>
+  <a href="#arch">Architecture</a>
+  <a href="#datamodel">Data Model</a>
+  <a href="#config">Configuration</a>
+  <a href="#methods">Forecast Methods</a>
+  <a href="#corkscrews">Corkscrews</a>
+  <a href="#debt">Debt Engine</a>
+  <a href="#stress">Stress Testing</a>
+  <a href="#notebooks">Notebooks</a>
+</nav>
+
+<div class="page">
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="quickstart">
+  <div class="section-header">
+    <span class="section-num">00</span>
+    <h2 class="section-title">Quick Start</h2>
+  </div>
+  <p class="section-desc">Two interfaces: Python API for automation, CLI for one-off runs.</p>
+
+  <h3>Python API</h3>
+<pre><span class="kw">from</span> engine.orchestrator <span class="kw">import</span> build_model
+
+result = build_model(
+    company_id=<span class="str">"us_steel"</span>,
+    run_preprocessor=<span class="kw">True</span>,
+    run_macro=<span class="kw">True</span>,
+    run_model=<span class="kw">True</span>,
+)
+<span class="kw">print</span>(result.summary())</pre>
+
+  <h3>CLI</h3>
+<pre>stresstest us_steel
+stresstest rusal --stress --rating</pre>
+
+  <h3>Jupyter Notebooks</h3>
+<pre><span class="comment"># Copy universal notebook to your working directory</span>
+cp templates/notebooks/00_Build_Model_Main.ipynb .
+jupyter notebook 00_Build_Model_Main.ipynb</pre>
+
+  <div class="result-strip">
+    <div class="result-item"><span class="result-val">US Steel + RUSAL</span><span class="result-lbl">Supported Companies</span></div>
+    <div class="result-item"><span class="result-val">2010–2030</span><span class="result-lbl">Forecast Horizon</span></div>
+    <div class="result-item"><span class="result-val">BS = 0, CF = 0</span><span class="result-lbl">Balance Identity</span></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="arch">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2 class="section-title">Architecture — Layered Pipeline</h2>
+  </div>
+  <p class="section-desc">Data flows through 6 stages. Each stage reads from the previous, writes to SQLite. No circular dependencies between stages.</p>
+
+  <div class="arch-flow">
+    <div class="arch-row">
+      <div class="node node-blue"><span class="node-title">Preprocessor</span><span class="node-sub">14 metric groups</span></div>
+      <span style="color:var(--ink-3)">→</span>
+      <div class="node node-teal"><span class="node-title">Macro Module</span><span class="node-sub">VECM / ARIMA / ECM</span></div>
+      <span style="color:var(--ink-3)">→</span>
+      <div class="node node-purple"><span class="node-title">Model Loader</span><span class="node-sub">HistoricState + Config</span></div>
+    </div>
+    <div class="arch-row">
+      <div class="node node-purple"><span class="node-title">3-Statement Solver</span><span class="node-sub">Joint iteration</span></div>
+      <span style="color:var(--ink-3)">→</span>
+      <div class="node node-amber"><span class="node-title">Stress Runner</span><span class="node-sub">Scenario shocks</span></div>
+      <span style="color:var(--ink-3)">→</span>
+      <div class="node node-coral"><span class="node-title">Rating + Covenants</span><span class="node-sub">S&P / Moody's / Fitch</span></div>
+    </div>
+  </div>
+
+  <div class="why-box" style="margin-top:16px"><strong>Design principle:</strong> Model does not know about DB or YAML. All data arrives as typed dataclasses (<code>ModelConfig</code>, <code>HistoricState</code>, <code>YearState</code>). The loader is the only place that touches files and DB.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="datamodel">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2 class="section-title">Data Model — YearState</h2>
+  </div>
+  <p class="section-desc">The central dataclass. One instance per forecast year. 80+ fields covering full IS, BS, and CF.</p>
+
+  <table>
+    <tr><th style="width:25%">Statement</th><th style="width:45%">Key Fields</th><th style="width:30%">Validation</th></tr>
+    <tr>
+      <td><strong>Income Statement</strong></td>
+      <td><code>revenue</code>, <code>cogs</code>, <code>sga</code>, <code>ebitda</code>, <code>ebit</code>, <code>interest_expense</code>, <code>ebt</code>, <code>tax_expense</code>, <code>net_income</code></td>
+      <td>EBITDA = GP + SGA − DA<br>EBT = EBIT + non-op items</td>
+    </tr>
+    <tr>
+      <td><strong>Balance Sheet</strong></td>
+      <td><code>cash</code>, <code>ar</code>, <code>inventory</code>, <code>ppe_net</code>, <code>rou_asset</code>, <code>intangibles</code>, <code>st_debt</code>, <code>ap</code>, <code>lt_debt</code>, <code>equity</code></td>
+      <td>A = L + E (tol $1)</td>
+    </tr>
+    <tr>
+      <td><strong>Cash Flow</strong></td>
+      <td><code>cfo_total</code>, <code>cfi_total</code>, <code>cff_total</code>, <code>cf_cash_ending</code></td>
+      <td>Cash_end = Cash_open + CFO + CFI + CFF (tol $1)</td>
+    </tr>
+  </table>
+
+  <div class="formula">
+    <span class="comment"># BS Identity check — called after every forecast year</span><br>
+    <span class="hl">total_assets</span> = CA + NCA<br>
+    <span class="hl">total_liab_equity</span> = CL + NCL + Equity<br>
+    <span class="hl">diff</span> = |total_assets − total_liab_equity| &lt; $1
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="config">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2 class="section-title">Configuration — project.yaml</h2>
+  </div>
+  <p class="section-desc">YAML is the single source of forecast method configuration. Per-company, version-controlled.</p>
+
+  <table>
+    <tr><th>Section</th><th>Controls</th><th>Example</th></tr>
+    <tr>
+      <td><code>model.mode</code></td>
+      <td><code>standard</code> (simple ratios) vs <code>custom</code> (full corkscrews)</td>
+      <td><code>custom</code></td>
+    </tr>
+    <tr>
+      <td><code>model.custom.margins</code></td>
+      <td>Override preprocessor: <code>cogs_pct</code>, <code>tax_rate_statutory</code></td>
+      <td><code>cogs_pct: 0.72</code></td>
+    </tr>
+    <tr>
+      <td><code>model.custom.debt</code></td>
+      <td>Debt mode (<code>optimizer</code> / <code>schedule_based</code> / <code>parametric</code>), RC limit, covenants</td>
+      <td><code>mode: optimizer</code></td>
+    </tr>
+    <tr>
+      <td><code>model.custom.ppe</code></td>
+      <td>Depreciation rate, expansion capex, additional capex schedule</td>
+      <td><code>min_capex_da_ratio: 0.90</code></td>
+    </tr>
+    <tr>
+      <td><code>model.custom.equity</code></td>
+      <td>Dividend payout, buyback policy, additional events</td>
+      <td><code>dividend_payout_ratio: 0.05</code></td>
+    </tr>
+    <tr>
+      <td><code>accounting_conventions</code></td>
+      <td><code>da_in_cogs</code>, <code>capitalize_interest</code>, <code>is_income_sign</code></td>
+      <td><code>da_in_cogs: true</code></td>
+    </tr>
+  </table>
+
+  <div class="why-box"><strong>Priority:</strong> YAML explicit &gt; preprocessor recommended &gt; hardcoded default. Preprocessor calibrates from history; YAML overrides when analyst has better information.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="methods">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2 class="section-title">Forecast Methods — 10 Types</h2>
+  </div>
+  <p class="section-desc">Every line item in IS/BS/CF can use a different method. Configured in project.yaml → forecast_methods.</p>
+
+  <table>
+    <tr><th>Method</th><th>Description</th><th>Used For</th></tr>
+    <tr><td><code>MACRO</code></td><td>Elastic Net regression on macro factors (GDP, CPI, PPI, commodity prices)</td><td>Revenue, COGS</td></tr>
+    <tr><td><code>DRIVER</code></td><td>% of base article (e.g. COGS = 72% × Revenue)</td><td>COGS, SGA</td></tr>
+    <tr><td><code>DAYS</code></td><td>Working capital turnover: DSO, DIH, DPO</td><td>AR, Inventory, AP</td></tr>
+    <tr><td><code>CORK</code></td><td>Corkscrew roll-forward: Open + Additions − Depreciation = Close</td><td>PPE, Debt, Lease, Tax, Equity</td></tr>
+    <tr><td><code>EWA</code></td><td>Exponentially Weighted Average with half-life tuning</td><td>Other IS items</td></tr>
+    <tr><td><code>LAST</code></td><td>Carry forward last historical value</td><td>Goodwill, static BS items</td></tr>
+    <tr><td><code>ZERO</code></td><td>Set to zero in forecast (one-time items)</td><td>Impairment, restructuring</td></tr>
+    <tr><td><code>CALC</code></td><td>Computed from other line items via formula</td><td>EBIT, EBT, totals</td></tr>
+    <tr><td><code>PLUG</code></td><td>Balancing item (absorbs gap)</td><td>Other NCA (emergency only)</td></tr>
+    <tr><td><code>LINK</code></td><td>Direct link to another statement</td><td>CF → BS cash</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="corkscrews">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2 class="section-title">Corkscrew Blocks</h2>
+  </div>
+  <p class="section-desc">Each corkscrew is an independent block with <code>validate()</code>. Built in-memory during model run; not persisted.</p>
+
+  <table>
+    <tr><th>Block</th><th>Core Identity</th><th>Key Parameters</th></tr>
+    <tr>
+      <td><strong>PPE</strong></td>
+      <td><div class="formula" style="margin:4px 0">Gross<sub>close</sub> = Gross<sub>open</sub> + CapEx − Disposal</div></td>
+      <td><code>dep_rate</code>, <code>capex_pct</code>, <code>min_capex_da_ratio</code></td>
+    </tr>
+    <tr>
+      <td><strong>Debt</strong></td>
+      <td><div class="formula" style="margin:4px 0">Close = Open + Draw − Repay<sub>mand</sub> − Repay<sub>vol</sub></div></td>
+      <td><code>mode</code>, <code>rc.limit</code>, <code>avg_rate_pct</code></td>
+    </tr>
+    <tr>
+      <td><strong>Lease (ASC 842)</strong></td>
+      <td><div class="formula" style="margin:4px 0">ΔROU = ΔLL (lockstep enforced)</div></td>
+      <td><code>op_decay_rate</code>, <code>fin_principal_rate</code></td>
+    </tr>
+    <tr>
+      <td><strong>Tax</strong></td>
+      <td><div class="formula" style="margin:4px 0">Tax<sub>exp</sub> = Statutory × max(0, EBT − NOL<sub>used</sub>)</div></td>
+      <td><code>nol_opening_balance</code>, <code>accel_dep_excess_pct</code></td>
+    </tr>
+    <tr>
+      <td><strong>Equity</strong></td>
+      <td><div class="formula" style="margin:4px 0">RE<sub>close</sub> = RE<sub>open</sub> + NI − Dividends − Buybacks</div></td>
+      <td><code>dividend_payout</code>, <code>buyback_pct_fcf</code></td>
+    </tr>
+    <tr>
+      <td><strong>WC</strong></td>
+      <td><div class="formula" style="margin:4px 0">AR = DSO ÷ 365 × Revenue</div></td>
+      <td><code>dso_days</code>, <code>dih_days</code>, <code>dpo_days</code></td>
+    </tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="debt">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2 class="section-title">Debt Engine — 3 Modes</h2>
+  </div>
+  <p class="section-desc">The debt solver supports full instrument-level modeling with refinancing, floating rates, and covenant acceleration.</p>
+
+  <table>
+    <tr><th style="width:18%">Mode</th><th>Description</th><th>When to Use</th></tr>
+    <tr>
+      <td><code>optimizer</code></td>
+      <td>Full LP optimization: 7-step algorithm with refinancing, maturity rollover, voluntary prepay caps, ST/LT split by 4 rules</td>
+      <td>Detailed instrument data available (US Steel: 38 instruments)</td>
+    </tr>
+    <tr>
+      <td><code>schedule_based</code></td>
+      <td>Reads pre-built corkscrew from debt_schedule table</td>
+      <td>Analyst has exact repayment schedule</td>
+    </tr>
+    <tr>
+      <td><code>parametric</code></td>
+      <td>Simplified: target ND/EBITDA or Debt/Revenue ratio, ST/LT split from history</td>
+      <td>Limited instrument data; quick estimates</td>
+    </tr>
+  </table>
+
+  <div class="why-box"><strong>Floating rate support:</strong> Instruments with <code>rate_type=floating</code> receive <code>general_rate_delta_pct</code> shocks. CBR key rate forecast passed per-year. Fixed-rate instruments unaffected by rate stress.</div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="stress">
+  <div class="section-header">
+    <span class="section-num">07</span>
+    <h2 class="section-title">Stress Testing</h2>
+  </div>
+  <p class="section-desc">Shock scenarios defined in stress_scenarios.yaml. Applied to forecasted values. Covenant breach auto-triggers covenant_breach scenario.</p>
+
+  <table>
+    <tr><th>Scenario</th><th>Shock</th><th>Mechanism</th></tr>
+    <tr><td><code>steel_downturn</code></td><td>HRC price −30%, volume −15%</td><td>Revenue ↓ via macro factor chain</td></tr>
+    <tr><td><code>rate_spike</code></td><td>Interest rates +300 bps</td><td>Floating-rate debt interest ↑</td></tr>
+    <tr><td><code>wc_stress</code></td><td>DSO +15 days, DIH +20 days</td><td>Working capital ↑, CFO ↓</td></tr>
+    <tr><td><code>covenant_breach</code></td><td>Auto-triggered when ICR or ND/EBITDA breached</td><td>Callable debt → ST, refinancing stress</td></tr>
+  </table>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<section class="section" id="notebooks">
+  <div class="section-header">
+    <span class="section-num">08</span>
+    <h2 class="section-title">Analyst Workflow — Jupyter Notebooks</h2>
+  </div>
+  <p class="section-desc">Universal notebooks in templates/notebooks/ work with any company. Copy to your working directory.</p>
+
+  <table>
+    <tr><th style="width:5%">#</th><th>Notebook</th><th>Purpose</th></tr>
+    <tr><td>00</td><td><code>Init_New_Company</code></td><td>Create company directory structure, config templates</td></tr>
+    <tr><td>00</td><td><code>Build_Model_Main</code></td><td>Run full pipeline, view results</td></tr>
+    <tr><td>01</td><td><code>Data_Loading</code></td><td>Load Excel → DB via ExcelLoader</td></tr>
+    <tr><td>01</td><td><code>Test_Macro_Module</code></td><td>VECM/ARIMA fitting and diagnostics</td></tr>
+    <tr><td>02</td><td><code>Test_Model_Module</code></td><td>3-Statement model run + validation</td></tr>
+    <tr><td>03</td><td><code>Stress_Testing</code></td><td>Apply scenarios, compare base vs stressed</td></tr>
+    <tr><td>04</td><td><code>Rating</code></td><td>S&P / Moody's / Fitch scorecards</td></tr>
+    <tr><td>05</td><td><code>Covenants</code></td><td>Covenant headroom and breach detection</td></tr>
+    <tr><td>06</td><td><code>Financial_Dashboard</code></td><td>Interactive charts and summary</td></tr>
+    <tr><td>99</td><td><code>Configure_Excel_Loader</code></td><td>Map Excel labels → DB canonical metrics</td></tr>
+    <tr><td>99</td><td><code>Configure_YAML</code></td><td>Interactive project.yaml editor</td></tr>
+  </table>
+
+  <h3>Adding a New Company</h3>
+<pre><span class="comment"># 1. Create company structure</span>
+python3 tools/init_company.py my_company --name <span class="str">"My Company"</span> --currency USD
+
+<span class="comment"># 2. Fill Excel template with historical data</span>
+<span class="comment">#    Copy templates/excel_templates/template_UNIFIED_All_Data.xlsx</span>
+<span class="comment">#    Fill IS/BS/CF sheets with 5+ years of data</span>
+
+<span class="comment"># 3. Load into database</span>
+<span class="kw">from</span> engine.loader.excel <span class="kw">import</span> ExcelLoader
+<span class="kw">from</span> engine.database.repository <span class="kw">import</span> Repository
+<span class="kw">with</span> Repository() <span class="kw">as</span> repo:
+    loader = ExcelLoader(<span class="str">"my_company"</span>, repo, db_unit=<span class="str">"USD"</span>)
+    loader.load(Path(<span class="str">"companies/my_company/data/my_company.xlsx"</span>))
+
+<span class="comment"># 4. Run model</span>
+result = build_model(<span class="str">"my_company"</span>)</pre>
+</section>
+
+<div class="footer">
+  stressTest Engine v2.1.0 &nbsp;·&nbsp; <a href="https://github.com/arturhusnutdinov/stressTest_v2" style="color:var(--navy-light)">github.com/arturhusnutdinov/stressTest_v2</a>
+</div>
+
+</div>
+</body>
+</html>
