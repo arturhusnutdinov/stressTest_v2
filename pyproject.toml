@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "stresstest-v2"
 version = "2.1.0"
@@ -18,6 +22,12 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
 ]
+
+[project.scripts]
+stresstest = "engine.orchestrator:main"
+
+[tool.setuptools.packages.find]
+include = ["engine*", "parsers*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

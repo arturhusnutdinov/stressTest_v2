@@ -374,7 +374,7 @@ def build_model(
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Построить финансовую модель")
@@ -403,3 +403,7 @@ if __name__ == "__main__":
         run_covenants=args.covenants,
     )
     exit(0 if res.success else 1)
+
+
+if __name__ == "__main__":
+    main()
