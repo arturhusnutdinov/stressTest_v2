@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import logging
 from typing import TYPE_CHECKING
+from engine.constants import REVENUE_FALLBACK_GROWTH
 
 if TYPE_CHECKING:
     from ..inputs import YearState, HistoricState, ModelConfig
@@ -67,7 +68,7 @@ def solve_revenue(state, prev, historic, config):
             return state
 
     # 5. Fallback
-    state.revenue = prev.revenue * 1.02
+    state.revenue = prev.revenue * REVENUE_FALLBACK_GROWTH
     return state
 
 

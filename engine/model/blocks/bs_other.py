@@ -1,6 +1,7 @@
 """Static BS items: LAST carry-forward for non-corkscrew items."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
+from engine.constants import PAYROLL_PCT_OF_SGA
 if TYPE_CHECKING:
     from ..inputs import YearState
 
@@ -14,5 +15,5 @@ def solve_bs_other(state, prev):
     fl_adj = getattr(state, '_fl_ncl_adj', 0)
     state.other_ncl = (prev.other_ncl or 0) + fl_adj
     state.accounts_payable_rp = prev.accounts_payable_rp
-    state.payroll_payable = abs(state.sga) * 0.10
+    state.payroll_payable = abs(state.sga) * PAYROLL_PCT_OF_SGA
     return state
