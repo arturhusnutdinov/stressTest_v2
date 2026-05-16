@@ -77,27 +77,24 @@ def build_model(
     log_level:        int  = logging.INFO,
 ) -> BuildResult:
     """
-    Полный pipeline построения модели.
-
-    Порядок:
-    1. Препроцессор — вычисляет драйверы из истории
-    2. Модель — строит 3-Statement прогноз
-    3. Downstream — стресс / рейтинг / ковенанты (если включены)
+    Full pipeline: preprocessor → macro → model → stress → rating → covenants.
 
     Args:
-        company_id:       ID компании в БД
-        config_path:      путь к project.yaml (если None — ищет companies/{company_id}/configs/project.yaml)
-        db_path:          путь к БД (если None — data_mart_v2.db в корне проекта)
-        scenario_name:    имя сценария (default: "base")
-        run_preprocessor: пересчитать драйверы из истории
-        run_model:        запустить 3-Statement модель
-        run_stress:       запустить стресс-тестирование (не реализован)
-        run_rating:       рассчитать рейтинг (не реализован)
-        run_covenants:    проверить ковенанты (не реализован)
-        log_level:        уровень логирования
+        company_id: Company identifier in the database (e.g. 'us_steel', 'rusal').
+        config_path: Path to project.yaml. Defaults to companies/{company_id}/configs/project.yaml.
+        db_path: Path to SQLite database. Defaults to data_mart_v2.db in project root.
+        scenario_name: Scenario name (default: 'base').
+        run_preprocessor: Recompute driver metrics from historical data.
+        run_macro: Run VECM/ARIMA macro-economic forecasts.
+        run_model: Run the three-statement model solver.
+        run_stress: Apply stress scenarios.
+        run_rating: Compute credit ratings (S&P / Moody's / Fitch).
+        run_covenants: Check covenant compliance.
+        stress_scenarios: List of scenario names to run (None = all from YAML).
+        log_level: Python logging level.
 
     Returns:
-        BuildResult с результатами всех этапов
+        BuildResult with per-step results, timings, and BS/CF diffs.
     """
     logging.basicConfig(
         level=log_level,

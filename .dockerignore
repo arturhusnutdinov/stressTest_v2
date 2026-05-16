@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+.git
+.pytest_cache
+*.db
+*.db-shm
+*.db-wal
+*.xlsx
+*.xlsb
+*.pdf
+*.bak
+*.bak_*
+.DS_Store
+.ipynb_checkpoints
+audit/
