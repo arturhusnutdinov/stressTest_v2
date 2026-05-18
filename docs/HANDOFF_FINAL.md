@@ -1,6 +1,6 @@
 # stressTest v2 — Финальная передача контекста
 
-**Дата: May 2026 | Версия: 2.1.0 | Статус: PRODUCTION READY**
+**Дата: May 2026 | Версия: 2.1.1 | Статус: PRODUCTION READY**
 
 ---
 
@@ -92,7 +92,7 @@ engine/
 │       ├── lease.py             523 строки — LeaseBlock (IFRS 16 / ASC 842)
 │       ├── wc.py                233 строки — WCBlock (DSO/DIH/DPO)
 │       ├── ppe.py               PPEBlock (additions/disposals/depreciation)
-│       ├── tax.py               126 строк — TaxBlock (NOL, DTA/DTL)
+│       ├── tax.py               126 строк — TaxBlock (IAS 12: Current+Deferred, NOL→DTA)
 │       ├── equity.py            139 строк — EquityBlock (dividends, buybacks)
 │       └── intangibles.py       IntangiblesBlock
 ├── stress/
@@ -185,6 +185,28 @@ Debt optimizer reads instruments from `debt_instruments` table and produces a co
 - `cff_debt_repayment` ← -sum(repay)
 
 **Verified:** Total debt (ST+LT) matches corkscrew closing exactly (Δ=0). Interest and CF flows match exactly (Δ=0). BS=0.000004, CF=0.000000.
+
+---
+
+## TAX BLOCK — IAS 12 / ASC 740
+
+TaxBlock (`engine/model/schedules/tax.py`) переписан для соответствия CFI / IAS 12 (commit a50710a).
+
+**IS Total Tax = Current Tax + Deferred Tax:**
+- Current Tax = rate × max(0, EBT − NOL_used − accel_dep_excess) — cash tax basis
+- Deferred Tax = −(ΔDTL − ΔDTA) — non-cash timing differences
+- Identity: Total Tax = rate × EBT (когда нет NOL)
+
+**NOL механика:**
+- NOL pool corkscrew: nol_open → nol_used (80% cap, TCJA) → new_nol (from losses) → nol_close
+- EBT < 0: tax benefit = new_nol × rate → DTA создаётся (IAS 12)
+- Pre-existing NOL usage НЕ reverses DTA (историческая DTA не включала NOL component)
+
+**Accel depreciation (US Steel: 40%):**
+- taxable_income = EBT − NOL − dep_adj (dep_adj = dep_ppe × accel_dep_excess_pct)
+- Current Tax ниже (cash tax basis), Deferred Tax компенсирует → Total = rate × EBT
+
+**Payment timing:** из config `tax_paid_timing` (US Steel=next_year, Rusal=current_year)
 
 ---
 
@@ -364,6 +386,15 @@ stresstest --help
 ---
 
 ## ВЕРСИОННАЯ ИСТОРИЯ
+
+### v2.1.1 (2026-05-18)
+- TaxBlock IAS 12: IS Total Tax = Current + Deferred (было: current only, deferred ×0)
+- TaxBlock NOL→DTA: убыток создаёт DTA = new_nol × rate
+- TaxBlock accel dep: taxable_income = EBT − NOL − dep_adj
+- TaxBlock payment_lag из config (было: hardcoded)
+- Covenants: metals industry override respects YAML thresholds
+- Rusal: 8 stress scenarios, feature flags, finmodelling_guide.html rewrite
+- Textbook: 3,192 строк, все docs обновлены с актуальными цифрами
 
 ### v2.1.0 (2026-05-16)
 - Декомпозиция core.py: 2,044→1,696 строк, 6 блоков в blocks/
