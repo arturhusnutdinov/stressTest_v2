@@ -10,11 +10,19 @@
 - **HANDOFF_FINAL.md**: comprehensive handoff document with all current metrics
 
 ### Fixed
+- **TaxBlock IAS 12 compliance**: IS Total Tax = Current + Deferred (was: current only, deferred ×0)
+- **TaxBlock NOL→DTA**: EBT < 0 now creates DTA = new_nol × rate (IAS 12 tax benefit)
+- **TaxBlock accel dep**: taxable_income = EBT − NOL − dep_adj (was: EBT − NOL only)
+- **TaxBlock payment_lag**: from config `tax_paid_timing` (was: hardcoded next_year)
+- **TaxBlock nol_enabled**: activates on EBT < 0 (was: only when nol_open > 0)
 - **Covenants**: metals industry override now respects YAML threshold overrides (was ignoring them)
 - **RUSAL covenants**: ND/EBITDA threshold correctly 4.5x (was defaulting to steel 3.5x)
 
 ### Changed
-- **Textbook**: 2,461 → 3,162 lines (+701 lines of new content)
+- **TaxBlock**: rewritten to follow CFI / IAS 12 / ASC 740 methodology
+- **ModelConfig**: added `tax_paid_timing` field (current_year | next_year)
+- **finmodelling_guide.html**: full rewrite — 12 sections, Russian, narrative blocks, actual results
+- **Textbook**: 2,461 → 3,192 lines (+731 lines of new content)
 - **Project tree**: updated in docs to reflect blocks/ decomposition and new files
 - **Documentation**: all docs updated with current model output numbers
 
