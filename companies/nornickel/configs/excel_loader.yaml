@@ -1,0 +1,167 @@
+# ═══════════════════════════════════════════════════════════════
+# Excel Loader Configuration Template — stressTest_v2 Engine
+# ═══════════════════════════════════════════════════════════════
+# Copy to: companies/nornickel/configs/excel_loader.yaml
+# Source Excel: companies/nornickel/data/nornickel_unified_complete.xlsx
+#
+# ExcelLoader reads this config + the Excel file → populates DB.
+# Usage:
+#   loader = ExcelLoader(company_id="nornickel", repo=repo,
+#                        db_unit="USD", input_default_unit="mUSD")
+#   result = loader.load(Path("companies/nornickel/data/nornickel_unified.xlsx"))
+
+# ── Loader Settings ──────────────────────────────────────────
+loader_settings:
+  company_id: "nornickel"
+  db_unit: USD                  # target unit in database
+  input_default_unit: mUSD      # Excel values in millions → ×1e6 → full USD in DB
+  # Other options: tUSD (thousands), bUSD (billions)
+
+# ── Statement Sheets ────────────────────────────────────────
+# Format: legacy wide (metric | 2010 | 2011 | ... | 2024 | unit | source)
+# Or: new format (label | db_metric | formula | sign | unit | 2010 | ...)
+
+history:
+  IS:
+    sheet: history_is
+    format: legacy              # legacy | new (with db_metric column)
+    required_metrics:           # model fails without these
+      - revenue
+      - cogs
+      - gross_profit
+      - sga
+      - ebitda
+      - ebit
+      - ebt
+      - tax_expense
+      - net_income
+    key_optional:               # important for accuracy but not blocking
+      - dep_ppe                 # depreciation of PPE
+      - amort_intangibles       # amortization of intangibles
+      - total_da                # total D&A
+      - interest_expense        # interest on debt
+      - interest_income         # interest on cash/deposits
+      - earnings_from_investees # associates/JV income (e.g. Norilsk for Rusal)
+      - asset_impairment        # impairment charges
+      - distribution_expenses   # distribution/selling expenses (IFRS separate from SGA)
+      - current_tax             # current tax expense
+      - deferred_tax            # deferred tax expense/benefit
+
+  BS:
+    sheet: history_bs
+    format: legacy
+    required_metrics:
+      - cash
+      - accounts_receivable
+      - inventory
+      - ppe_net                 # or ppe_gross + ppe_accum_dep
+      - short_term_debt
+      - long_term_debt
+      - accounts_payable
+      - retained_earnings
+      - total_assets
+      - total_equity
+    key_optional:
+      - ppe_gross               # PPE at cost
+      - ppe_accum_dep           # accumulated depreciation
+      - investments_lt          # investments in associates (Norilsk etc)
+      - intangibles             # intangible assets (excl goodwill)
+      - goodwill                # goodwill
+      - rou_asset               # right-of-use assets (IFRS 16)
+      - dta                     # deferred tax assets
+      - dtl                     # deferred tax liabilities
+      - share_capital           # share capital
+      - apic                    # additional paid-in capital
+      - aoci                    # accumulated other comprehensive income
+      - nci                     # non-controlling interests
+      - other_ca                # other current assets (prepayments, VAT)
+      - other_cl                # other current liabilities (accrued expenses)
+      - other_nca               # other non-current assets
+      - other_ncl               # other non-current liabilities (provisions)
+      - total_liabilities       # total liabilities
+      - total_ca                # total current assets
+      - total_nca               # total non-current assets
+      - total_cl                # total current liabilities
+      - total_ncl               # total non-current liabilities
+      - taxes_payable           # taxes payable
+      - employee_benefits       # employee benefits liability
+      - lease_liab_current      # current lease liability
+      - lease_liab_noncurrent   # non-current lease liability
+
+  CF:
+    sheet: history_cf
+    format: legacy
+    required_metrics:
+      - cfo_total               # operating cash flow total
+      - cfi_total               # investing cash flow total
+      - cff_total               # financing cash flow total
+    key_optional:
+      - cfo_net_income          # NI starting point
+      - cfo_da                  # D&A add-back
+      - cfo_before_wc           # CFO before working capital changes
+      - cfo_interest_paid       # interest paid (cash)
+      - cfo_income_tax_paid     # taxes paid (cash)
+      - capex                   # capital expenditures
+      - capex_intangibles       # intangible asset acquisitions
+      - cff_lt_debt_issuance    # long-term debt issuance
+      - cff_lt_debt_repayment   # long-term debt repayment
+      - cff_dividends           # dividends paid
+      - net_change_cash         # net change in cash
+      - cash_opening            # opening cash balance
+      - cash_closing            # closing cash balance
+      - op_lease_cash_cfo       # operating lease payments in CFO
+      - fx_effect_cash          # FX effect on cash
+
+# ── Canonical Sheets (non-statement data) ────────────────────
+
+canonical:
+  debt_instruments:
+    sheet: debt_instruments
+    key: instrument_id
+    # Required columns: instrument_id, instrument_name, instrument_type,
+    #   currency, opening_balance, maturity_date, interest_rate, rate_type
+    # rate_type: fixed | floating
+    # interest_rate: numeric (0.05 = 5%, not "5%")
+
+  macro_factors:
+    sheet: macro_factors
+    key: factor_name
+    # Wide format: factor_name | 2010 | 2011 | ... | 2025
+    # Common factors: lme_aluminium, brent, gdp_world, cpi_us, usd_rub
+
+  segments_financial:
+    sheet: segments_financial
+    keys: [segment_name, metric]
+    # Wide format: segment_name | metric | 2010 | ... | 2024 | unit
+    # Metrics: revenue, ebitda, ebit, net_income, capex
+
+  segments_operational:
+    sheet: segments_operational
+    keys: [segment_name, metric]
+    # Non-monetary data: production_kt, sales_kt, avg_price_usd_t
+    # Values stored raw (no unit conversion)
+
+  Production_KPI:
+    sheet: Production_KPI
+    key: metric
+    target: preprocess_metrics
+    # Wide format: metric | unit | 2019 | 2020 | ... | 2024
+    # Metrics: production_al_kt, sales_al_kt, avg_al_price_usd_t, etc.
+
+# ── Sign Convention Notes ────────────────────────────────────
+# US GAAP (credit_negative): income items stored as NEGATIVE in Excel
+#   revenue = positive, cogs = negative, interest_income = NEGATIVE
+# IFRS (natural): income items stored as POSITIVE
+#   revenue = positive, cogs = negative, interest_income = POSITIVE
+# Configure in project.yaml: accounting_conventions.is_income_sign
+
+# ── Instrument ID Normalization ──────────────────────────────
+# ExcelLoader normalizes instrument_id: lowercase + spaces→underscores
+# "CNY 4.75%" → "cny_4.75%"
+# "RUB KeyRate + 2%" → "rub_keyrate_+_2%"
+# This ensures upsert works correctly on reload (no duplicates)
+
+# ── Reload Idempotency ──────────────────────────────────────
+# ExcelLoader uses INSERT OR REPLACE (upsert) for all tables.
+# Running load() multiple times produces identical DB state.
+# Debt instruments: rates must be NUMERIC in Excel (0.0475, not "4.75%")

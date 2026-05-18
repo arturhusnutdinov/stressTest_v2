@@ -1,0 +1,115 @@
+# Полный шаблон конфига макро-движка (VECM → VAR → ARIMA/RW)
+# Copy to: companies/nornickel/configs/forecast/macro_ecm.yaml
+run:
+  use_log: true
+  require_span_years: 15
+  window:
+    start_year_required: 2006
+    require_min_history_years: 12
+  max_lag: 2
+  criterion: aic  # aic|bic|hqic
+  resid_ar1: true
+  johansen_alpha: 0.05
+  output_dir: companies/nornickel/outputs/macro_forecast
+
+frequency:
+  target: Y   # Y|Q|M
+  aggregation: avg  # для даун-/ап-семплинга
+  annual:
+    enable: true
+    method: mean  # mean|sum|end
+
+factors:
+  # Укажите полный список факторов, удалите лишние
+  - id: brent_usd
+    path: macro/global/drivers/brent_usd.csv
+    column: value
+    anchor: level      # level|trend
+    transform: log     # log|log_diff|diff|none
+    span_check: true
+  - id: lme_al_usd
+    path: macro/industry/aluminum/drivers/lme_al_usd.csv
+    column: value
+    anchor: level
+    transform: log
+    span_check: true
+  - id: fx_usdrub
+    path: macro/global/drivers/fx_usdrub.csv
+    column: value
+    anchor: level
+    transform: log
+    span_check: true
+  - id: dxy
+    path: macro/global/drivers/dxy.csv
+    column: value
+    anchor: level
+    transform: log
+    span_check: true
+  - id: cpi_ru
+    path: macro/global/drivers/cpi_ru_index.csv
+    column: value
+    anchor: trend
+    transform: log_diff
+    span_check: true
+  - id: ppi_ru
+    path: macro/global/drivers/ppi_ru_index.csv
+    column: value
+    anchor: trend
+    transform: log_diff
+    span_check: true
+  - id: gdp_world
+    path: macro/global/drivers/world_gdp.csv
+    column: value
+    anchor: trend
+    transform: log
+    span_check: true
+  - id: gdp_ru
+    path: macro/global/drivers/gdp_ru.csv
+    column: value
+    anchor: trend
+    transform: log
+    span_check: true
+  - id: gdp_deflator_ru
+    path: macro/global/drivers/gdp_deflator_ru.csv
+    column: value
+    anchor: trend
+    transform: log
+    span_check: true
+
+vecm:
+  groups:
+    - name: energy_metals
+      factors: [brent_usd, lme_al_usd, fx_usdrub]
+    - name: inflation_block
+      factors: [cpi_ru, ppi_ru]
+    - name: growth_block
+      factors: [gdp_world, gdp_ru, gdp_deflator_ru]
+  horizon_periods: 60  # для M: месяцы; для Y: годы
+  deterministic_terms: ci  # none|co|ci|li|both
+  rank: auto              # auto|int
+  lag_order_select: true
+
+fallback:
+  chain: [vecm, var, arima011, rw]
+  conditions:
+    vecm_min_span_years: 10
+    vecm_min_rank: 1
+  var:
+    criterion: aic
+    max_lag: 4
+  arima011:
+    force: true
+  rw:
+    drift: false
+
+io:
+  logs:
+    run_report: companies/nornickel/outputs/logs/vecm_run_report.md
+  avf:
+    summary_file: _summary.csv
+    merged_file: actual_vs_fitted_merged.csv
+    metrics_file: actual_vs_fitted_metrics.csv
+    fit_suffix: _ecm_fit.csv
+    forecast_suffix: _forecast.csv
+
+

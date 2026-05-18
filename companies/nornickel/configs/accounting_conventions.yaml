@@ -1,0 +1,48 @@
+# ═══════════════════════════════════════════════════════════════
+# Accounting Conventions Template — stressTest_v2 Engine
+# ═══════════════════════════════════════════════════════════════
+# Copy to: companies/nornickel/configs/accounting_conventions.yaml
+#
+# NOTE: Key conventions (da_in_cogs, is_income_sign) are also in
+# project.yaml → accounting_conventions section. This file covers
+# additional reporting-specific conventions.
+
+company: nornickel
+
+# ── Cash Reporting ───────────────────────────────────────────
+# CF statement cash definition:
+#   cash_only          — CF.cash_ending = BS.cash
+#   cash_and_restricted — CF.cash_ending = BS.cash + BS.restricted_cash (US 10-K)
+cash_in_cf:
+  type: "cash_only"
+  description: ""
+
+cash_in_bs:
+  current: "cash"
+  noncurrent: "restricted_cash"
+
+# ── Reconciliation ───────────────────────────────────────────
+reconciliation:
+  enabled: true
+  variance_threshold: 100000000    # $100M warn-only
+  materiality_threshold: 1000000   # $1M — допустимое расхождение
+
+# ── Sign Convention Reference ────────────────────────────────
+# Configured in project.yaml → accounting_conventions.is_income_sign
+# Two modes:
+#   credit_negative (US GAAP default):
+#     Revenue = positive, Expenses = negative
+#     Interest income = NEGATIVE (credit convention)
+#     Earnings from investees = NEGATIVE
+#     Loader inverts: -(negative) = positive for model
+#
+#   natural (IFRS default):
+#     Revenue = positive, Expenses = negative
+#     Interest income = POSITIVE (natural sign)
+#     Earnings from investees = POSITIVE
+#     Loader uses as-is
+
+# ── D&A Treatment Reference ─────────────────────────────────
+# Configured in project.yaml → accounting_conventions.da_in_cogs
+#   true  (US GAAP typical): D&A embedded in COGS → model strips it
+#   false (IFRS typical):    D&A reported separately below gross profit
