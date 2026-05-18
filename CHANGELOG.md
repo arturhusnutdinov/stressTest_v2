@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.1.1] — 2026-05-18
+
+### Added
+- **RUSAL stress scenarios**: expanded from 5 to 8 (lme_mild, sanctions_shock, severe, upside)
+- **RUSAL feature flags**: explicit corkscrew flags in project.yaml (use_ppe_corkscrew, use_wc_days, use_tax_corkscrew, use_intangibles_corkscrew, use_interest_payable_cork)
+- **Textbook chapters**: 5.1b Preprocessor, 7.3.4 Stress & Rating (6 subsections), 7.3.6b Covenants, 7.7 YAML Configuration Guide (10 subsections)
+- **Textbook PDF**: 54 pages, 280 KB (docs/financial_modeling_textbook_rewritten.pdf)
+- **HANDOFF_FINAL.md**: comprehensive handoff document with all current metrics
+
+### Fixed
+- **Covenants**: metals industry override now respects YAML threshold overrides (was ignoring them)
+- **RUSAL covenants**: ND/EBITDA threshold correctly 4.5x (was defaulting to steel 3.5x)
+
+### Changed
+- **Textbook**: 2,461 → 3,162 lines (+701 lines of new content)
+- **Project tree**: updated in docs to reflect blocks/ decomposition and new files
+- **Documentation**: all docs updated with current model output numbers
+
+### Model Output (verified)
+- US Steel: BS=0.000004, Rating BBB→A-, 0 covenant breaches, 1 stress scenario
+- RUSAL: BS=0.000004, Rating B, 9 covenant breaches, 8 stress scenarios (all OK)
+
 ## [2.1.0] — 2026-05-16
 
 ### Added

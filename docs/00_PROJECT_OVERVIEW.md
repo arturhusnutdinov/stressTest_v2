@@ -14,36 +14,40 @@ Three-statement financial model (IS / BS / CF) for corporate financial modeling 
 
 ```
 stressTest_v2/
-├── engine/                  # Core engine modules
-│   ├── model/               # Three-statement model (core.py, inputs.py, loader.py)
-│   │   ├── cogs_block.py    # Component-based COGS (alumina, energy, labour)
-│   │   └── segment_revenue.py # Segment Volume × Price revenue model
-│   ├── macro/               # Macro module: VECM, ARIMA, EWA, commodity models
-│   ├── preprocessor/        # Historical KPI extraction and ratio computation
-│   ├── database/            # SQLite schema, repository, connection wrapper
-│   ├── loader/              # ExcelLoader: Excel → DB pipeline
-│   ├── stress/              # Stress scenario runner
-│   ├── rating/              # Credit rating engine (S&P/Moody's/Fitch)
-│   ├── covenants/           # Covenant monitoring
-│   └── orchestrator.py      # Top-level pipeline orchestrator
+├── engine/                      # Core engine modules
+│   ├── orchestrator.py          # Top-level pipeline (406 lines)
+│   ├── constants.py             # Named constants (81 lines)
+│   ├── model/                   # Three-statement model
+│   │   ├── core.py              # ThreeStatementModel (1,696 lines, iterative solver)
+│   │   ├── loader.py            # DB + YAML → ModelConfig (824 lines)
+│   │   ├── inputs.py            # YearState, ModelConfig dataclasses (515 lines)
+│   │   ├── saver.py             # Results → DB (299 lines)
+│   │   ├── cogs_block.py        # Component-based COGS (Rusal)
+│   │   ├── segment_revenue.py   # Segment Volume × Price revenue
+│   │   ├── revenue_models.py    # ElasticNet / EWA revenue
+│   │   ├── forecast_dispatcher.py # Method dispatch per metric
+│   │   ├── blocks/              # 6 extracted blocks (revenue, sga, cash, bs_totals, ...)
+│   │   └── schedules/           # debt, ppe, tax, lease, equity, wc, intangibles
+│   ├── macro/                   # VECM / ARIMA / EWA macro (vecm.py 1,666 lines)
+│   ├── preprocessor/            # Historical KPI extraction (1,094 lines)
+│   ├── database/                # SQLite schema + repository (1,309 lines)
+│   ├── loader/                  # ExcelLoader (764 lines)
+│   ├── stress/                  # Stress runner (core 282 + runner 427 lines)
+│   ├── rating/                  # Credit rating (core 458 + runner 190 lines)
+│   └── covenants/               # Covenant monitoring (410 lines)
+├── parsers/
+│   ├── pdf_parser.py            # Rusal PDF extraction (~1,000 lines)
+│   └── adapters/rusal.yaml      # YAML adapter (~600 lines)
 ├── companies/
-│   ├── us_steel/
-│   │   ├── configs/         # project.yaml, excel_loader.yaml, stress_scenarios.yaml
-│   │   ├── data/excel/      # UNIFIED Excel data file
-│   │   └── notebooks/       # 10 Jupyter notebooks
-│   └── rusal/
-│       ├── configs/         # project.yaml, excel_loader.yaml, stress_scenarios.yaml
-│       ├── data/            # rusal_unified_complete.xlsx (32 sheets)
-│       └── notebooks/       # 10 Jupyter notebooks
-├── templates/
-│   └── project_template.yaml   # Canonical YAML config template
-├── configs/                 # Global config (db path, logging)
-├── tests/                   # pytest suite
-├── notebooks/               # Jupyter analysis notebooks
-├── scripts/                 # CLI helper scripts
-├── tools/                   # Diagnostic and migration tools
-├── docs/                    # This documentation
-└── data_mart_v2.db          # SQLite database (WAL mode)
+│   ├── us_steel/configs/        # project.yaml, stress_scenarios.yaml, macro_ecm.yaml
+│   └── rusal/configs/           # project.yaml, stress_scenarios.yaml, macro_ecm.yaml
+├── tests/                       # 45 tests (unit + integration)
+├── tools/                       # Diagnostic, migration, audit tools
+├── docs/                        # Documentation (this folder)
+├── pyproject.toml               # Package config, CLI entry point
+├── Dockerfile                   # Docker image (python:3.12-slim)
+├── .github/workflows/ci.yml     # CI/CD (Python 3.11/3.12, pytest + ruff)
+└── data_mart_v2.db              # SQLite database (WAL mode)
 ```
 
 ---
@@ -53,22 +57,26 @@ stressTest_v2/
 The engine follows a **layered pipeline**:
 
 ```
-History (CSV / DB)
+History (Excel / DB)
         │
         ▼
-  Preprocessor              ← computes ratios, medians, EWA, min_cash
+  Preprocessor (1,094 lines) ← computes ratios, betas, EWA, min_cash
         │
         ▼
-  Macro Module              ← VECM / ARIMA / EWA forecast of macro factors
+  Macro Module (VECM 1,666)  ← VECM / ARIMA / EWA forecast of macro factors
         │
         ▼
-  Model Loader              ← reads YAML config, assembles ModelConfig + HistoricState
+  Model Loader (824 lines)   ← reads YAML config, assembles ModelConfig + HistoricState
         │
         ▼
-  ThreeStatementModel       ← joint iterative solver, 10 forecast methods
+  ThreeStatementModel (1,696) ← iterative solver, 6 blocks + 7 schedules
+        │
+        ├── Stress Runner (427)   ← 8 scenarios (macro + driver shocks)
+        ├── Rating Engine (458)   ← S&P scorecard (4 sub-scores)
+        └── Covenant Checker (410) ← breach / warning / ok
         │
         ▼
-  ModelSaver / Repository   ← writes forecast_is/bs/cf to DB
+  ModelSaver / Repository    ← writes forecast_is/bs/cf to DB
         │
         ▼
   Stress Runner             ← applies shocks to forecasted values

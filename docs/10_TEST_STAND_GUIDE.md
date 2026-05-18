@@ -1,12 +1,14 @@
 # Test Stand Guide
 
-**Updated:** April 2026
+**Updated:** May 2026 | **Version:** 2.1.0
 
 ## Overview
 
 Integration test infrastructure for verifying Excel → DB loading and data consistency.
 
 **Location:** `tests/integration/`
+
+**Full test suite:** `python3 -m pytest tests/ -v` — 45 tests (unit + integration)
 
 ## Usage
 
@@ -41,8 +43,8 @@ python3 tests/integration/verify_consistency.py --company rusal
 ## Expected output
 
 ```
-history_is:          281 = 281  ✓
-history_bs:          450 ≈ 438  ≈ (12 parser-only)
+history_is:          336 = 336  ✓
+history_bs:          458 ≈ 446  ≈ (parser-only extras)
 history_cf:          544 = 544  ✓
 ppe_components:      273 = 273  ✓
 intangible_assets:    24 =  24  ✓
@@ -50,7 +52,9 @@ tax_schedule:          6 =   6  ✓
 provisions_schedule:  20 =  20  ✓
 associates_schedule:  54 =  54  ✓
 operational_drivers:  73 =  73  ✓
-debt_instruments:     71 =  71  ✓
+debt_instruments:     69 =  69  ✓
+lease_schedule:        4 =   4  ✓
+equity_schedule:      15 =  15  ✓
 BS Identity: 13/13 years OK
 overall: PASS
 ```

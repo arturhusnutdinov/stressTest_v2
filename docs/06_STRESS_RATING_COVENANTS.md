@@ -55,18 +55,35 @@ A stress scenario applies multiplicative or additive shocks to forecast inputs, 
 | `stress` | Severe: revenue −20%, interest rates +200bps, margin −5pp |
 | `custom` | User-defined parameter overrides |
 
-### Shock Parameters (in project.yaml or scenario file)
+### Shock Parameters (in stress_scenarios.yaml)
+
+Shock types: `percentage`, `absolute`, `pp` (percentage points), `basis_points`.
 
 ```yaml
-stress_scenarios:
-  bear_steel_crash:
-    type: bear
-    shocks:
-      revenue_growth_delta: -0.15    # Additive: reduce growth by 15pp
-      steel_price_pct: -0.20         # Multiply steel price by 0.80
-      avg_interest_rate_delta: 0.02  # Add 200bps to all rates
-      cogs_ratio_delta: 0.03         # Increase COGS/rev ratio by 3pp
+# Rusal example (8 scenarios)
+scenarios:
+  aluminium_downturn:
+    description: "LME Al -25%, alumina -15%, WC deterioration"
+    macro_shocks:
+      lme_aluminium: {type: percentage, value: -25.0}
+      lme_alumina:   {type: percentage, value: -15.0}
+    driver_shocks:
+      dso_days: {type: percentage, value: 15.0}
+      dih_days: {type: percentage, value: 20.0}
+
+  severe:
+    description: "LME -30%, RUB +25%, rate +400bp"
+    macro_shocks:
+      lme_aluminium:       {type: percentage, value: -30.0}
+      usd_rub:             {type: percentage, value: 25.0}
+      russian_power_price: {type: percentage, value: 30.0}
+    driver_shocks:
+      avg_rate: {type: pp, value: 4.0}
+      dso_days: {type: percentage, value: 20.0}
 ```
+
+**Rusal scenarios:** lme_mild, aluminium_downturn, sanctions_shock, energy_spike, rate_spike, severe, upside, covenant_breach.
+**US Steel scenarios:** covenant_breach.
 
 ### Runner (`engine/stress/runner.py`)
 
@@ -268,14 +285,15 @@ This is the primary output for the financial analysis report.
 
 ## Configuration Summary
 
-All stress/rating/covenant settings in `project.yaml`:
+All stress/rating/covenant settings in `project.yaml`. Two company examples:
 
+**US Steel** (methodology: steel):
 ```yaml
 covenants:
   enabled: true
   methodology: steel          # steel adds EBITDA margin and FCF/debt covenants
   warning_buffer: 0.10
-  acceleration_triggers:      # Covenant breach → callable debt reclassified to ST
+  acceleration_triggers:
     - interest_coverage
     - net_debt_ebitda
   thresholds:
@@ -287,8 +305,8 @@ covenants:
 
 rating:
   methodology: sp
-  industry_adjustment: -8.0         # Cyclical steel discount
-  size_adjustment: 3.0              # Large integrated producer premium
+  industry_adjustment: -12.0        # Cyclical steel discount
+  size_adjustment: 2.0              # Large integrated producer premium
   cycle_avg_ebitda_margin: 0.10     # TTC normalization baseline
   weights:
     leverage:      0.35
@@ -296,3 +314,33 @@ rating:
     profitability: 0.20
     liquidity:     0.15
 ```
+
+**Rusal** (methodology: default, metals industry override):
+```yaml
+covenants:
+  enabled: true
+  methodology: default        # metals industry → STEEL_COVENANTS + YAML overrides
+  warning_buffer: 0.10
+  acceleration_triggers:
+    - interest_coverage
+    - net_debt_ebitda
+  thresholds:
+    net_debt_ebitda_max:   4.5      # Rusal: more lenient than steel
+    interest_coverage_min: 2.0
+    debt_to_equity_max:    4.0
+    current_ratio_min:     1.0
+    ebitda_margin_min:     0.05
+
+rating:
+  methodology: sp
+  industry_adjustment: -6.0         # Less cyclical (vertical integration)
+  size_adjustment: 2.0
+  cycle_avg_ebitda_margin: 0.12
+  weights:
+    leverage:      0.35
+    coverage:      0.30
+    profitability: 0.20
+    liquidity:     0.15
+```
+
+**Note:** When `methodology: default` and `company.industry: metals`, the engine starts with `STEEL_COVENANTS` (tighter defaults) and applies YAML threshold overrides on top. This ensures metals companies get appropriate base thresholds while allowing per-company customization.

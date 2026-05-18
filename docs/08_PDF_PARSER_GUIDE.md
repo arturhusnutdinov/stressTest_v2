@@ -1,6 +1,6 @@
 # PDF Parser Guide — Rusal Financial Statements
 
-**Updated:** April 2026 | **Status:** Production ready
+**Updated:** May 2026 | **Version:** 2.1.0 | **Status:** Production ready
 
 ## Overview
 
