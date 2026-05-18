@@ -30,7 +30,8 @@ companies/nornickel/
 ```
 
 ### Результат
-- ✅ `init_company.py` отработал: 11 директорий, 5 YAML конфигов, 10 notebooks, README.md
+- ✅ `init_company.py` отработал: 13 директорий, 5 YAML конфигов, 10 notebooks, Excel шаблон, README.md
+- ✅ Доработан `init_company.py`: +data/statements/, +data/annual_reports/, +Excel шаблон автогенерация
 - ✅ project.yaml с шаблонными значениями (IFRS, USD, metals)
 - ✅ stress_scenarios.yaml — пустой шаблон
 - ✅ 10 Jupyter notebooks скопированы с company_id=nornickel
@@ -57,7 +58,8 @@ companies/nornickel/
 **Статус:** В ожидании — ручной ввод пользователем
 
 ### План
-- Пользователь заполняет Excel шаблон (`companies/nornickel/data/excel/nornickel_unified.xlsx`)
+- ✅ Excel шаблон создан: `companies/nornickel/data/excel/nornickel_unified.xlsx` (8 листов, 15 лет 2011-2025)
+- Пользователь заполняет Excel шаблон данными из МСФО отчётности
 - Данные: IS / BS / CF за 2011-2025 (15 лет)
 - По образцу `companies/rusal/data/rusal_complete_v4.xlsx` (21 лист)
 - Минимум: листы `history_is`, `history_bs`, `history_cf`

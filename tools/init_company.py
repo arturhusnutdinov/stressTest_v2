@@ -31,6 +31,8 @@ DIRS = [
     "data/macro",
     "data/debt",
     "data/operational",
+    "data/statements",
+    "data/annual_reports",
     "notebooks",
     "outputs/model",
     "outputs/stress",
@@ -171,7 +173,13 @@ def init_company(
 
     print(f"  ✓ notebooks ({copied} скопировано + {len(PLACEHOLDER_NOTEBOOKS)} placeholder)")
 
-    # ── 8. README.md ─────────────────────────────────────────────────────────
+    # ── 8. Excel шаблон ───────────────────────────────────────────────────────
+    excel_path = company_dir / "data" / "excel" / f"{company_id}_unified.xlsx"
+    if not excel_path.exists():
+        _create_excel_template(excel_path, company_id)
+        print(f"  ✓ data/excel/{company_id}_unified.xlsx")
+
+    # ── 9. README.md ─────────────────────────────────────────────────────────
     (company_dir / "README.md").write_text(f"""\
 # {name}
 
@@ -191,6 +199,8 @@ companies/{company_id}/
     stress_scenarios.yaml     # Стресс-сценарии
   data/
     excel/                    # UNIFIED Excel с данными (IS/BS/CF/debt/macro)
+    statements/               # МСФО / US GAAP отчётность (PDF)
+    annual_reports/           # Годовые отчёты для акционеров (PDF)
     macro/                    # Макро-факторы (CSV)
     debt/                     # Долговые расписания
     operational/              # Операционные KPI
@@ -231,6 +241,86 @@ python3 -m engine.orchestrator {company_id} --no-preprocess
     print(f"  3. Запустите:        companies/{company_id}/notebooks/01_Data_Loading.ipynb")
 
     return company_dir
+
+
+def _create_excel_template(path: Path, company_id: str) -> None:
+    """Создаёт пустой Excel шаблон с листами IS/BS/CF/segments/debt/ppe/macro."""
+    try:
+        import openpyxl
+    except ImportError:
+        path.write_bytes(b"")  # fallback: пустой файл
+        return
+
+    wb = openpyxl.Workbook()
+    years = list(range(2011, 2026))
+
+    # history_is
+    ws = wb.active
+    ws.title = "history_is"
+    ws.append(["metric"] + years)
+    for m in ["revenue", "cost_of_goods_sold", "gross_profit",
+              "selling_general_admin", "other_operating_income", "other_operating_expense",
+              "asset_impairment", "depreciation_amortization", "total_depreciation_amortization",
+              "ebitda", "ebit", "interest_expense", "interest_income",
+              "earnings_from_investees", "other_financial_costs",
+              "earnings_before_tax", "tax_expense", "net_income"]:
+        ws.append([m] + [None] * len(years))
+
+    # history_bs
+    ws2 = wb.create_sheet("history_bs")
+    ws2.append(["metric"] + years)
+    for m in ["cash_and_equivalents", "accounts_receivable", "inventory",
+              "other_current_assets", "total_current_assets",
+              "ppe_net", "ppe_gross", "ppe_accumulated_depreciation",
+              "intangibles", "goodwill", "investments_long_term",
+              "deferred_tax_asset", "other_non_current_assets",
+              "total_non_current_assets", "total_assets",
+              "accounts_payable", "short_term_debt", "taxes_payable",
+              "other_current_liabilities", "total_current_liabilities",
+              "long_term_debt", "deferred_tax_liability",
+              "other_non_current_liabilities", "total_non_current_liabilities",
+              "total_liabilities",
+              "share_capital", "additional_paid_in_capital", "retained_earnings",
+              "accumulated_other_comprehensive_income",
+              "total_equity", "non_controlling_interests",
+              "total_liabilities_and_equity"]:
+        ws2.append([m] + [None] * len(years))
+
+    # history_cf
+    ws3 = wb.create_sheet("history_cf")
+    ws3.append(["metric"] + years)
+    for m in ["net_income", "depreciation_amortization", "deferred_tax",
+              "change_accounts_receivable", "change_inventory",
+              "change_accounts_payable", "change_other_working_capital",
+              "other_operating_activities", "cfo_total",
+              "capital_expenditure", "acquisitions", "disposal_proceeds",
+              "other_investing_activities", "cfi_total",
+              "debt_issuance", "debt_repayment",
+              "dividends_paid", "share_buyback",
+              "other_financing_activities", "cff_total",
+              "net_change_in_cash", "cash_beginning", "cash_ending"]:
+        ws3.append([m] + [None] * len(years))
+
+    # segments, debt_instruments, ppe_components, macro_factors, operational_drivers
+    ws4 = wb.create_sheet("segments")
+    ws4.append(["segment", "metric"] + years)
+
+    ws5 = wb.create_sheet("debt_instruments")
+    ws5.append(["instrument_id", "instrument_name", "currency", "opening_balance",
+                "interest_rate", "rate_type", "base_rate_factor",
+                "maturity_date", "amortization_profile", "callable_flag",
+                "yr1", "yr2", "yr3", "yr4", "yr5", "yr6_plus"])
+
+    ws6 = wb.create_sheet("ppe_components")
+    ws6.append(["category", "movement", "year", "value"])
+
+    ws7 = wb.create_sheet("macro_factors")
+    ws7.append(["factor"] + years)
+
+    ws8 = wb.create_sheet("operational_drivers")
+    ws8.append(["driver", "unit"] + years)
+
+    wb.save(path)
 
 
 def _write_stress_scenarios(path: Path, industry: str) -> None:
