@@ -1507,39 +1507,46 @@ def validate_model(rev_hist: dict, rev_fitted: dict,
 
 **Назначение:** Построение 3-Statement модели (IS/BS/CF).
 
-**Компоненты:**
-- `core.py` — Ядро модели (build_model)
-- `io.py` — Загрузка и маппинг канонических форм
-- `schedules/` — Расписания для различных статей:
-  - `capex.py` — CapEx расписание
-  - `ppe.py` — PP&E corkscrew
-  - `wc.py` — Working Capital (days method)
-  - `debt_rc.py` — Долг и RC с рефинансированием
-  - `debt_refinancing.py` — Логика рефинансирования
-  - `tax.py` — Tax Schedule с NOL
+**Компоненты (после декомпозиции v2.1.0):**
+- `core.py` (1,696 строк) — ThreeStatementModel, итерационный солвер
+- `loader.py` (824 строки) — DB + YAML → ModelConfig + HistoricState
+- `inputs.py` (515 строк) — YearState, ModelConfig, DebtSettings dataclasses
+- `saver.py` (299 строк) — Запись результатов в DB
+- `constants.py` (81 строка) — Все именованные константы
+- `blocks/` — 6 извлечённых блоков:
+  - `revenue.py`, `sga.py`, `cash.py`, `bs_totals.py`, `is_subtotals.py`, `bs_other.py`
+- `schedules/` — 7 расписаний:
+  - `debt.py` (581 строка) — DebtOptimizer (instrument-level corkscrew)
+  - `ppe.py` — PP&E corkscrew (additions/disposals/depreciation)
+  - `lease.py` (523 строки) — IFRS 16 / ASC 842
+  - `wc.py` (233 строки) — Working Capital (DSO/DIH/DPO)
+  - `tax.py` (126 строк) — Tax Schedule с NOL carryforward
+  - `equity.py` (139 строк) — Dividends, buybacks
+  - `intangibles.py` — Intangibles corkscrew
+- `cogs_block.py` (173 строки) — Component-based COGS (Rusal)
+- `segment_revenue.py` (281 строка) — Segment Volume × Price
 
-**Процесс построения модели:**
+**Процесс построения модели (итерационный солвер):**
 
 ```
-1. Загрузка истории (IS/BS/CF)
-↓
-2. Загрузка макропрогноза
-↓
-3. Прогнозирование Revenue (Elastic Net или EWA)
-↓
-4. Прогнозирование COGS и SG&A
-↓
-5. Построение IS (Income Statement)
-↓
-6. Построение расписаний (CapEx, PP&E, WC, Debt)
-↓
-7. Построение BS (Balance Sheet)
-↓
-8. Построение CF (Cash Flow Statement)
-↓
-9. Балансировка (Cash как balancing item)
-↓
-10. Итерации для циклических зависимостей
+Для каждого прогнозного года:
+  1. Revenue (ElasticNet / Segment / EWA)
+  2. COGS (PPI uplift / Component-based)
+  3. SGA (EWA + CPI индексация)
+  4. PPE corkscrew → D&A
+  5. WC days → AR, Inventory, AP
+  6. Leases (IFRS 16 / ASC 842)
+  7. Intangibles corkscrew
+  Итерационный цикл (max 10 итераций, tol $1,000):
+    8. Debt (DebtOptimizer: 70 инструментов → interest)
+    9. Interest payable
+    10. IS subtotals (EBITDA → EBIT → EBT)
+    11. Tax (NOL carryforward, DTA/DTL)
+    12. Equity (dividends, buybacks)
+    13. Cash Flow (CFO + CFI + CFF)
+    14. Cash balance
+    15. BS totals + BS check
+    16. Covenant acceleration check
 ```
 
 #### 7.3.3a Database Module (engine/database/)
@@ -1547,8 +1554,8 @@ def validate_model(rev_hist: dict, rev_fitted: dict,
 **Назначение:** Централизованное хранение данных в SQLite.
 
 **Компоненты:**
-- `sqlite_wrapper.py` — Низкоуровневая обертка над SQLite
-- `data_mart.py` — Витрина данных (единый слой доступа)
+- `repository.py` (746 строк) — Repository pattern, CRUD для всех таблиц
+- `schema.py` (563 строки) — DDL, миграции, индексы
 
 **Преимущества:**
 - Единая точка доступа к данным
@@ -2020,51 +2027,44 @@ CovenantsCheckResult:
 ### 7.4 Структура проекта
 
 ```
-stressTest_v2/
-├── data_mart_v2.db                          # Централизованная SQLite БД
+stressTest_v2/                                   # v2.1.1 (May 2026)
+├── data_mart_v2.db                              # Централизованная SQLite БД
+├── pyproject.toml                               # pip install -e ., CLI stresstest
+├── Dockerfile                                   # python:3.12-slim
 ├── engine/
-│   ├── orchestrator.py                      # Сквозной E2E запуск
-│   ├── database/                            # SQLite интеграция (Repository)
-│   ├── ecm/                                 # VECM/MR макропрогнозирование
-│   ├── model/                               # Построение 3-Statement модели
-│   │   ├── core.py                          # ThreeStatementModel (2,044 строк)
-│   │   └── schedules/                       # PPE, Debt, Tax, Lease блоки
-│   ├── preprocessor/                        # Калибровка параметров (1,095 строк)
-│   ├── stress/                              # Стресс-тестирование
-│   │   ├── core.py                          # ShockSpec, StressScenario, ScenarioLoader
-│   │   └── runner.py                        # StressRunner (428 строк)
-│   ├── rating/                              # Кредитный рейтинг
-│   │   └── core.py                          # RatingEngine (459 строк)
-│   ├── covenants/                           # Мониторинг ковенантов
-│   │   └── core.py                          # CovenantsChecker (389 строк)
-│   ├── loader/                              # ExcelLoader, EDGAR loader
-│   └── acceptance/                          # Проверки балансировки BS=0
+│   ├── orchestrator.py                          # E2E pipeline (406 строк)
+│   ├── constants.py                             # Именованные константы (81 строка)
+│   ├── database/
+│   │   ├── repository.py                        # Repository pattern (746 строк)
+│   │   └── schema.py                            # DDL + миграции (563 строки)
+│   ├── ecm/                                     # VECM/MR макропрогнозирование
+│   │   └── vecm.py                              # VECM реализация (1,666 строк)
+│   ├── model/
+│   │   ├── core.py                              # ThreeStatementModel (1,696 строк)
+│   │   ├── loader.py                            # DB + YAML → ModelConfig (824 строки)
+│   │   ├── inputs.py                            # YearState, ModelConfig (515 строк)
+│   │   ├── blocks/                              # 6 блоков: revenue, sga, cash, ...
+│   │   ├── schedules/                           # 7 расписаний: debt, ppe, tax, lease, ...
+│   │   ├── cogs_block.py                        # Component COGS — Rusal (173 строки)
+│   │   └── segment_revenue.py                   # Segment Vol×Price (281 строка)
+│   ├── preprocessor/core.py                     # Калибровка параметров (1,094 строки)
+│   ├── stress/
+│   │   ├── core.py                              # ShockSpec, ScenarioLoader (282 строки)
+│   │   └── runner.py                            # StressRunner (427 строк)
+│   ├── rating/core.py                           # RatingEngine S&P (458 строк)
+│   ├── covenants/core.py                        # CovenantsChecker (410 строк)
+│   └── loader/excel.py                          # ExcelLoader (764 строки)
 ├── companies/
-│   ├── rusal/                               # Rusal (IFRS, алюминий)
-│   │   ├── configs/
-│   │   │   ├── project.yaml                 # Главный конфиг модели
-│   │   │   ├── stress_scenarios.yaml        # 5 стресс-сценариев
-│   │   │   └── macro_ecm.yaml              # Конфиг макро-движка
-│   │   └── data/rusal_complete_v4.xlsx      # Excel данные (21 лист)
-│   └── us_steel/                            # US Steel (US GAAP, сталь)
-│       ├── configs/
-│       │   ├── project.yaml
-│       │   ├── stress_scenarios.yaml
-│       │   └── macro_ecm.yaml
-│       ├── data/excel/                      # Excel данные
-│       └── notebooks/                       # Jupyter ноутбуки
-├── parsers/                                 # PDF Parser для Rusal
-│   ├── pdf_parser.py                        # ~1,000 строк (pdfplumber)
-│   └── adapters/rusal.yaml                  # YAML-адаптер (~600 строк)
-├── macro/                                   # Макро-данные
-│   ├── global/drivers/*.csv                 # Общие факторы
-│   └── industry/{sector}/drivers/*.csv      # Отраслевые факторы
-├── tools/                                   # Утилиты
-│   ├── load_schedule_sheets.py              # Загрузка Notes из Excel
-│   ├── excel_template_generator.py          # Генератор шаблонов
-│   └── export_data_to_excel_template.py     # Экспорт в Excel
-├── tests/integration/                       # Тестовый стенд
-└── templates/                               # Шаблоны для новых компаний
+│   ├── rusal/configs/                           # project.yaml, stress_scenarios.yaml (8 сценариев)
+│   └── us_steel/configs/                        # project.yaml, stress_scenarios.yaml
+├── parsers/
+│   ├── pdf_parser.py                            # Rusal PDF extraction (~1,000 строк)
+│   └── adapters/rusal.yaml                      # YAML-адаптер (~600 строк)
+├── tests/                                       # 45 тестов (unit + integration)
+│   ├── unit/                                    # preprocessor, loader, core, schema
+│   └── integration/                             # E2E build_model, тест-стенд
+├── .github/workflows/ci.yml                     # CI/CD (Python 3.11/3.12, pytest + ruff)
+└── docs/                                        # Документация + учебник
 ```
 
 ### 7.5 Преимущества архитектуры
@@ -2345,14 +2345,17 @@ rating:
 | is_income_sign | credit_negative | natural |
 | Revenue method | elastic_net (HRC) | segment (3 сегмента) |
 | COGS method | standard (PPI uplift) | component (4 компонента) |
-| Debt mode | full (schedule_based) | optimizer |
-| Floating rate | — | CBR KeyRate linked (9 инструментов) |
-| Revolving credit | $2B, 300bp spread | — |
-| Covenant methodology | steel (5 ковенантов) | default (3 ковенанта) |
+| Debt mode | full/optimizer (30 инструментов) | optimizer (70 инструментов) |
+| Floating rate | — | 9 CBR KeyRate + spread |
+| Revolving credit | $2B, 300bp spread | — (use_debt_rc=false) |
+| Covenant methodology | steel (5 ковенантов) | default+metals (5 ковенантов + YAML overrides) |
 | Industry adjustment | −12.0 | −6.0 |
 | Cycle avg EBITDA | 10% | 12% |
+| Stress scenarios | 1 | 8 |
+| Rating result | BBB→A- (score 58–67) | B (score 29–33) |
 | History | 2010–2024 (15 лет) | 2011–2025 (15 лет) |
 | Forecast | 2025–2029 | 2026–2030 |
+| Tests | 45 (unit + integration) | 45 (unit + integration) |
 
 
 ## 8. Практический пример: US Steel Corporation
@@ -2611,15 +2614,16 @@ results = build_model(root, company)
 |----------|---------|
 | Стандарт | IFRS |
 | Валюта | USD (расходы частично в RUB) |
-| Выручка 2024 | $12.1B |
-| EBITDA 2024 | $1.5B |
+| Выручка 2025 | $12.9B |
+| EBITDA 2025 | $1.5B |
+| Debt mode | optimizer (69 инструментов в DB) |
 | Источник данных | PDF парсер (EN FS PDFs) |
 
 ### 8b.2 PDF Parser
 
 Данные автоматически извлечены из 14 EN PDF файлов (2012-2025).
-PPE corkscrew: 273 строк,
-Debt: 71 инструментов.
+PPE corkscrew: 273 строк.
+Debt: 69 инструментов в DB (70 загружается в модель, 23 активных в 2026).
 
 ### 8b.3 Сегментная модель выручки
 
@@ -2640,35 +2644,59 @@ lme_aluminium, lme_alumina, usd_rub, brent, gdp_world, cpi_ru, ppi_ru, russian_p
 
 ### 8b.6 Floating rate debt
 
-9 инструментов привязаны к CBR KeyRate.
-Прогноз: 2026=0.14%, 2027=0.11%, 2028=0.09%, 2029=0.08%
+9 инструментов привязаны к CBR KeyRate (spread 1.2–3.0%).
+Прогноз CBR: 2026=14%, 2027=11%, 2028=9%, 2029=8%, 2030=7%.
+Interest expense: 818M (2026) → 718M (2030) — снижается с CBR.
 
-### 8b.7 Корки
+### 8b.7 Корки (Corkscrew Schedules)
 
-| Корк | Таблица | Строк |
-|------|---------|-------|
-| PPE | ppe_components | 273 |
-| Debt | debt_instruments | 71 |
-| Intangibles | intangible_assets | 24 |
-| Tax | tax_schedule | 6 |
-| Provisions | provisions_schedule | 20 |
-| Associates | associates_schedule | 54 |
+| Корк | Таблица | Строк | Closing=BS |
+|------|---------|------:|:----------:|
+| PPE | ppe_components | 273 | verified |
+| Debt | debt_instruments + debt_schedule | 666 | verified (Δ=0) |
+| Intangibles | intangible_assets | 24 | verified |
+| Tax | tax_schedule | 6 | verified |
+| Provisions | provisions_schedule | 20 | verified |
+| Associates | associates_schedule | 54 | verified |
+| Lease | lease_schedule | 4 | verified |
+| Equity | equity_schedule | 15 | verified |
 
 ### 8b.8 Сравнение Rusal vs US Steel
 
 | Аспект | US Steel | Rusal |
 |--------|----------|-------|
 | Стандарт | US GAAP | IFRS |
-| Источник | EDGAR | PDF парсер |
-| Revenue | Macro regression | Сегментная (Al+Alumina) |
-| COGS | PPI-linked ratio | Component-based |
-| Macro | steel_price_hrc, gdp_us | lme_al, usd_rub, power_price |
-| Floating debt | нет | CBR KeyRate + spread |
+| Источник | EDGAR XBRL | PDF парсер |
+| Revenue | ElasticNet (HRC) | Сегментная (Al+Alumina+Other) |
+| COGS | PPI-linked ratio | Component-based (4 компонента) |
+| Debt mode | full (30 инструментов) | optimizer (70 инструментов) |
+| Macro | steel_price_hrc, gdp_us, 8 факторов | lme_al, usd_rub, 8 факторов |
+| Floating debt | нет | 9 CBR KeyRate + spread |
+| Stress | 1 сценарий | 8 сценариев |
+| Rating | BBB→A- | B (stable) |
+| Covenants | steel (0 breaches) | default+metals (9 breaches) |
 
 ### 8b.9 Результаты
 
-BS Identity: 0.000004. Rating: B (stable).
-EBITDA margin: 10.7% (2026) → 8.1% (2030).
+| Year | Revenue | EBITDA | Margin | Net Income | ND/EBITDA | ICR | Rating |
+|------|--------:|-------:|-------:|-----------:|----------:|----:|--------|
+| 2026 | 13,572M | 1,446M | 10.7% | 775M | 4.5x | 1.8x | B |
+| 2027 | 14,366M | 1,413M | 9.8% | 714M | 4.5x | 1.7x | B+ |
+| 2028 | 15,084M | 1,373M | 9.1% | 670M | 4.9x | 1.8x | B |
+| 2029 | 15,543M | 1,345M | 8.7% | 639M | 5.1x | 1.9x | B |
+| 2030 | 16,017M | 1,302M | 8.1% | 567M | 5.5x | 1.8x | B |
+
+BS Identity: 0.000004. CF diff: 0.000000. Stress: 8/8 OK. Covenant breaches: 9 (ND/EBITDA и ICR).
+
+**Debt schedule:**
+
+| Year | Active | Opening | Closing | Interest | Draw | Repay |
+|------|-------:|--------:|--------:|---------:|-----:|------:|
+| 2026 | 23/70 | 9,602M | 9,117M | 818M | 0M | 485M |
+| 2027 | 23/70 | 9,117M | 9,074M | 809M | 0M | 43M |
+| 2028 | 18/70 | 9,074M | 7,491M | 766M | 0M | 1,583M |
+| 2029 | 18/70 | 7,491M | 7,378M | 721M | 0M | 113M |
+| 2030 | 19/70 | 7,378M | 7,591M | 718M | 223M | 10M |
 
 
 ### 8b.10 Практическое руководство: от PDF до модели
@@ -3113,19 +3141,21 @@ python3 parsers/tests/smoke_rusal_note13_ppe.py
 ### 10.4 Ресурсы
 
 **Документация:**
-- `docs/YAML_CONFIGURATION_GUIDE.md` — руководство по конфигурации
-- `docs/DEBT_MODELING_GUIDE.md` — детальное руководство по моделированию долга
-- `docs/CANONICAL_FORMS.md` — канонические формы отчетности
+- `docs/03_YAML_CONFIGURATION.md` — руководство по конфигурации (497 строк)
+- `docs/06_STRESS_RATING_COVENANTS.md` — стресс, рейтинг, ковенанты
+- `docs/09_RUSAL_MODEL_GUIDE.md` — полное описание Rusal модели
+- `docs/HANDOFF_FINAL.md` — передача контекста с актуальными метриками
 
-**Примеры:**
-- `companies/us_steel/` — полный пример с US Steel (US GAAP, сталь, EDGAR XBRL)
-- `companies/rusal/` — полный пример с Rusal (IFRS, алюминий, PDF парсер, 2,457 строк в DB)
-- `templates/` — шаблоны для новых компаний
+**Примеры (production ready):**
+- `companies/us_steel/` — US Steel (US GAAP, сталь, EDGAR XBRL), Rating BBB→A-
+- `companies/rusal/` — Rusal (IFRS, алюминий, PDF парсер), Rating B, 8 stress scenarios
 
-**Инструменты:**
-- Jupyter Notebooks для интерактивного анализа
-- SQLite база данных для централизованного хранения
-- YAML конфигурации для настройки моделей
+**Инфраструктура:**
+- 45 тестов (pytest): `python3 -m pytest tests/ -v`
+- CI/CD: GitHub Actions (Python 3.11/3.12)
+- CLI: `stresstest` (после `pip install -e .`)
+- Docker: `docker build -t stresstest .`
+- SQLite база данных `data_mart_v2.db` (WAL mode)
 
 **Успехов в финансовом моделировании!**
 
