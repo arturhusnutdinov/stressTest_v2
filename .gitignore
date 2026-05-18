@@ -17,6 +17,7 @@ __pycache__/
 *.csv
 *.pdf
 !templates/excel_templates/*.xlsx
+!companies/*/data/excel/*_unified.xlsx
 
 # IDE
 .idea/

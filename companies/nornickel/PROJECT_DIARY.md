@@ -58,8 +58,28 @@ companies/nornickel/
 **Статус:** В ожидании — ручной ввод пользователем
 
 ### План
-- ✅ Excel шаблон создан: `companies/nornickel/data/excel/nornickel_unified.xlsx` (8 листов, 15 лет 2011-2025)
-- Пользователь заполняет Excel шаблон данными из МСФО отчётности
+- ✅ XBRL парсинг: 2 файла (2023, 2025) → 162 серии, 5 лет данных (2021-2025)
+- ✅ Excel v2 с корками и schedule sheets: `nornickel_unified.xlsx` (14 листов, 500/1545 ячеек = 32%)
+- ✅ IS: 22 метрики (revenue, cogs_metal/other, gross_profit, g&a, ebit, finance, ebt, tax, ni)
+- ✅ BS: 42 метрики (full IFRS structure с NN-specific: social liabilities, provisions)
+- ✅ CF: 38 метрик (indirect method, full WC breakdown, investing, financing)
+- ✅ XBRL данные синим шрифтом, 2011-2020 пустые для ручного ввода
+- Пользователь заполняет 2011-2020 из МСФО отчётности (10 лет)
+
+### Что есть из XBRL, что нет
+**Есть (автозаполнено):**
+- IS/BS/CF face statements: 2021-2025 (из двух iXBRL файлов)
+- Equity Schedule (SOCIE): 2021-2025 по компонентам (SC, SP, RE, AOCI, NCI)
+- Tax DTA/DTL: 2023-2025
+- Lease liabilities: 2021-2025 (current + noncurrent)
+- Provisions: 2023-2025 (current + noncurrent)
+- Dividends paid по компонентам: 2021-2025
+
+**Нет в iXBRL (нужен ручной ввод из Notes):**
+- PPE components (Note): gross/accum_dep по категориям — нужен ввод
+- Debt instruments (Note): отдельные инструменты с rates/maturity — нужен ввод
+- Intangibles breakdown (Note) — нужен ввод
+- Segments revenue (Ni/Pd/Cu/Pt) — нужен ввод из Annual Report
 - Данные: IS / BS / CF за 2011-2025 (15 лет)
 - По образцу `companies/rusal/data/rusal_complete_v4.xlsx` (21 лист)
 - Минимум: листы `history_is`, `history_bs`, `history_cf`
