@@ -315,6 +315,9 @@ class ModelInputLoader:
             nol_max_utilization_pct=float(
                 (mode_cfg.get("taxes") or {}).get("nol_max_utilization_pct", 0.80) or 0.80
             ),
+            tax_paid_timing=str(
+                (mode_cfg.get("taxes") or {}).get("tax_paid_timing", "next_year")
+            ),
             # Accounting conventions (drive COGS/interest treatment in core.py)
             da_in_cogs=bool(cfg.get("accounting_conventions", {}).get("da_in_cogs", True)),
             capitalize_interest=bool(

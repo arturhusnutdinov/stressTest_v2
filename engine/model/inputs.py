@@ -461,9 +461,10 @@ class ModelConfig:
     covenant_acceleration_triggers: List[str] = field(
         default_factory=lambda: ['interest_coverage', 'net_debt_ebitda']
     )
-    # NOL config (used by TaxBlock)
+    # NOL / Tax config (used by TaxBlock)
     nol_opening_balance: float = 0.0
     nol_max_utilization_pct: float = 0.80
+    tax_paid_timing: str = "next_year"  # "current_year" | "next_year"
 
     # Accounting conventions (from project.yaml accounting_conventions section)
     da_in_cogs: bool = True

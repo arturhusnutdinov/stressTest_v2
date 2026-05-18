@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>stressTest Engine v2 — Methodology Guide</title>
+<title>stressTest Engine v2 — Методология финансового моделирования</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;1,300&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -18,10 +18,10 @@
   --amber: #D97706; --amber-light: #FEF3C7;
   --coral: #DC4A2D; --coral-light: #FEE2DA;
   --green: #16A34A; --green-light: #DCFCE7;
+  --red: #DC2626; --red-light: #FEE2E2;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.6; }
-
 .hero { background: var(--navy); color: white; padding: 48px 64px 40px; position: relative; overflow: hidden; }
 .hero::before { content: ''; position: absolute; right: -80px; top: -80px; width: 400px; height: 400px; border: 1px solid rgba(200,168,75,0.15); border-radius: 50%; }
 .hero::after { content: ''; position: absolute; right: 40px; top: 40px; width: 200px; height: 200px; border: 1px solid rgba(200,168,75,0.1); border-radius: 50%; }
@@ -32,19 +32,15 @@ body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: v
 .hero-stat { display: flex; flex-direction: column; gap: 2px; }
 .hero-stat-val { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 500; color: var(--gold-light); }
 .hero-stat-lbl { font-size: 11px; color: rgba(255,255,255,0.5); letter-spacing: 0.05em; }
-
 .nav { background: var(--navy-mid); padding: 0 64px; display: flex; gap: 0; border-bottom: 1px solid rgba(200,168,75,0.2); overflow-x: auto; }
 .nav a { color: rgba(255,255,255,0.6); text-decoration: none; font-size: 12px; font-weight: 500; padding: 12px 16px; border-bottom: 2px solid transparent; white-space: nowrap; transition: all 0.2s; letter-spacing: 0.03em; }
 .nav a:hover { color: white; border-bottom-color: var(--gold); }
-
 .page { max-width: 1100px; margin: 0 auto; padding: 48px 64px; }
-
 .section { margin-bottom: 56px; }
 .section-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid var(--navy); }
 .section-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--gold); letter-spacing: 0.15em; font-weight: 500; }
 .section-title { font-size: 20px; font-weight: 600; color: var(--navy); }
 .section-desc { font-size: 13px; color: var(--ink-3); margin-top: -16px; margin-bottom: 24px; max-width: 760px; font-style: italic; font-family: 'IBM Plex Serif', serif; }
-
 .node { display: inline-flex; flex-direction: column; gap: 2px; padding: 8px 14px; border-radius: 6px; border: 1px solid; font-size: 12px; min-width: 100px; cursor: default; }
 .node-title { font-weight: 600; font-size: 12px; }
 .node-sub { font-size: 11px; opacity: 0.75; }
@@ -54,366 +50,560 @@ body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: v
 .node-amber  { background: var(--amber-light);  border-color: #FCD34D; color: #92400E; }
 .node-coral  { background: var(--coral-light);  border-color: #FCA5A5; color: #991B1B; }
 .node-green  { background: var(--green-light);  border-color: #86EFAC; color: #14532D; }
-
-.arch-flow { display: flex; flex-direction: column; gap: 0; }
-.arch-row { display: flex; align-items: center; gap: 16px; padding: 8px 0; }
-.arch-arrow { text-align: center; padding: 4px 0; color: var(--ink-3); font-size: 18px; }
-
+.node-navy   { background: var(--navy);         border-color: var(--navy-mid); color: white; }
+.pipeline { display: flex; align-items: center; gap: 0; margin: 16px 0; overflow-x: auto; }
+.pipe-step { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 110px; }
+.pipe-box { padding: 8px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; text-align: center; width: 100%; }
+.pipe-sub { font-size: 10px; color: var(--ink-3); text-align: center; }
+.pipe-arrow { font-size: 16px; color: var(--rule-strong); padding: 0 4px; flex-shrink: 0; padding-bottom: 16px; }
 .formula { background: var(--navy); color: #A8C4F0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 14px 16px; border-radius: 6px; line-height: 1.8; margin: 8px 0; }
 .formula .hl { color: var(--gold-light); font-weight: 500; }
 .formula .comment { color: rgba(168,196,240,0.5); font-size: 11px; }
-
 table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; background: var(--bg-card); border-radius: 8px; overflow: hidden; border: 1px solid var(--rule); }
 th { background: var(--navy); color: white; padding: 10px 14px; text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.05em; }
 td { padding: 8px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 tr:last-child td { border-bottom: none; }
 tr:nth-child(even) td { background: var(--bg); }
-
 code { font-family: 'IBM Plex Mono', monospace; background: var(--bg-2); padding: 2px 6px; border-radius: 3px; font-size: 12px; color: var(--navy); }
 pre { background: var(--navy); color: #A8C4F0; font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 16px; border-radius: 6px; overflow-x: auto; line-height: 1.6; }
 pre .kw { color: var(--gold-light); }
 pre .str { color: #86EFAC; }
-
 .result-strip { background: var(--navy); color: white; padding: 10px 16px; border-radius: 6px; font-size: 12px; display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
 .result-item { display: flex; flex-direction: column; gap: 1px; }
 .result-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--gold-light); font-weight: 500; }
 .result-lbl { font-size: 10px; color: rgba(255,255,255,0.5); }
-
 .why-box { background: linear-gradient(135deg, #EEF0F8 0%, #E8EAF2 100%); border-left: 3px solid var(--navy-light); padding: 12px 16px; border-radius: 0 6px 6px 0; font-size: 12px; color: var(--ink-2); margin-top: 8px; }
 .why-box strong { color: var(--navy); }
-
+.narrative { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 10px; padding: 24px 28px; margin: 20px 0; position: relative; }
+.narrative::before { content: ''; position: absolute; left: 0; top: 20px; bottom: 20px; width: 4px; background: var(--navy); border-radius: 0 2px 2px 0; }
+.narrative-title { font-size: 14px; font-weight: 600; color: var(--navy); margin-bottom: 10px; margin-left: 4px; }
+.narrative p { font-size: 13px; color: var(--ink-2); line-height: 1.7; margin-bottom: 8px; margin-left: 4px; }
+.narrative p:last-child { margin-bottom: 0; }
+.analogy { background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 8px; padding: 14px 18px; margin: 12px 0; font-size: 12px; color: #78350F; }
+.analogy-label { font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #B45309; margin-bottom: 6px; }
+.alert { padding: 12px 16px; border-radius: 6px; font-size: 12px; border-left: 3px solid; margin: 8px 0; }
+.alert-info  { background: #EFF6FF; border-color: var(--blue); color: #1E3A5F; }
+.alert-warn  { background: #FFFBEB; border-color: var(--amber); color: #78350F; }
+.alert-good  { background: var(--green-light); border-color: var(--green); color: #14532D; }
+.layer-card { background: var(--bg-card); border: 1px solid var(--rule); border-radius: 10px; margin-bottom: 24px; overflow: hidden; }
+.layer-card-header { padding: 14px 20px; border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 12px; }
+.layer-badge { font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.08em; }
+.badge-blue   { background: var(--navy); color: white; }
+.badge-teal   { background: var(--teal); color: white; }
+.badge-purple { background: var(--purple); color: white; }
+.badge-coral  { background: var(--coral); color: white; }
+.badge-amber  { background: var(--amber); color: white; }
+.badge-green  { background: var(--green); color: white; }
+.layer-card-title { font-size: 15px; font-weight: 600; color: var(--navy); }
+.layer-card-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.layer-card-body.three-col { grid-template-columns: 1fr 1fr 1fr; }
+.layer-col { padding: 16px 20px; border-right: 1px solid var(--rule); }
+.layer-col:last-child { border-right: none; }
+.layer-col-title { font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 10px; }
 h3 { font-size: 15px; font-weight: 600; color: var(--navy); margin: 24px 0 12px; }
+.td-name { text-align: left !important; font-family: 'IBM Plex Sans', sans-serif !important; font-weight: 500; }
+.td-mono { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+.ok { color: var(--green); font-weight: 600; }
+.warn { color: var(--amber); font-weight: 600; }
+.bad { color: var(--red); font-weight: 600; }
 .footer { text-align: center; padding: 32px; color: var(--ink-3); font-size: 12px; border-top: 1px solid var(--rule); margin-top: 48px; }
+@media print { .nav { display: none; } .hero, .formula, pre { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .layer-card, .section { break-inside: avoid; } }
 </style>
 </head>
 <body>
 
 <div class="hero">
-  <div class="hero-label">Financial Modeling Engine</div>
-  <h1>stressTest Engine<br>v2.1.0</h1>
-  <div class="hero-sub">Universal three-statement model with stress testing, credit rating, and covenant monitoring</div>
+  <div class="hero-label">Методология финансового моделирования · v2.1.1 · Май 2026</div>
+  <h1>stressTest Engine v2<br>3-Statement модель со стресс-тестированием</h1>
+  <div class="hero-sub">Итеративный солвер · Instrument-level debt · S&P рейтинг · Ковенанты · 8 стресс-сценариев</div>
   <div class="hero-meta">
-    <div class="hero-stat"><span class="hero-stat-val">2</span><span class="hero-stat-lbl">Production Companies</span></div>
-    <div class="hero-stat"><span class="hero-stat-val">10</span><span class="hero-stat-lbl">Forecast Methods</span></div>
-    <div class="hero-stat"><span class="hero-stat-val">45</span><span class="hero-stat-lbl">Automated Tests</span></div>
-    <div class="hero-stat"><span class="hero-stat-val">0</span><span class="hero-stat-lbl">BS / CF Diff</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">2</span><span class="hero-stat-lbl">Компании (US GAAP + IFRS)</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">45</span><span class="hero-stat-lbl">Автотестов</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">0.000004</span><span class="hero-stat-lbl">BS diff ($)</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">70</span><span class="hero-stat-lbl">Debt инструментов (Rusal)</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">BBB→A-</span><span class="hero-stat-lbl">US Steel Rating</span></div>
+    <div class="hero-stat"><span class="hero-stat-val">B</span><span class="hero-stat-lbl">Rusal Rating</span></div>
   </div>
 </div>
 
 <nav class="nav">
-  <a href="#quickstart">Quick Start</a>
-  <a href="#arch">Architecture</a>
-  <a href="#datamodel">Data Model</a>
-  <a href="#config">Configuration</a>
-  <a href="#methods">Forecast Methods</a>
-  <a href="#corkscrews">Corkscrews</a>
-  <a href="#debt">Debt Engine</a>
-  <a href="#stress">Stress Testing</a>
-  <a href="#notebooks">Notebooks</a>
+  <a href="#idea">Главная идея</a>
+  <a href="#arch">Архитектура</a>
+  <a href="#preproc">Препроцессор</a>
+  <a href="#solver">Итеративный солвер</a>
+  <a href="#corkscrews">Корксрюс</a>
+  <a href="#debt">Долговой движок</a>
+  <a href="#stress">Стресс-тесты</a>
+  <a href="#rating">Рейтинг</a>
+  <a href="#covenants">Ковенанты</a>
+  <a href="#results">Результаты</a>
+  <a href="#config">Конфигурация</a>
+  <a href="#infra">Инфраструктура</a>
 </nav>
 
 <div class="page">
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section class="section" id="quickstart">
-  <div class="section-header">
-    <span class="section-num">00</span>
-    <h2 class="section-title">Quick Start</h2>
-  </div>
-  <p class="section-desc">Two interfaces: Python API for automation, CLI for one-off runs.</p>
-
-  <h3>Python API</h3>
-<pre><span class="kw">from</span> engine.orchestrator <span class="kw">import</span> build_model
-
-result = build_model(
-    company_id=<span class="str">"us_steel"</span>,
-    run_preprocessor=<span class="kw">True</span>,
-    run_macro=<span class="kw">True</span>,
-    run_model=<span class="kw">True</span>,
-)
-<span class="kw">print</span>(result.summary())</pre>
-
-  <h3>CLI</h3>
-<pre>stresstest us_steel
-stresstest rusal --stress --rating</pre>
-
-  <h3>Jupyter Notebooks</h3>
-<pre><span class="comment"># Copy universal notebook to your working directory</span>
-cp templates/notebooks/00_Build_Model_Main.ipynb .
-jupyter notebook 00_Build_Model_Main.ipynb</pre>
-
-  <div class="result-strip">
-    <div class="result-item"><span class="result-val">US Steel + RUSAL</span><span class="result-lbl">Supported Companies</span></div>
-    <div class="result-item"><span class="result-val">2010–2030</span><span class="result-lbl">Forecast Horizon</span></div>
-    <div class="result-item"><span class="result-val">BS = 0, CF = 0</span><span class="result-lbl">Balance Identity</span></div>
-  </div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section class="section" id="arch">
+<!-- ════════════════ 01 ГЛАВНАЯ ИДЕЯ ════════════════ -->
+<section class="section" id="idea">
   <div class="section-header">
     <span class="section-num">01</span>
-    <h2 class="section-title">Architecture — Layered Pipeline</h2>
-  </div>
-  <p class="section-desc">Data flows through 6 stages. Each stage reads from the previous, writes to SQLite. No circular dependencies between stages.</p>
-
-  <div class="arch-flow">
-    <div class="arch-row">
-      <div class="node node-blue"><span class="node-title">Preprocessor</span><span class="node-sub">14 metric groups</span></div>
-      <span style="color:var(--ink-3)">→</span>
-      <div class="node node-teal"><span class="node-title">Macro Module</span><span class="node-sub">VECM / ARIMA / ECM</span></div>
-      <span style="color:var(--ink-3)">→</span>
-      <div class="node node-purple"><span class="node-title">Model Loader</span><span class="node-sub">HistoricState + Config</span></div>
-    </div>
-    <div class="arch-row">
-      <div class="node node-purple"><span class="node-title">3-Statement Solver</span><span class="node-sub">Joint iteration</span></div>
-      <span style="color:var(--ink-3)">→</span>
-      <div class="node node-amber"><span class="node-title">Stress Runner</span><span class="node-sub">Scenario shocks</span></div>
-      <span style="color:var(--ink-3)">→</span>
-      <div class="node node-coral"><span class="node-title">Rating + Covenants</span><span class="node-sub">S&P / Moody's / Fitch</span></div>
-    </div>
+    <h2 class="section-title">Главная идея — в трёх предложениях</h2>
   </div>
 
-  <div class="why-box" style="margin-top:16px"><strong>Design principle:</strong> Model does not know about DB or YAML. All data arrives as typed dataclasses (<code>ModelConfig</code>, <code>HistoricState</code>, <code>YearState</code>). The loader is the only place that touches files and DB.</div>
+  <div class="narrative">
+    <div class="narrative-title">Зачем нужна 3-statement модель</div>
+    <p>
+      Финансовая модель «трёх отчётов» — это связанный прогноз <strong>Отчёта о прибылях и убытках (IS)</strong>,
+      <strong>Баланса (BS)</strong> и <strong>Отчёта о движении денежных средств (CF)</strong> компании на 5 лет вперёд.
+      Модель учитывает взаимозависимости: процентные расходы зависят от долга, долг — от свободного денежного потока,
+      а денежный поток — от чистой прибыли, которая уже включает проценты.
+    </p>
+    <p>
+      Движок решает эту циклическую зависимость <strong>итерационно</strong>: для каждого года
+      прогоняет цикл «Долг → Проценты → Налог → Прибыль → Cash → Долг» до сходимости (tolerance $1,000, max 10 итераций).
+      На выходе — полностью сбалансированный прогноз, где <strong>Активы = Пассивы + Капитал</strong> с точностью до $0.000004.
+    </p>
+    <p>
+      Поверх базового прогноза работают три аналитических модуля: <strong>стресс-тестирование</strong> (8 сценариев для Rusal),
+      <strong>кредитный рейтинг</strong> (методология S&P) и <strong>мониторинг ковенантов</strong> (breach/warning/ok).
+    </p>
+  </div>
+
+  <div class="pipeline">
+    <div class="pipe-step"><div class="pipe-box node-blue">Препроцессор<br>1,094 строки</div><div class="pipe-sub">EWA, OLS, betas</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="pipe-box node-teal">Макро-модуль<br>VECM/ARIMA</div><div class="pipe-sub">8 факторов</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="pipe-box node-purple">3-Statement<br>1,696 строк</div><div class="pipe-sub">6 блоков + 7 schedules</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="pipe-box node-amber">Стресс<br>8 сценариев</div><div class="pipe-sub">macro + driver shocks</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="pipe-box node-coral">Рейтинг<br>S&P scorecard</div><div class="pipe-sub">4 sub-scores</div></div>
+    <div class="pipe-arrow">→</div>
+    <div class="pipe-step"><div class="pipe-box node-green">Ковенанты<br>5 метрик</div><div class="pipe-sub">breach / warning / ok</div></div>
+  </div>
+
+  <div class="analogy">
+    <div class="analogy-label">Аналогия</div>
+    3-statement модель — это Excel-модель инвестбанкира, но реализованная в коде.
+    Вместо ячеек — dataclass <code>YearState</code> (80+ полей), вместо ручного подбора — итеративный солвер,
+    вместо «руками менять допущения» — YAML-конфигурация + автоматическая калибровка из истории.
+  </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section class="section" id="datamodel">
+<!-- ════════════════ 02 АРХИТЕКТУРА ════════════════ -->
+<section class="section" id="arch">
   <div class="section-header">
     <span class="section-num">02</span>
-    <h2 class="section-title">Data Model — YearState</h2>
+    <h2 class="section-title">Архитектура — после декомпозиции v2.1.0</h2>
   </div>
-  <p class="section-desc">The central dataclass. One instance per forecast year. 80+ fields covering full IS, BS, and CF.</p>
+  <p class="section-desc">core.py: 2,044 → 1,696 строк. 6 блоков извлечено в blocks/, 7 расписаний в schedules/. Все константы — в constants.py.</p>
+
+  <div class="layer-card">
+    <div class="layer-card-header">
+      <span class="layer-badge badge-purple">ENGINE</span>
+      <span class="layer-card-title">Структура engine/ (12,000+ строк Python)</span>
+    </div>
+    <div class="layer-card-body three-col">
+      <div class="layer-col">
+        <div class="layer-col-title">Ядро модели</div>
+        <table style="margin:0;border:0">
+          <tr><td class="td-mono">core.py</td><td>1,696 строк — солвер</td></tr>
+          <tr><td class="td-mono">loader.py</td><td>824 — DB+YAML → Config</td></tr>
+          <tr><td class="td-mono">inputs.py</td><td>515 — YearState, ModelConfig</td></tr>
+          <tr><td class="td-mono">constants.py</td><td>81 — именованные константы</td></tr>
+          <tr><td class="td-mono">blocks/</td><td>6 блоков (revenue, sga, ...)</td></tr>
+          <tr><td class="td-mono">schedules/</td><td>7 расписаний (debt, ppe, ...)</td></tr>
+        </table>
+      </div>
+      <div class="layer-col">
+        <div class="layer-col-title">Специальные блоки</div>
+        <table style="margin:0;border:0">
+          <tr><td class="td-mono">debt.py</td><td>581 — DebtOptimizer</td></tr>
+          <tr><td class="td-mono">lease.py</td><td>523 — IFRS 16 / ASC 842</td></tr>
+          <tr><td class="td-mono">wc.py</td><td>233 — DSO/DIH/DPO</td></tr>
+          <tr><td class="td-mono">tax.py</td><td>126 — NOL, DTA/DTL</td></tr>
+          <tr><td class="td-mono">cogs_block.py</td><td>173 — Component COGS</td></tr>
+          <tr><td class="td-mono">segment_revenue.py</td><td>281 — Vol×Price</td></tr>
+        </table>
+      </div>
+      <div class="layer-col">
+        <div class="layer-col-title">Downstream модули</div>
+        <table style="margin:0;border:0">
+          <tr><td class="td-mono">stress/runner.py</td><td>427 — 8 сценариев</td></tr>
+          <tr><td class="td-mono">rating/core.py</td><td>458 — S&P scorecard</td></tr>
+          <tr><td class="td-mono">covenants/core.py</td><td>410 — breach monitor</td></tr>
+          <tr><td class="td-mono">preprocessor/</td><td>1,094 — калибровка</td></tr>
+          <tr><td class="td-mono">macro/vecm.py</td><td>1,666 — VECM/ARIMA</td></tr>
+          <tr><td class="td-mono">orchestrator.py</td><td>406 — E2E pipeline</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="why-box"><strong>Принцип:</strong> Модель не знает о DB или YAML. Все данные приходят как типизированные dataclass (<code>ModelConfig</code>, <code>HistoricState</code>, <code>YearState</code>). Loader — единственное место, которое читает файлы и БД.</div>
+</section>
+
+<!-- ════════════════ 03 ПРЕПРОЦЕССОР ════════════════ -->
+<section class="section" id="preproc">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2 class="section-title">Препроцессор — калибровка из истории</h2>
+  </div>
+  <p class="section-desc">1,094 строки. Вычисляет ~950 метрик из 15 лет истории. EWA halflife=3 года — последние данные весят больше.</p>
 
   <table>
-    <tr><th style="width:25%">Statement</th><th style="width:45%">Key Fields</th><th style="width:30%">Validation</th></tr>
-    <tr>
-      <td><strong>Income Statement</strong></td>
-      <td><code>revenue</code>, <code>cogs</code>, <code>sga</code>, <code>ebitda</code>, <code>ebit</code>, <code>interest_expense</code>, <code>ebt</code>, <code>tax_expense</code>, <code>net_income</code></td>
-      <td>EBITDA = GP + SGA − DA<br>EBT = EBIT + non-op items</td>
-    </tr>
-    <tr>
-      <td><strong>Balance Sheet</strong></td>
-      <td><code>cash</code>, <code>ar</code>, <code>inventory</code>, <code>ppe_net</code>, <code>rou_asset</code>, <code>intangibles</code>, <code>st_debt</code>, <code>ap</code>, <code>lt_debt</code>, <code>equity</code></td>
-      <td>A = L + E (tol $1)</td>
-    </tr>
-    <tr>
-      <td><strong>Cash Flow</strong></td>
-      <td><code>cfo_total</code>, <code>cfi_total</code>, <code>cff_total</code>, <code>cf_cash_ending</code></td>
-      <td>Cash_end = Cash_open + CFO + CFI + CFF (tol $1)</td>
-    </tr>
+    <tr><th>Группа</th><th>Метрики</th><th>Метод</th><th>Пример</th></tr>
+    <tr><td>margin_ratios</td><td>cogs_ratio, sga_ratio, ebitda_margin, tax_rate</td><td>EWA + winsorization P10/P90</td><td>cogs_ratio: 0.87</td></tr>
+    <tr><td>wc_days</td><td>DSO, DIH, DPO, CCC</td><td>AR/Revenue × 365, EWA</td><td>DSO: 34 дней</td></tr>
+    <tr><td>capex</td><td>capex_to_rev, dep_rate</td><td>EWA</td><td>capex/rev: 0.07</td></tr>
+    <tr><td>beta_coefficients</td><td>ppi_beta, cpi_beta</td><td>OLS: Δln(COGS/Rev) ~ Δln(PPI)</td><td>ppi_beta: 0.85</td></tr>
+    <tr><td>revenue_betas</td><td>rev_beta_{factor}, rev_best_factor</td><td>OLS log-diff на каждый макро-фактор</td><td>best: lme_aluminium</td></tr>
+    <tr><td>debt</td><td>ND/EBITDA, ICR, avg_rate, min_cash</td><td>Расчёт из BS/IS</td><td>ICR: 2.1x</td></tr>
+    <tr><td>cogs_macro</td><td>cogs_beta_{factor}</td><td>OLS commodity elasticity</td><td>cogs_beta_ppi: 0.72</td></tr>
   </table>
 
   <div class="formula">
-    <span class="comment"># BS Identity check — called after every forecast year</span><br>
-    <span class="hl">total_assets</span> = CA + NCA<br>
-    <span class="hl">total_liab_equity</span> = CL + NCL + Equity<br>
-    <span class="hl">diff</span> = |total_assets − total_liab_equity| &lt; $1
+    <span class="comment">// EWA — Exponentially Weighted Average</span><br>
+    <span class="hl">α</span> = 1 − exp(−ln2 / halflife)  <span class="comment">// halflife=3 → α≈0.206</span><br>
+    <span class="hl">EWA</span> = Σ αᵢ × xᵢ / Σ αᵢ  <span class="comment">// последние 3 года = ~50% веса</span>
   </div>
+
+  <div class="why-box"><strong>Приоритет:</strong> YAML explicit &gt; preprocessor recommended &gt; hardcoded default. Препроцессор калибрует из истории; YAML переопределяет когда аналитик знает лучше.</div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section class="section" id="config">
-  <div class="section-header">
-    <span class="section-num">03</span>
-    <h2 class="section-title">Configuration — project.yaml</h2>
-  </div>
-  <p class="section-desc">YAML is the single source of forecast method configuration. Per-company, version-controlled.</p>
-
-  <table>
-    <tr><th>Section</th><th>Controls</th><th>Example</th></tr>
-    <tr>
-      <td><code>model.mode</code></td>
-      <td><code>standard</code> (simple ratios) vs <code>custom</code> (full corkscrews)</td>
-      <td><code>custom</code></td>
-    </tr>
-    <tr>
-      <td><code>model.custom.margins</code></td>
-      <td>Override preprocessor: <code>cogs_pct</code>, <code>tax_rate_statutory</code></td>
-      <td><code>cogs_pct: 0.72</code></td>
-    </tr>
-    <tr>
-      <td><code>model.custom.debt</code></td>
-      <td>Debt mode (<code>optimizer</code> / <code>schedule_based</code> / <code>parametric</code>), RC limit, covenants</td>
-      <td><code>mode: optimizer</code></td>
-    </tr>
-    <tr>
-      <td><code>model.custom.ppe</code></td>
-      <td>Depreciation rate, expansion capex, additional capex schedule</td>
-      <td><code>min_capex_da_ratio: 0.90</code></td>
-    </tr>
-    <tr>
-      <td><code>model.custom.equity</code></td>
-      <td>Dividend payout, buyback policy, additional events</td>
-      <td><code>dividend_payout_ratio: 0.05</code></td>
-    </tr>
-    <tr>
-      <td><code>accounting_conventions</code></td>
-      <td><code>da_in_cogs</code>, <code>capitalize_interest</code>, <code>is_income_sign</code></td>
-      <td><code>da_in_cogs: true</code></td>
-    </tr>
-  </table>
-
-  <div class="why-box"><strong>Priority:</strong> YAML explicit &gt; preprocessor recommended &gt; hardcoded default. Preprocessor calibrates from history; YAML overrides when analyst has better information.</div>
-</section>
-
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section class="section" id="methods">
+<!-- ════════════════ 04 ИТЕРАТИВНЫЙ СОЛВЕР ════════════════ -->
+<section class="section" id="solver">
   <div class="section-header">
     <span class="section-num">04</span>
-    <h2 class="section-title">Forecast Methods — 10 Types</h2>
+    <h2 class="section-title">Итеративный солвер — циклическая зависимость</h2>
   </div>
-  <p class="section-desc">Every line item in IS/BS/CF can use a different method. Configured in project.yaml → forecast_methods.</p>
+  <p class="section-desc">Долг зависит от Cash, Cash — от NI, NI — от процентов, проценты — от долга. Решается итерационно.</p>
 
-  <table>
-    <tr><th>Method</th><th>Description</th><th>Used For</th></tr>
-    <tr><td><code>MACRO</code></td><td>Elastic Net regression on macro factors (GDP, CPI, PPI, commodity prices)</td><td>Revenue, COGS</td></tr>
-    <tr><td><code>DRIVER</code></td><td>% of base article (e.g. COGS = 72% × Revenue)</td><td>COGS, SGA</td></tr>
-    <tr><td><code>DAYS</code></td><td>Working capital turnover: DSO, DIH, DPO</td><td>AR, Inventory, AP</td></tr>
-    <tr><td><code>CORK</code></td><td>Corkscrew roll-forward: Open + Additions − Depreciation = Close</td><td>PPE, Debt, Lease, Tax, Equity</td></tr>
-    <tr><td><code>EWA</code></td><td>Exponentially Weighted Average with half-life tuning</td><td>Other IS items</td></tr>
-    <tr><td><code>LAST</code></td><td>Carry forward last historical value</td><td>Goodwill, static BS items</td></tr>
-    <tr><td><code>ZERO</code></td><td>Set to zero in forecast (one-time items)</td><td>Impairment, restructuring</td></tr>
-    <tr><td><code>CALC</code></td><td>Computed from other line items via formula</td><td>EBIT, EBT, totals</td></tr>
-    <tr><td><code>PLUG</code></td><td>Balancing item (absorbs gap)</td><td>Other NCA (emergency only)</td></tr>
-    <tr><td><code>LINK</code></td><td>Direct link to another statement</td><td>CF → BS cash</td></tr>
-  </table>
+  <div class="narrative">
+    <div class="narrative-title">Почему нужны итерации</div>
+    <p>
+      В 3-statement модели есть <strong>circular reference</strong>: процентные расходы зависят от суммы долга,
+      а сумма долга зависит от свободного денежного потока, который включает процентные расходы.
+      В Excel это решается «enable iterative calculation». У нас — явный цикл.
+    </p>
+    <p>
+      Для каждого прогнозного года: сначала рассчитываются «однопроходные» блоки (Revenue, COGS, SGA, PPE, WC, Leases),
+      затем запускается итерационный цикл с 8 блоками, пока не достигнута сходимость.
+    </p>
+  </div>
+
+  <div class="formula">
+    <span class="comment">// Однопроходные блоки:</span><br>
+    Revenue → COGS → SGA → PPE(D&A) → WC → Leases → Intangibles<br><br>
+    <span class="comment">// Итерационный цикл (max 10, tol $1,000):</span><br>
+    <span class="hl">loop</span> {<br>
+    &nbsp;&nbsp;Debt(interest) → Interest_Payable → IS_Subtotals(EBITDA→EBT)<br>
+    &nbsp;&nbsp;→ Tax(NOL) → Equity(div, buyback) → CF(CFO+CFI+CFF)<br>
+    &nbsp;&nbsp;→ Cash → BS_Totals → <span class="hl">Covenant_Acceleration_Check</span><br>
+    } <span class="kw">until</span> |Δcash| &lt; $1,000 <span class="kw">and</span> |Δni| &lt; $1,000
+  </div>
+
+  <div class="result-strip">
+    <div class="result-item"><span class="result-val">10</span><span class="result-lbl">Max итераций</span></div>
+    <div class="result-item"><span class="result-val">$1,000</span><span class="result-lbl">Tolerance</span></div>
+    <div class="result-item"><span class="result-val">$1</span><span class="result-lbl">BS tolerance</span></div>
+    <div class="result-item"><span class="result-val">$0.000004</span><span class="result-lbl">Фактический BS diff</span></div>
+  </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ════════════════ 05 КОРКСРЮС ════════════════ -->
 <section class="section" id="corkscrews">
   <div class="section-header">
     <span class="section-num">05</span>
-    <h2 class="section-title">Corkscrew Blocks</h2>
+    <h2 class="section-title">Corkscrew-блоки — «открыл + добавил − списал = закрыл»</h2>
   </div>
-  <p class="section-desc">Each corkscrew is an independent block with <code>validate()</code>. Built in-memory during model run; not persisted.</p>
+  <p class="section-desc">Каждый corkscrew — независимый блок. Closing balance → BS. Движения → IS и CF.</p>
 
   <table>
-    <tr><th>Block</th><th>Core Identity</th><th>Key Parameters</th></tr>
-    <tr>
-      <td><strong>PPE</strong></td>
-      <td><div class="formula" style="margin:4px 0">Gross<sub>close</sub> = Gross<sub>open</sub> + CapEx − Disposal</div></td>
-      <td><code>dep_rate</code>, <code>capex_pct</code>, <code>min_capex_da_ratio</code></td>
-    </tr>
-    <tr>
-      <td><strong>Debt</strong></td>
-      <td><div class="formula" style="margin:4px 0">Close = Open + Draw − Repay<sub>mand</sub> − Repay<sub>vol</sub></div></td>
-      <td><code>mode</code>, <code>rc.limit</code>, <code>avg_rate_pct</code></td>
-    </tr>
-    <tr>
-      <td><strong>Lease (ASC 842)</strong></td>
-      <td><div class="formula" style="margin:4px 0">ΔROU = ΔLL (lockstep enforced)</div></td>
-      <td><code>op_decay_rate</code>, <code>fin_principal_rate</code></td>
-    </tr>
-    <tr>
-      <td><strong>Tax</strong></td>
-      <td><div class="formula" style="margin:4px 0">Tax<sub>exp</sub> = Statutory × max(0, EBT − NOL<sub>used</sub>)</div></td>
-      <td><code>nol_opening_balance</code>, <code>accel_dep_excess_pct</code></td>
-    </tr>
-    <tr>
-      <td><strong>Equity</strong></td>
-      <td><div class="formula" style="margin:4px 0">RE<sub>close</sub> = RE<sub>open</sub> + NI − Dividends − Buybacks</div></td>
-      <td><code>dividend_payout</code>, <code>buyback_pct_fcf</code></td>
-    </tr>
-    <tr>
-      <td><strong>WC</strong></td>
-      <td><div class="formula" style="margin:4px 0">AR = DSO ÷ 365 × Revenue</div></td>
-      <td><code>dso_days</code>, <code>dih_days</code>, <code>dpo_days</code></td>
-    </tr>
+    <tr><th>Блок</th><th>Формула</th><th>BS статья</th><th>IS/CF эффект</th></tr>
+    <tr><td><strong>PPE</strong></td><td>Gross<sub>close</sub> = Gross<sub>open</sub> + CapEx − Disposal</td><td>ppe_net</td><td>D&A → IS; CapEx → CFI</td></tr>
+    <tr><td><strong>Debt</strong></td><td>Close = Open + Draw − Repay<sub>mand</sub> − Repay<sub>vol</sub></td><td>st_debt + lt_debt</td><td>Interest → IS; Draw/Repay → CFF</td></tr>
+    <tr><td><strong>Lease</strong></td><td>ΔROU = ΔLL (lockstep enforced)</td><td>finance_lease_asset</td><td>Interest → IS; Principal → CFF</td></tr>
+    <tr><td><strong>Tax</strong></td><td>Tax = Statutory × max(0, EBT − NOL<sub>used</sub>)</td><td>DTA, DTL</td><td>Tax expense → IS</td></tr>
+    <tr><td><strong>Equity</strong></td><td>RE<sub>close</sub> = RE<sub>open</sub> + NI − Div − Buyback</td><td>retained_earnings</td><td>Dividends → CFF</td></tr>
+    <tr><td><strong>WC</strong></td><td>AR = DSO ÷ 365 × Revenue</td><td>AR, Inventory, AP</td><td>ΔWC → CFO</td></tr>
+    <tr><td><strong>Intangibles</strong></td><td>Close = Open + Additions − Amortization</td><td>intangibles</td><td>Amort → IS (D&A)</td></tr>
   </table>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ════════════════ 06 ДОЛГОВОЙ ДВИЖОК ════════════════ -->
 <section class="section" id="debt">
   <div class="section-header">
     <span class="section-num">06</span>
-    <h2 class="section-title">Debt Engine — 3 Modes</h2>
+    <h2 class="section-title">Долговой движок — instrument-level corkscrew</h2>
   </div>
-  <p class="section-desc">The debt solver supports full instrument-level modeling with refinancing, floating rates, and covenant acceleration.</p>
+  <p class="section-desc">DebtOptimizer (581 строка): каждый из 70 инструментов моделируется отдельно. ST/LT классификация по 4 правилам.</p>
 
+  <div class="narrative">
+    <div class="narrative-title">Как работает DebtOptimizer</div>
+    <p>
+      Для каждого прогнозного года: (1) определяются обязательные погашения по каждому инструменту,
+      (2) истекшие инструменты рефинансируются, (3) при нехватке Cash — draw из RC (если есть),
+      (4) при избытке Cash — добровольное погашение, (5) начисляются проценты (fixed: по ставке, floating: base_rate + spread),
+      (6) ST/LT split, (7) CFF агрегация.
+    </p>
+  </div>
+
+  <h3>ST/LT классификация (4 правила в порядке приоритета)</h3>
   <table>
-    <tr><th style="width:18%">Mode</th><th>Description</th><th>When to Use</th></tr>
-    <tr>
-      <td><code>optimizer</code></td>
-      <td>Full LP optimization: 7-step algorithm with refinancing, maturity rollover, voluntary prepay caps, ST/LT split by 4 rules</td>
-      <td>Detailed instrument data available (US Steel: 38 instruments)</td>
-    </tr>
-    <tr>
-      <td><code>schedule_based</code></td>
-      <td>Reads pre-built corkscrew from debt_schedule table</td>
-      <td>Analyst has exact repayment schedule</td>
-    </tr>
-    <tr>
-      <td><code>parametric</code></td>
-      <td>Simplified: target ND/EBITDA or Debt/Revenue ratio, ST/LT split from history</td>
-      <td>Limited instrument data; quick estimates</td>
-    </tr>
+    <tr><th>Правило</th><th>Условие</th><th>Результат</th></tr>
+    <tr><td>1. RC</td><td>Revolving Credit facility</td><td>Всегда ST</td></tr>
+    <tr><td>2. Maturity</td><td>Погашение через ≤1 год</td><td>Полный баланс → ST</td></tr>
+    <tr><td>3. Amort schedule</td><td>Есть scheduled payment через 1 год</td><td>current_portion → ST, остаток → LT</td></tr>
+    <tr><td>4. Covenant breach</td><td>callable_flag + breach</td><td>Полный баланс → ST (acceleration)</td></tr>
   </table>
 
-  <div class="why-box"><strong>Floating rate support:</strong> Instruments with <code>rate_type=floating</code> receive <code>general_rate_delta_pct</code> shocks. CBR key rate forecast passed per-year. Fixed-rate instruments unaffected by rate stress.</div>
+  <h3>Canonical mapping (верифицировано: Δ=0 все 5 лет)</h3>
+  <table>
+    <tr><th>Statement</th><th>Canonical field</th><th>Источник в корксрюсе</th></tr>
+    <tr><td>BS</td><td><code>short_term_debt</code></td><td>DebtSolveResult.st_debt</td></tr>
+    <tr><td>BS</td><td><code>long_term_debt</code></td><td>DebtSolveResult.lt_debt</td></tr>
+    <tr><td>IS</td><td><code>interest_expense_debt</code></td><td>sum(instrument.interest) × (1 − cap_pct)</td></tr>
+    <tr><td>CF</td><td><code>cff_debt_issuance</code></td><td>sum(draw + refi_draw)</td></tr>
+    <tr><td>CF</td><td><code>cff_debt_repayment</code></td><td>−sum(repay)</td></tr>
+  </table>
+
+  <h3>Floating rate: CBR KeyRate + spread</h3>
+  <div class="formula">
+    <span class="comment">// 9 инструментов Rusal привязаны к ключевой ставке ЦБ:</span><br>
+    <span class="hl">effective_rate</span> = cbr_key_rate[year] + instrument.spread<br>
+    <span class="comment">// CBR forecast: 2026=14%, 2027=11%, 2028=9%, 2029=8%, 2030=7%</span><br>
+    <span class="comment">// Interest: 818M (2026) → 718M (2030) — снижается с CBR</span>
+  </div>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- ════════════════ 07 СТРЕСС-ТЕСТЫ ════════════════ -->
 <section class="section" id="stress">
   <div class="section-header">
     <span class="section-num">07</span>
-    <h2 class="section-title">Stress Testing</h2>
+    <h2 class="section-title">Стресс-тестирование — 8 сценариев Rusal</h2>
   </div>
-  <p class="section-desc">Shock scenarios defined in stress_scenarios.yaml. Applied to forecasted values. Covenant breach auto-triggers covenant_breach scenario.</p>
+  <p class="section-desc">StressRunner (427 строк) применяет macro_shocks + driver_shocks, пересчитывает полную модель, сравнивает с базой.</p>
 
   <table>
-    <tr><th>Scenario</th><th>Shock</th><th>Mechanism</th></tr>
-    <tr><td><code>steel_downturn</code></td><td>HRC price −30%, volume −15%</td><td>Revenue ↓ via macro factor chain</td></tr>
-    <tr><td><code>rate_spike</code></td><td>Interest rates +300 bps</td><td>Floating-rate debt interest ↑</td></tr>
-    <tr><td><code>wc_stress</code></td><td>DSO +15 days, DIH +20 days</td><td>Working capital ↑, CFO ↓</td></tr>
-    <tr><td><code>covenant_breach</code></td><td>Auto-triggered when ICR or ND/EBITDA breached</td><td>Callable debt → ST, refinancing stress</td></tr>
+    <tr><th>Сценарий</th><th>Шоки</th><th>Цель</th></tr>
+    <tr><td><strong>lme_mild</strong></td><td>LME Al −15%</td><td>Умеренная коррекция</td></tr>
+    <tr><td><strong>aluminium_downturn</strong></td><td>LME −25%, Alumina −15%, DSO +15%, DIH +20%</td><td>Отраслевой кризис</td></tr>
+    <tr><td><strong>sanctions_shock</strong></td><td>USD/RUB +30%, Power +20%, DSO/DIH stress</td><td>Санкционный сценарий</td></tr>
+    <tr><td><strong>energy_spike</strong></td><td>Power +40%, Brent +30%</td><td>Энергетический кризис</td></tr>
+    <tr><td><strong>rate_spike</strong></td><td>Rate +200bp</td><td>Рост ставок</td></tr>
+    <tr><td><strong>severe</strong></td><td>LME −30%, RUB +25%, Power +30%, Rate +400bp</td><td>Тяжёлый комбинированный стресс</td></tr>
+    <tr><td><strong>upside</strong></td><td>LME +20%, Alumina +15%</td><td>Commodity supercycle</td></tr>
+    <tr><td><strong>covenant_breach</strong></td><td>LME −20%, Power +30%, Rate +200bp</td><td>Авто-триггер при breach</td></tr>
+  </table>
+
+  <div class="result-strip">
+    <div class="result-item"><span class="result-val">8/8 OK</span><span class="result-lbl">Все сценарии сходятся</span></div>
+    <div class="result-item"><span class="result-val">US Steel: 1</span><span class="result-lbl">covenant_breach only</span></div>
+  </div>
+
+  <div class="formula">
+    <span class="comment">// Типы шоков:</span><br>
+    <span class="hl">percentage</span>: X_stress = X_base × (1 + value/100)  <span class="comment">// LME Al −25%</span><br>
+    <span class="hl">pp</span>: X_stress = X_base + value/100  <span class="comment">// Rate +200bp</span><br>
+    <span class="hl">absolute</span>: X_stress = X_base + value  <span class="comment">// Revenue +500M</span><br>
+    <span class="hl">basis_points</span>: X_stress = X_base + value/10000  <span class="comment">// Spread +50bp</span>
+  </div>
+</section>
+
+<!-- ════════════════ 08 РЕЙТИНГ ════════════════ -->
+<section class="section" id="rating">
+  <div class="section-header">
+    <span class="section-num">08</span>
+    <h2 class="section-title">Кредитный рейтинг — S&P scorecard</h2>
+  </div>
+  <p class="section-desc">RatingEngine (458 строк): 4 sub-score по шкале 0–100, industry/size adjustment, TTC-нормализация.</p>
+
+  <div class="layer-card">
+    <div class="layer-card-header">
+      <span class="layer-badge badge-coral">RATING</span>
+      <span class="layer-card-title">Формула итогового рейтинга</span>
+    </div>
+    <div class="layer-card-body">
+      <div class="layer-col">
+        <div class="layer-col-title">Взвешенный score</div>
+        <div class="formula">
+          <span class="hl">base_score</span> =<br>
+          &nbsp;&nbsp;0.35 × leverage +<br>
+          &nbsp;&nbsp;0.30 × coverage +<br>
+          &nbsp;&nbsp;0.20 × profitability +<br>
+          &nbsp;&nbsp;0.15 × liquidity<br><br>
+          <span class="hl">final</span> = clamp(0, 100,<br>
+          &nbsp;&nbsp;base_score + industry_adj + size_adj)
+        </div>
+      </div>
+      <div class="layer-col">
+        <div class="layer-col-title">Шкала</div>
+        <table style="margin:0;border:0">
+          <tr><td class="td-mono">≥95</td><td>AAA</td></tr>
+          <tr><td class="td-mono">85–94</td><td>AA</td></tr>
+          <tr><td class="td-mono">75–84</td><td>A</td></tr>
+          <tr><td class="td-mono">63–74</td><td>BBB (Investment Grade)</td></tr>
+          <tr><td class="td-mono">52–62</td><td>BB (Speculative)</td></tr>
+          <tr><td class="td-mono">42–51</td><td>B</td></tr>
+          <tr><td class="td-mono">30–41</td><td>CCC</td></tr>
+          <tr><td class="td-mono">&lt;30</td><td>D</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <h3>Industry & Size Adjustments</h3>
+  <table>
+    <tr><th>Компания</th><th>Industry adj</th><th>Size adj</th><th>Cycle EBITDA</th><th>Результат</th></tr>
+    <tr><td>US Steel</td><td>−12.0</td><td>+2.0</td><td>10%</td><td class="ok">BBB → A− (score 58–67)</td></tr>
+    <tr><td>Rusal</td><td>−6.0</td><td>+2.0</td><td>12%</td><td class="warn">B (score 29–33)</td></tr>
+  </table>
+
+  <div class="why-box"><strong>TTC-нормализация:</strong> EBITDA margin ограничивается сверху: normalized = min(actual, cycle_avg × 1.5). Это предотвращает завышение рейтинга на пике цикла.</div>
+</section>
+
+<!-- ════════════════ 09 КОВЕНАНТЫ ════════════════ -->
+<section class="section" id="covenants">
+  <div class="section-header">
+    <span class="section-num">09</span>
+    <h2 class="section-title">Мониторинг ковенантов</h2>
+  </div>
+  <p class="section-desc">CovenantsChecker (410 строк): проверяет метрики по каждому году, сигнализирует о нарушениях, может reclassify callable debt в ST.</p>
+
+  <h3>Ковенанты Rusal (default + metals industry override)</h3>
+  <table>
+    <tr><th>Ковенант</th><th>Bound</th><th>Threshold</th><th>2026</th><th>2027</th><th>2028</th><th>2029</th><th>2030</th></tr>
+    <tr><td>Net Debt/EBITDA</td><td>max</td><td>4.5x</td><td class="warn">4.49</td><td class="bad">4.52</td><td class="bad">4.86</td><td class="bad">5.13</td><td class="bad">5.46</td></tr>
+    <tr><td>Interest Coverage</td><td>min</td><td>2.0x</td><td class="bad">0.96</td><td class="bad">0.86</td><td class="bad">0.78</td><td class="bad">0.71</td><td class="bad">0.57</td></tr>
+    <tr><td>Debt/Equity</td><td>max</td><td>4.0x</td><td class="ok">0.74</td><td class="ok">0.69</td><td class="ok">0.53</td><td class="ok">0.52</td><td class="ok">0.52</td></tr>
+    <tr><td>Current Ratio</td><td>min</td><td>1.0x</td><td class="ok">2.16</td><td class="ok">2.43</td><td class="ok">1.91</td><td class="ok">1.14</td><td class="ok">1.19</td></tr>
+    <tr><td>EBITDA Margin</td><td>min</td><td>5%</td><td class="ok">10.7%</td><td class="ok">9.8%</td><td class="ok">9.1%</td><td class="ok">8.7%</td><td class="ok">8.1%</td></tr>
+  </table>
+
+  <div class="alert alert-warn"><strong>9 breaches, 1 warning:</strong> Rusal показывает устойчивое нарушение ICR (Interest Coverage) из-за высокой долговой нагрузки ($9.1B) и снижающейся маржинальности. ND/EBITDA входит в breach с 2027 года.</div>
+
+  <div class="why-box"><strong>Acceleration triggers:</strong> при breach <code>interest_coverage</code> или <code>net_debt_ebitda</code> — callable инструменты автоматически reclassify из LT в ST (увеличивая mandatory repayment). Затем запускается стресс-сценарий <code>covenant_breach</code>.</div>
+</section>
+
+<!-- ════════════════ 10 РЕЗУЛЬТАТЫ ════════════════ -->
+<section class="section" id="results">
+  <div class="section-header">
+    <span class="section-num">10</span>
+    <h2 class="section-title">Результаты моделей</h2>
+  </div>
+
+  <h3>US Steel (US GAAP, 2025–2029)</h3>
+  <table>
+    <tr><th>Year</th><th>Revenue</th><th>EBITDA</th><th>Margin</th><th>Net Income</th><th>Rating</th><th>Score</th></tr>
+    <tr><td>2025</td><td>14,284M</td><td>2,103M</td><td>14.7%</td><td>1,229M</td><td class="ok">BBB</td><td>58.5</td></tr>
+    <tr><td>2026</td><td>13,225M</td><td>1,928M</td><td>14.6%</td><td>862M</td><td class="ok">BBB+</td><td>63.6</td></tr>
+    <tr><td>2027</td><td>12,386M</td><td>1,791M</td><td>14.5%</td><td>773M</td><td class="ok">BBB+</td><td>65.0</td></tr>
+    <tr><td>2028</td><td>11,716M</td><td>1,682M</td><td>14.4%</td><td>707M</td><td class="ok">BBB+</td><td>65.6</td></tr>
+    <tr><td>2029</td><td>11,174M</td><td>1,594M</td><td>14.3%</td><td>657M</td><td class="ok">A−</td><td>67.2</td></tr>
+  </table>
+  <div class="alert alert-good"><strong>0 covenant breaches.</strong> Debt: 30 instruments (7 active), RC $2B. EBITDA margin стабильна на 14.3–14.7%.</div>
+
+  <h3>Rusal (IFRS, 2026–2030)</h3>
+  <table>
+    <tr><th>Year</th><th>Revenue</th><th>EBITDA</th><th>Margin</th><th>Net Income</th><th>ND/EBITDA</th><th>ICR</th><th>Rating</th><th>Score</th></tr>
+    <tr><td>2026</td><td>13,572M</td><td>1,446M</td><td>10.7%</td><td>775M</td><td class="warn">4.5x</td><td class="bad">1.8x</td><td>B</td><td>33.1</td></tr>
+    <tr><td>2027</td><td>14,366M</td><td>1,413M</td><td>9.8%</td><td>714M</td><td class="bad">4.5x</td><td class="bad">1.7x</td><td>B+</td><td>33.4</td></tr>
+    <tr><td>2028</td><td>15,084M</td><td>1,373M</td><td>9.1%</td><td>670M</td><td class="bad">4.9x</td><td class="bad">1.8x</td><td>B</td><td>31.6</td></tr>
+    <tr><td>2029</td><td>15,543M</td><td>1,345M</td><td>8.7%</td><td>639M</td><td class="bad">5.1x</td><td class="bad">1.9x</td><td>B</td><td>28.9</td></tr>
+    <tr><td>2030</td><td>16,017M</td><td>1,302M</td><td>8.1%</td><td>567M</td><td class="bad">5.5x</td><td class="bad">1.8x</td><td>B</td><td>28.9</td></tr>
+  </table>
+
+  <h3>Rusal Debt Schedule</h3>
+  <table>
+    <tr><th>Year</th><th>Active</th><th>Opening</th><th>Closing</th><th>Interest</th><th>Draw</th><th>Repay</th></tr>
+    <tr><td>2026</td><td>23/70</td><td>9,602M</td><td>9,117M</td><td>818M</td><td>0M</td><td>485M</td></tr>
+    <tr><td>2027</td><td>23/70</td><td>9,117M</td><td>9,074M</td><td>809M</td><td>0M</td><td>43M</td></tr>
+    <tr><td>2028</td><td>18/70</td><td>9,074M</td><td>7,491M</td><td>766M</td><td>0M</td><td>1,583M</td></tr>
+    <tr><td>2029</td><td>18/70</td><td>7,491M</td><td>7,378M</td><td>721M</td><td>0M</td><td>113M</td></tr>
+    <tr><td>2030</td><td>19/70</td><td>7,378M</td><td>7,591M</td><td>718M</td><td>223M</td><td>10M</td></tr>
   </table>
 </section>
 
-<!-- ═══════════════════════════════════════════════════════════════ -->
-<section class="section" id="notebooks">
+<!-- ════════════════ 11 КОНФИГУРАЦИЯ ════════════════ -->
+<section class="section" id="config">
   <div class="section-header">
-    <span class="section-num">08</span>
-    <h2 class="section-title">Analyst Workflow — Jupyter Notebooks</h2>
+    <span class="section-num">11</span>
+    <h2 class="section-title">Конфигурация — project.yaml</h2>
   </div>
-  <p class="section-desc">Universal notebooks in templates/notebooks/ work with any company. Copy to your working directory.</p>
+  <p class="section-desc">YAML — единый источник конфигурации. Один файл на компанию, версионируется в git.</p>
 
   <table>
-    <tr><th style="width:5%">#</th><th>Notebook</th><th>Purpose</th></tr>
-    <tr><td>00</td><td><code>Init_New_Company</code></td><td>Create company directory structure, config templates</td></tr>
-    <tr><td>00</td><td><code>Build_Model_Main</code></td><td>Run full pipeline, view results</td></tr>
-    <tr><td>01</td><td><code>Data_Loading</code></td><td>Load Excel → DB via ExcelLoader</td></tr>
-    <tr><td>01</td><td><code>Test_Macro_Module</code></td><td>VECM/ARIMA fitting and diagnostics</td></tr>
-    <tr><td>02</td><td><code>Test_Model_Module</code></td><td>3-Statement model run + validation</td></tr>
-    <tr><td>03</td><td><code>Stress_Testing</code></td><td>Apply scenarios, compare base vs stressed</td></tr>
-    <tr><td>04</td><td><code>Rating</code></td><td>S&P / Moody's / Fitch scorecards</td></tr>
-    <tr><td>05</td><td><code>Covenants</code></td><td>Covenant headroom and breach detection</td></tr>
-    <tr><td>06</td><td><code>Financial_Dashboard</code></td><td>Interactive charts and summary</td></tr>
-    <tr><td>99</td><td><code>Configure_Excel_Loader</code></td><td>Map Excel labels → DB canonical metrics</td></tr>
-    <tr><td>99</td><td><code>Configure_YAML</code></td><td>Interactive project.yaml editor</td></tr>
+    <tr><th>Параметр</th><th>US Steel</th><th>Rusal</th></tr>
+    <tr><td>Стандарт</td><td>US GAAP (credit_negative)</td><td>IFRS (natural)</td></tr>
+    <tr><td>Revenue</td><td>ElasticNet (steel_price_hrc)</td><td>Segment: Al + Alumina + Other</td></tr>
+    <tr><td>COGS</td><td>PPI uplift (ppi_us, beta=1.0)</td><td>Component: alumina 37%, energy 27%, labour 12%, other 24%</td></tr>
+    <tr><td>Debt mode</td><td>full/optimizer (30 instruments)</td><td>optimizer (70 instruments)</td></tr>
+    <tr><td>Floating rate</td><td>—</td><td>9 CBR KeyRate + spread (1.2–3.0%)</td></tr>
+    <tr><td>Revolving credit</td><td>$2B, 300bp spread</td><td>— (use_debt_rc=false)</td></tr>
+    <tr><td>Covenants</td><td>steel (0 breaches)</td><td>default+metals (9 breaches)</td></tr>
+    <tr><td>Stress</td><td>1 сценарий</td><td>8 сценариев</td></tr>
+    <tr><td>Rating</td><td>BBB → A− (score 58–67)</td><td>B (score 29–33)</td></tr>
+    <tr><td>Macro факторы</td><td>8 (HRC, GDP, CPI, PPI, ...)</td><td>8 (LME, RUB, Brent, Power, ...)</td></tr>
+    <tr><td>History</td><td>2010–2024 (15 лет)</td><td>2011–2025 (15 лет)</td></tr>
+    <tr><td>Forecast</td><td>2025–2029</td><td>2026–2030</td></tr>
   </table>
 
-  <h3>Adding a New Company</h3>
-<pre><span class="comment"># 1. Create company structure</span>
-python3 tools/init_company.py my_company --name <span class="str">"My Company"</span> --currency USD
+  <h3>Feature flags (Rusal)</h3>
+  <div class="formula">
+    <span class="hl">use_ppe_corkscrew</span>: true &nbsp;&nbsp; <span class="hl">use_wc_days</span>: true<br>
+    <span class="hl">use_tax_corkscrew</span>: true &nbsp;&nbsp; <span class="hl">use_intangibles_corkscrew</span>: true<br>
+    <span class="hl">use_interest_payable_cork</span>: true &nbsp;&nbsp; <span class="hl">use_debt_rc</span>: false
+  </div>
+</section>
 
-<span class="comment"># 2. Fill Excel template with historical data</span>
-<span class="comment">#    Copy templates/excel_templates/template_UNIFIED_All_Data.xlsx</span>
-<span class="comment">#    Fill IS/BS/CF sheets with 5+ years of data</span>
+<!-- ════════════════ 12 ИНФРАСТРУКТУРА ════════════════ -->
+<section class="section" id="infra">
+  <div class="section-header">
+    <span class="section-num">12</span>
+    <h2 class="section-title">Инфраструктура и тестирование</h2>
+  </div>
 
-<span class="comment"># 3. Load into database</span>
-<span class="kw">from</span> engine.loader.excel <span class="kw">import</span> ExcelLoader
-<span class="kw">from</span> engine.database.repository <span class="kw">import</span> Repository
-<span class="kw">with</span> Repository() <span class="kw">as</span> repo:
-    loader = ExcelLoader(<span class="str">"my_company"</span>, repo, db_unit=<span class="str">"USD"</span>)
-    loader.load(Path(<span class="str">"companies/my_company/data/my_company.xlsx"</span>))
+  <table>
+    <tr><th>Компонент</th><th>Описание</th><th>Статус</th></tr>
+    <tr><td><strong>Test suite</strong></td><td>45 тестов (pytest): preprocessor 16, loader 8, core 11, schema 5, integration 5</td><td class="ok">45/45 pass</td></tr>
+    <tr><td><strong>CI/CD</strong></td><td>GitHub Actions: Python 3.11/3.12, pytest + ruff lint</td><td class="ok">Настроен</td></tr>
+    <tr><td><strong>Packaging</strong></td><td>pyproject.toml, <code>pip install -e .</code>, CLI <code>stresstest</code></td><td class="ok">v2.1.0</td></tr>
+    <tr><td><strong>Docker</strong></td><td>python:3.12-slim, Dockerfile + docker-compose.yml</td><td class="ok">Ready</td></tr>
+    <tr><td><strong>PDF Parser</strong></td><td>Rusal EN FS: 5 parsing modes, Notes 8/13/14/15/16/19/20</td><td class="ok">22/22 tests</td></tr>
+    <tr><td><strong>Учебник</strong></td><td>3,192 строки MD, 55 страниц PDF (10 глав)</td><td class="ok">v2.1.1</td></tr>
+    <tr><td><strong>DB</strong></td><td>data_mart_v2.db: SQLite WAL, ~40 таблиц</td><td class="ok">Production</td></tr>
+  </table>
 
-<span class="comment"># 4. Run model</span>
-result = build_model(<span class="str">"my_company"</span>)</pre>
+  <h3>Quick Start</h3>
+<pre><span class="kw">from</span> engine.orchestrator <span class="kw">import</span> build_model
+
+<span class="comment"># Базовая модель</span>
+result = build_model(<span class="str">"rusal"</span>, run_model=<span class="kw">True</span>)
+
+<span class="comment"># Полный pipeline</span>
+result = build_model(<span class="str">"rusal"</span>,
+    run_model=<span class="kw">True</span>,
+    run_stress=<span class="kw">True</span>,    <span class="comment"># 8 сценариев</span>
+    run_rating=<span class="kw">True</span>,    <span class="comment"># S&P scorecard</span>
+    run_covenants=<span class="kw">True</span>, <span class="comment"># breach monitoring</span>
+)
+<span class="kw">print</span>(f<span class="str">"BS = {max(result.model_result.bs_diffs.values()):.6f}"</span>)
+<span class="kw">print</span>(f<span class="str">"Stress: {len(result.stress_results)} scenarios"</span>)
+<span class="kw">print</span>(f<span class="str">"Rating: {result.rating_result.ratings[2026]['rating']}"</span>)</pre>
+
+  <div class="result-strip">
+    <div class="result-item"><span class="result-val">BS = 0.000004</span><span class="result-lbl">Обе компании</span></div>
+    <div class="result-item"><span class="result-val">CF = 0.000000</span><span class="result-lbl">Cash bridge</span></div>
+    <div class="result-item"><span class="result-val">45/45</span><span class="result-lbl">Tests pass</span></div>
+    <div class="result-item"><span class="result-val">v2.1.1</span><span class="result-lbl">Текущая версия</span></div>
+  </div>
 </section>
 
 <div class="footer">
-  stressTest Engine v2.1.0 &nbsp;·&nbsp; <a href="https://github.com/arturhusnutdinov/stressTest_v2" style="color:var(--navy-light)">github.com/arturhusnutdinov/stressTest_v2</a>
+  stressTest Engine v2.1.1 &nbsp;·&nbsp; <a href="https://github.com/arturhusnutdinov/stressTest_v2" style="color:var(--navy-light)">github.com/arturhusnutdinov/stressTest_v2</a>
+  &nbsp;·&nbsp; Учебник: <a href="financial_modeling_textbook_rewritten.md" style="color:var(--navy-light)">3,192 строки, 55 стр. PDF</a>
 </div>
 
 </div>

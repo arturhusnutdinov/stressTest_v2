@@ -673,18 +673,22 @@ class ThreeStatementModel:
         # Use year-opening NOL (frozen before iteration loop) so multi-iteration convergence
         # doesn't deplete the pool mid-year. _nol_carryforward persists the close to next year.
         _nol_open = self._nol_year_open
+        # NOL enabled: either has opening balance, or EBT is negative (loss creates new NOL)
+        _nol_active = _nol_open > 0 or state.ebt < 0
+        # Payment lag from config: 0=current_year, 1=next_year
+        _pay_lag = 1 if getattr(self._c, 'tax_paid_timing', 'next_year') == 'next_year' else 0
         block = TaxBlock(
             ebt=state.ebt,
             statutory_rate=self._c.tax_rate or 0.21,
             nol_open=_nol_open,
-            nol_enabled=_nol_open > 0,
+            nol_enabled=_nol_active,
             nol_limit_pct=getattr(self._c, 'nol_max_utilization_pct', 0.80) or 0.80,
             dta_open=prev.dta or 0.0,
             dtl_open=prev.dtl or 0.0,
             taxes_payable_open=prev.taxes_payable or 0.0,
             accel_dep_excess=accel_dep_excess,
             pension_dta_delta=pension_dta_delta,
-            payment_lag=1,  # next_year: US Steel pays prior-year taxes in current year
+            payment_lag=_pay_lag,
         ).solve()
         ok, issues = block.validate()
         if not ok:
