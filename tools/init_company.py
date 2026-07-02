@@ -244,7 +244,18 @@ python3 -m engine.orchestrator {company_id} --no-preprocess
 
 
 def _create_excel_template(path: Path, company_id: str) -> None:
-    """Создаёт пустой Excel шаблон с листами IS/BS/CF/segments/debt/ppe/macro."""
+    """Создаёт полный Excel шаблон со всеми листами для загрузки в БД.
+
+    Листы соответствуют таблицам schema.py и покрывают:
+    - Финансовые отчёты (IS/BS/CF)
+    - Schedule-расписания (tax, equity, leases, WC, interest, PPE)
+    - Детальные корксkrews (lease finance/operating, tax, WC)
+    - Долговые инструменты + cashflows
+    - Сегменты (финансовые + операционные)
+    - Макро-факторы, операционные драйверы
+    - Справочники (метрики, типы долга, сегменты, единицы)
+    - Метаданные и балансировочные корректировки
+    """
     try:
         import openpyxl
     except ImportError:
@@ -254,71 +265,245 @@ def _create_excel_template(path: Path, company_id: str) -> None:
     wb = openpyxl.Workbook()
     years = list(range(2011, 2026))
 
-    # history_is
+    # ── 1. meta ──────────────────────────────────────────────────
     ws = wb.active
-    ws.title = "history_is"
-    ws.append(["metric"] + years)
-    for m in ["revenue", "cost_of_goods_sold", "gross_profit",
-              "selling_general_admin", "other_operating_income", "other_operating_expense",
-              "asset_impairment", "depreciation_amortization", "total_depreciation_amortization",
-              "ebitda", "ebit", "interest_expense", "interest_income",
-              "earnings_from_investees", "other_financial_costs",
-              "earnings_before_tax", "tax_expense", "net_income"]:
-        ws.append([m] + [None] * len(years))
+    ws.title = "meta"
+    ws.append(["field", "value"])
+    ws.append(["template_version", "2.0.0"])
+    ws.append(["company_code", company_id])
+    ws.append(["company_name", ""])
+    ws.append(["base_currency", "USD"])
+    ws.append(["input_unit", "mUSD"])
+    ws.append(["accounting_standard", ""])
+    ws.append(["author", ""])
+    ws.append(["created_at", ""])
 
-    # history_bs
-    ws2 = wb.create_sheet("history_bs")
-    ws2.append(["metric"] + years)
-    for m in ["cash_and_equivalents", "accounts_receivable", "inventory",
-              "other_current_assets", "total_current_assets",
-              "ppe_net", "ppe_gross", "ppe_accumulated_depreciation",
-              "intangibles", "goodwill", "investments_long_term",
-              "deferred_tax_asset", "other_non_current_assets",
-              "total_non_current_assets", "total_assets",
-              "accounts_payable", "short_term_debt", "taxes_payable",
-              "other_current_liabilities", "total_current_liabilities",
-              "long_term_debt", "deferred_tax_liability",
-              "other_non_current_liabilities", "total_non_current_liabilities",
-              "total_liabilities",
-              "share_capital", "additional_paid_in_capital", "retained_earnings",
-              "accumulated_other_comprehensive_income",
-              "total_equity", "non_controlling_interests",
-              "total_liabilities_and_equity"]:
-        ws2.append([m] + [None] * len(years))
+    # ── 2. history_is ────────────────────────────────────────────
+    ws_is = wb.create_sheet("history_is")
+    ws_is.append(["metric"] + years)
+    for m in [
+        "revenue", "cogs", "gross_profit",
+        "sga", "rnd", "distribution_expenses",
+        "other_operating_income", "other_operating_expense",
+        "asset_impairment", "restructuring_and_other_charges",
+        "depreciation_owned", "depreciation_rou", "amortization", "total_da",
+        "ebitda", "ebit",
+        "interest_expense", "interest_income", "lease_interest",
+        "earnings_from_investees", "other_financial_costs",
+        "loss_on_debt_extinguishment", "net_periodic_benefit_income",
+        "other_losses_gains_net",
+        "ebt", "current_tax_expense", "deferred_tax_expense", "tax_expense",
+        "net_income",
+        "eps_basic", "eps_diluted",
+        "cfo_stock_compensation",
+    ]:
+        ws_is.append([m] + [None] * len(years))
 
-    # history_cf
-    ws3 = wb.create_sheet("history_cf")
-    ws3.append(["metric"] + years)
-    for m in ["net_income", "depreciation_amortization", "deferred_tax",
-              "change_accounts_receivable", "change_inventory",
-              "change_accounts_payable", "change_other_working_capital",
-              "other_operating_activities", "cfo_total",
-              "capital_expenditure", "acquisitions", "disposal_proceeds",
-              "other_investing_activities", "cfi_total",
-              "debt_issuance", "debt_repayment",
-              "dividends_paid", "share_buyback",
-              "other_financing_activities", "cff_total",
-              "net_change_in_cash", "cash_beginning", "cash_ending"]:
-        ws3.append([m] + [None] * len(years))
+    # ── 3. history_bs ────────────────────────────────────────────
+    ws_bs = wb.create_sheet("history_bs")
+    ws_bs.append(["metric"] + years)
+    for m in [
+        # Current Assets
+        "cash", "restricted_cash", "short_term_investments",
+        "accounts_receivable", "inventory",
+        "prepaid_expenses", "other_current_assets", "total_current_assets",
+        # Non-Current Assets
+        "ppe_gross", "ppe_accum_dep", "ppe_net",
+        "rou_asset", "finance_lease_asset_net",
+        "goodwill", "intangibles",
+        "investments_lt", "dta", "dta_noncurrent",
+        "other_non_current_assets", "total_non_current_assets", "total_assets",
+        # Current Liabilities
+        "accounts_payable", "short_term_debt",
+        "accrued_liabilities", "accrued_interest", "taxes_payable",
+        "payroll_and_benefits_payable",
+        "lease_liab_current", "finance_lease_liab_current",
+        "other_current_liabilities", "total_current_liabilities",
+        # Non-Current Liabilities
+        "long_term_debt", "dtl", "dtl_noncurrent",
+        "lease_liab_noncurrent", "finance_lease_liab_noncurrent",
+        "employee_benefits", "deferred_credits",
+        "other_non_current_liabilities", "total_non_current_liabilities",
+        "total_liabilities",
+        # Equity
+        "share_capital", "common_stock_par", "apic",
+        "retained_earnings", "treasury_stock", "aoci",
+        "nci", "total_equity", "total_liab_equity",
+    ]:
+        ws_bs.append([m] + [None] * len(years))
 
-    # segments, debt_instruments, ppe_components, macro_factors, operational_drivers
-    ws4 = wb.create_sheet("segments")
-    ws4.append(["segment", "metric"] + years)
+    # ── 4. history_cf ────────────────────────────────────────────
+    ws_cf = wb.create_sheet("history_cf")
+    ws_cf.append(["metric"] + years)
+    for m in [
+        # Operating
+        "net_income", "total_da", "depreciation_owned", "depreciation_rou",
+        "amortization", "deferred_tax", "cfo_stock_compensation",
+        "asset_impairment_charges", "loss_on_debt_extinguishment",
+        "gain_loss_on_disposal", "earnings_from_investees",
+        "change_ar", "change_inventory", "change_ap",
+        "change_other_wc", "change_taxes_payable", "change_interest_payable",
+        "interest_paid", "taxes_paid",
+        "lease_payments_cfo", "other_operating", "cfo_total",
+        # Investing
+        "capex", "acquisitions", "disposal_proceeds",
+        "other_investing", "cfi_total",
+        # Financing
+        "debt_issuance", "debt_repayments", "cff_borrowings", "cff_repayments",
+        "finance_lease_principal", "dividends_paid", "share_buyback",
+        "equity_issuance", "other_financing", "cff_total",
+        # Cash bridge
+        "fx_effect", "net_change_in_cash", "cash_beginning", "cash_ending",
+    ]:
+        ws_cf.append([m] + [None] * len(years))
 
-    ws5 = wb.create_sheet("debt_instruments")
-    ws5.append(["instrument_id", "instrument_name", "currency", "opening_balance",
-                "interest_rate", "rate_type", "base_rate_factor",
-                "maturity_date", "amortization_profile", "callable_flag",
-                "yr1", "yr2", "yr3", "yr4", "yr5", "yr6_plus"])
+    # ── 5. schedule_leases → lease_schedule ──────────────────────
+    ws_sl = wb.create_sheet("schedule_leases")
+    ws_sl.append(["year", "lease_type", "lease_id", "lease_name",
+                  "rou_open_mUSD", "rou_dep_mUSD", "rou_close_mUSD",
+                  "liab_open_mUSD", "interest_exp_mUSD", "payment_mUSD",
+                  "liab_close_mUSD", "discount_rate"])
 
-    ws6 = wb.create_sheet("ppe_components")
-    ws6.append(["category", "movement", "year", "value"])
+    # ── 6. schedule_ppe → ppe_components ─────────────────────────
+    ws_sppe = wb.create_sheet("schedule_ppe")
+    ws_sppe.append(["year", "category", "value_type", "value_mUSD", "useful_life"])
 
-    ws7 = wb.create_sheet("macro_factors")
-    ws7.append(["factor"] + years)
+    # ── 7. schedule_tax → tax_schedule ───────────────────────────
+    ws_st = wb.create_sheet("schedule_tax")
+    ws_st.append(["year", "ebt_mUSD", "current_tax_mUSD", "deferred_tax_mUSD",
+                  "effective_rate",
+                  "dta_open_mUSD", "dta_additions_mUSD", "dta_used_mUSD", "dta_close_mUSD",
+                  "dtl_open_mUSD", "dtl_additions_mUSD", "dtl_reversal_mUSD", "dtl_close_mUSD",
+                  "nol_open_mUSD", "nol_additions_mUSD", "nol_used_mUSD", "nol_close_mUSD"])
 
-    ws8 = wb.create_sheet("operational_drivers")
-    ws8.append(["driver", "unit"] + years)
+    # ── 8. schedule_working_capital → sched_wc_corkscrew ─────────
+    ws_swc = wb.create_sheet("schedule_working_capital")
+    ws_swc.append(["year", "component", "opening_balance_mUSD",
+                   "closing_balance_mUSD", "delta_mUSD",
+                   "driver_value", "driver_metric"])
+
+    # ── 9. schedule_interest → interest_paid_split ───────────────
+    ws_si = wb.create_sheet("schedule_interest")
+    ws_si.append(["year",
+                  "interest_paid_debt_mUSD", "interest_paid_leases_mUSD", "interest_paid_total_mUSD",
+                  "interest_payable_debt_open_mUSD", "interest_payable_debt_close_mUSD",
+                  "interest_payable_leases_open_mUSD", "interest_payable_leases_close_mUSD"])
+
+    # ── 10. schedule_equity → equity_schedule ────────────────────
+    ws_se = wb.create_sheet("schedule_equity")
+    ws_se.append(["year", "re_open_mUSD", "net_income_mUSD",
+                  "dividends_mUSD", "buybacks_mUSD", "issuance_mUSD",
+                  "other_equity_changes_mUSD", "re_close_mUSD"])
+
+    # ── 11. sched_lease_finance ──────────────────────────────────
+    ws_lf = wb.create_sheet("sched_lease_finance")
+    ws_lf.append(["year", "lease_id",
+                  "opening_mUSD", "additions_mUSD",
+                  "payments_principal_mUSD", "payments_interest_mUSD",
+                  "depreciation_is_mUSD", "interest_expense_is_mUSD", "closing_mUSD",
+                  "rou_asset_open_mUSD", "rou_asset_dep_mUSD", "rou_asset_close_mUSD",
+                  "liab_current_mUSD", "liab_noncurrent_mUSD", "mode"])
+
+    # ── 12. sched_lease_operating ────────────────────────────────
+    ws_lo = wb.create_sheet("sched_lease_operating")
+    ws_lo.append(["year", "lease_id",
+                  "opening_mUSD", "additions_mUSD", "payments_mUSD",
+                  "lease_expense_is_mUSD", "closing_mUSD",
+                  "rou_asset_open_mUSD", "rou_asset_dep_mUSD", "rou_asset_close_mUSD",
+                  "liab_current_mUSD", "liab_noncurrent_mUSD", "mode"])
+
+    # ── 13. sched_tax_corkscrew ──────────────────────────────────
+    ws_tc = wb.create_sheet("sched_tax_corkscrew")
+    ws_tc.append(["year", "temp_diff_type",
+                  "dta_opening_mUSD", "dta_created_mUSD", "dta_utilized_mUSD", "dta_closing_mUSD",
+                  "dtl_opening_mUSD", "dtl_created_mUSD", "dtl_reversed_mUSD", "dtl_closing_mUSD"])
+
+    # ── 14. sched_wc_corkscrew ───────────────────────────────────
+    ws_wc = wb.create_sheet("sched_wc_corkscrew")
+    ws_wc.append(["year", "component",
+                  "opening_balance_mUSD", "closing_balance_mUSD", "delta_mUSD",
+                  "driver_value", "driver_metric"])
+
+    # ── 15. interest_paid_split ──────────────────────────────────
+    ws_ips = wb.create_sheet("interest_paid_split")
+    ws_ips.append(["year",
+                   "interest_paid_debt_mUSD", "interest_paid_leases_mUSD",
+                   "interest_paid_total_mUSD",
+                   "interest_payable_debt_open_mUSD", "interest_payable_debt_close_mUSD",
+                   "interest_payable_leases_open_mUSD", "interest_payable_leases_close_mUSD",
+                   "change_debt_mUSD", "change_leases_mUSD"])
+
+    # ── 16. lease_maturity_ladder ────────────────────────────────
+    ws_lml = wb.create_sheet("lease_maturity_ladder")
+    ws_lml.append(["year", "lease_id", "lease_type", "maturity_year",
+                   "principal_amount_mUSD", "interest_amount_mUSD",
+                   "total_payment_mUSD", "currency_code"])
+
+    # ── 17. segments_financial → segment_data ────────────────────
+    ws_sf = wb.create_sheet("segments_financial")
+    ws_sf.append(["segment_name", "metric"] + years)
+
+    # ── 18. segments_operational → segment_data ──────────────────
+    ws_so = wb.create_sheet("segments_operational")
+    ws_so.append(["segment_name", "metric"] + years)
+
+    # ── 19. debt_instruments ─────────────────────────────────────
+    ws_di = wb.create_sheet("debt_instruments")
+    ws_di.append(["instrument_id", "instrument_name", "db_type", "currency",
+                  "opening_balance_mUSD", "committed_amount_mUSD",
+                  "maturity_date", "interest_rate", "rate_type", "base_rate_factor",
+                  "payment_frequency", "amortization_profile", "callable_flag",
+                  "covenant_package"])
+
+    # ── 20. debt_cashflows ───────────────────────────────────────
+    ws_dc = wb.create_sheet("debt_cashflows")
+    ws_dc.append(["instrument_id", "year", "period", "cashflow_type",
+                  "amount_mUSD", "currency", "note"])
+
+    # ── 21. ppe_components → ppe_components ──────────────────────
+    ws_pp = wb.create_sheet("ppe_components")
+    ws_pp.append(["year", "component_id", "component_name", "value_type",
+                  "value_mUSD", "useful_life"])
+
+    # ── 22. intangible_assets → intangible_assets ────────────────
+    ws_ia = wb.create_sheet("intangible_assets")
+    ws_ia.append(["year", "category", "gross_amount_mUSD",
+                  "accumulated_amortization_mUSD", "net_amount_mUSD", "useful_life"])
+
+    # ── 23. provisions → provisions_schedule ─────────────────────
+    ws_prov = wb.create_sheet("provisions")
+    ws_prov.append(["year", "category", "closing_mUSD"])
+
+    # ── 24. associates → associates_schedule ─────────────────────
+    ws_assoc = wb.create_sheet("associates")
+    ws_assoc.append(["year", "category", "movement", "value_mUSD"])
+
+    # ── 25. macro_factors → macro_factors ────────────────────────
+    ws_mf = wb.create_sheet("macro_factors")
+    ws_mf.append(["factor"] + years)
+
+    # ── 26. operational_drivers → operational_drivers ────────────
+    ws_od = wb.create_sheet("operational_drivers")
+    ws_od.append(["driver", "unit"] + years)
+
+    # ── 27. balancing_adjustments ────────────────────────────────
+    ws_ba = wb.create_sheet("balancing_adjustments")
+    ws_ba.append(["year", "statement_type", "metric",
+                  "adjustment_value_mUSD", "is_balancing",
+                  "balancing_reason", "balancing_category", "original_value_mUSD"])
+
+    # ── 28-31. Справочники ───────────────────────────────────────
+    ws_dm = wb.create_sheet("dictionary_metrics")
+    ws_dm.append(["canonical_metric", "statement", "description", "accepted_aliases"])
+
+    ws_ddt = wb.create_sheet("dictionary_debt_types")
+    ws_ddt.append(["instrument_type", "description", "amortization_default", "is_active"])
+
+    ws_ds = wb.create_sheet("dictionary_segments")
+    ws_ds.append(["segment_name", "description", "is_active", "commodity"])
+
+    ws_du = wb.create_sheet("dictionary_units")
+    ws_du.append(["unit", "description", "multiplier"])
 
     wb.save(path)
 

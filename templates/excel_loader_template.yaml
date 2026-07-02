@@ -2,30 +2,31 @@
 # Excel Loader Configuration Template — stressTest_v2 Engine
 # ═══════════════════════════════════════════════════════════════
 # Copy to: companies/{company}/configs/excel_loader.yaml
-# Source Excel: companies/{company}/data/{company}_unified_complete.xlsx
+# Source Excel: companies/{company}/data/excel/{company}_unified.xlsx
 #
-# ExcelLoader reads this config + the Excel file → populates DB.
-# Usage:
-#   loader = ExcelLoader(company_id="{company}", repo=repo,
-#                        db_unit="USD", input_default_unit="mUSD")
-#   result = loader.load(Path("companies/{company}/data/{company}_unified.xlsx"))
+# Two ways to load data:
+# 1. Unified loader (recommended):
+#    python3 tools/load_unified_excel.py --company {company}
+#
+# 2. Schedule-only loader:
+#    python3 tools/load_schedule_sheets.py --company {company}
 
 # ── Loader Settings ──────────────────────────────────────────
 loader_settings:
   company_id: "{company}"
   db_unit: USD                  # target unit in database
   input_default_unit: mUSD      # Excel values in millions → ×1e6 → full USD in DB
-  # Other options: tUSD (thousands), bUSD (billions)
 
-# ── Statement Sheets ────────────────────────────────────────
-# Format: legacy wide (metric | 2010 | 2011 | ... | 2024 | unit | source)
-# Or: new format (label | db_metric | formula | sign | unit | 2010 | ...)
+# ═══════════════════════════════════════════════════════════════
+# CORE STATEMENTS (3 sheets)
+# Format: wide — metric | 2011 | 2012 | ... | 2025
+# ═══════════════════════════════════════════════════════════════
 
 history:
   IS:
     sheet: history_is
-    format: legacy              # legacy | new (with db_metric column)
-    required_metrics:           # model fails without these
+    format: legacy
+    required_metrics:
       - revenue
       - cogs
       - gross_profit
@@ -35,17 +36,28 @@ history:
       - ebt
       - tax_expense
       - net_income
-    key_optional:               # important for accuracy but not blocking
-      - dep_ppe                 # depreciation of PPE
-      - amort_intangibles       # amortization of intangibles
-      - total_da                # total D&A
-      - interest_expense        # interest on debt
-      - interest_income         # interest on cash/deposits
-      - earnings_from_investees # associates/JV income (e.g. Norilsk for Rusal)
-      - asset_impairment        # impairment charges
-      - distribution_expenses   # distribution/selling expenses (IFRS separate from SGA)
-      - current_tax             # current tax expense
-      - deferred_tax            # deferred tax expense/benefit
+    key_optional:
+      - depreciation_owned       # depreciation of PPE
+      - depreciation_rou         # ROU asset depreciation
+      - amortization             # intangibles amortization
+      - total_da                 # total D&A
+      - interest_expense         # interest on debt
+      - interest_income          # interest on cash/deposits
+      - lease_interest           # interest on lease liabilities
+      - earnings_from_investees  # associates/JV income
+      - asset_impairment         # impairment charges
+      - restructuring_and_other_charges
+      - distribution_expenses    # IFRS: separate selling expenses
+      - current_tax_expense      # current tax
+      - deferred_tax_expense     # deferred tax
+      - other_financial_costs
+      - loss_on_debt_extinguishment
+      - net_periodic_benefit_income
+      - other_losses_gains_net
+      - rnd                      # R&D expense
+      - cfo_stock_compensation   # stock-based comp
+      - eps_basic
+      - eps_diluted
 
   BS:
     sheet: history_bs
@@ -54,7 +66,7 @@ history:
       - cash
       - accounts_receivable
       - inventory
-      - ppe_net                 # or ppe_gross + ppe_accum_dep
+      - ppe_net
       - short_term_debt
       - long_term_debt
       - accounts_payable
@@ -62,106 +74,266 @@ history:
       - total_assets
       - total_equity
     key_optional:
-      - ppe_gross               # PPE at cost
-      - ppe_accum_dep           # accumulated depreciation
-      - investments_lt          # investments in associates (Norilsk etc)
-      - intangibles             # intangible assets (excl goodwill)
-      - goodwill                # goodwill
-      - rou_asset               # right-of-use assets (IFRS 16)
-      - dta                     # deferred tax assets
-      - dtl                     # deferred tax liabilities
-      - share_capital           # share capital
-      - apic                    # additional paid-in capital
-      - aoci                    # accumulated other comprehensive income
-      - nci                     # non-controlling interests
-      - other_ca                # other current assets (prepayments, VAT)
-      - other_cl                # other current liabilities (accrued expenses)
-      - other_nca               # other non-current assets
-      - other_ncl               # other non-current liabilities (provisions)
-      - total_liabilities       # total liabilities
-      - total_ca                # total current assets
-      - total_nca               # total non-current assets
-      - total_cl                # total current liabilities
-      - total_ncl               # total non-current liabilities
-      - taxes_payable           # taxes payable
-      - employee_benefits       # employee benefits liability
-      - lease_liab_current      # current lease liability
-      - lease_liab_noncurrent   # non-current lease liability
+      - restricted_cash
+      - short_term_investments
+      - prepaid_expenses
+      - ppe_gross
+      - ppe_accum_dep
+      - rou_asset
+      - finance_lease_asset_net
+      - goodwill
+      - intangibles
+      - investments_lt
+      - dta
+      - dta_noncurrent
+      - dtl
+      - dtl_noncurrent
+      - share_capital
+      - common_stock_par
+      - apic
+      - treasury_stock
+      - aoci
+      - nci
+      - accrued_liabilities
+      - accrued_interest
+      - taxes_payable
+      - payroll_and_benefits_payable
+      - lease_liab_current
+      - finance_lease_liab_current
+      - lease_liab_noncurrent
+      - finance_lease_liab_noncurrent
+      - employee_benefits
+      - deferred_credits
+      - other_current_assets
+      - other_current_liabilities
+      - other_non_current_assets
+      - other_non_current_liabilities
+      - total_current_assets
+      - total_non_current_assets
+      - total_current_liabilities
+      - total_non_current_liabilities
+      - total_liabilities
+      - total_liab_equity
 
   CF:
     sheet: history_cf
     format: legacy
     required_metrics:
-      - cfo_total               # operating cash flow total
-      - cfi_total               # investing cash flow total
-      - cff_total               # financing cash flow total
+      - cfo_total
+      - cfi_total
+      - cff_total
     key_optional:
-      - cfo_net_income          # NI starting point
-      - cfo_da                  # D&A add-back
-      - cfo_before_wc           # CFO before working capital changes
-      - cfo_interest_paid       # interest paid (cash)
-      - cfo_income_tax_paid     # taxes paid (cash)
-      - capex                   # capital expenditures
-      - capex_intangibles       # intangible asset acquisitions
-      - cff_lt_debt_issuance    # long-term debt issuance
-      - cff_lt_debt_repayment   # long-term debt repayment
-      - cff_dividends           # dividends paid
-      - net_change_cash         # net change in cash
-      - cash_opening            # opening cash balance
-      - cash_closing            # closing cash balance
-      - op_lease_cash_cfo       # operating lease payments in CFO
-      - fx_effect_cash          # FX effect on cash
+      - net_income
+      - total_da
+      - depreciation_owned
+      - depreciation_rou
+      - amortization
+      - deferred_tax
+      - cfo_stock_compensation
+      - asset_impairment_charges
+      - loss_on_debt_extinguishment
+      - gain_loss_on_disposal
+      - earnings_from_investees
+      - change_ar
+      - change_inventory
+      - change_ap
+      - change_other_wc
+      - change_taxes_payable
+      - change_interest_payable
+      - interest_paid
+      - taxes_paid
+      - lease_payments_cfo
+      - other_operating
+      - capex
+      - acquisitions
+      - disposal_proceeds
+      - other_investing
+      - debt_issuance
+      - debt_repayments
+      - cff_borrowings
+      - cff_repayments
+      - finance_lease_principal
+      - dividends_paid
+      - share_buyback
+      - equity_issuance
+      - other_financing
+      - fx_effect
+      - net_change_in_cash
+      - cash_beginning
+      - cash_ending
 
-# ── Canonical Sheets (non-statement data) ────────────────────
+# ═══════════════════════════════════════════════════════════════
+# SCHEDULE SHEETS (9 sheets) → loaded by load_schedule_sheets.py
+# Format: long — year | field1 | field2 | ...
+# Values in mUSD (columns ending in _mUSD are auto-scaled ×1e6)
+# ═══════════════════════════════════════════════════════════════
+
+schedules:
+  tax:
+    sheet: schedule_tax
+    target_table: tax_schedule
+    columns: [year, ebt_mUSD, current_tax_mUSD, deferred_tax_mUSD,
+              effective_rate, dta_open_mUSD, dta_additions_mUSD,
+              dta_used_mUSD, dta_close_mUSD, dtl_open_mUSD,
+              dtl_additions_mUSD, dtl_reversal_mUSD, dtl_close_mUSD,
+              nol_open_mUSD, nol_additions_mUSD, nol_used_mUSD, nol_close_mUSD]
+
+  equity:
+    sheet: schedule_equity
+    target_table: equity_schedule
+    columns: [year, re_open_mUSD, net_income_mUSD, dividends_mUSD,
+              buybacks_mUSD, issuance_mUSD, other_equity_changes_mUSD,
+              re_close_mUSD]
+
+  leases:
+    sheet: schedule_leases
+    target_table: lease_schedule
+    columns: [year, lease_type, lease_id, lease_name, rou_open_mUSD,
+              rou_dep_mUSD, rou_close_mUSD, liab_open_mUSD,
+              interest_exp_mUSD, payment_mUSD, liab_close_mUSD,
+              discount_rate]
+
+  working_capital:
+    sheet: schedule_working_capital
+    target_table: sched_wc_corkscrew
+    columns: [year, component, opening_balance_mUSD, closing_balance_mUSD,
+              delta_mUSD, driver_value, driver_metric]
+
+  interest:
+    sheet: schedule_interest
+    target_table: interest_paid_split
+    columns: [year, interest_paid_debt_mUSD, interest_paid_leases_mUSD,
+              interest_paid_total_mUSD, interest_payable_debt_open_mUSD,
+              interest_payable_debt_close_mUSD,
+              interest_payable_leases_open_mUSD,
+              interest_payable_leases_close_mUSD]
+
+  intangibles:
+    sheet: intangible_assets
+    target_table: intangible_assets
+    columns: [year, category, gross_amount_mUSD,
+              accumulated_amortization_mUSD, net_amount_mUSD, useful_life]
+
+  provisions:
+    sheet: provisions
+    target_table: provisions_schedule
+    columns: [year, category, closing_mUSD]
+
+  associates:
+    sheet: associates
+    target_table: associates_schedule
+    columns: [year, category, movement, value_mUSD]
+
+# ═══════════════════════════════════════════════════════════════
+# CORKSCREW DETAIL SHEETS (6 sheets)
+# Granular breakdowns for model corkscrews
+# ═══════════════════════════════════════════════════════════════
+
+corkscrew_detail:
+  lease_finance:
+    sheet: sched_lease_finance
+    target_table: sched_lease_finance
+
+  lease_operating:
+    sheet: sched_lease_operating
+    target_table: sched_lease_operating
+
+  tax_corkscrew:
+    sheet: sched_tax_corkscrew
+    target_table: sched_tax_corkscrew
+
+  wc_corkscrew:
+    sheet: sched_wc_corkscrew
+    target_table: sched_wc_corkscrew
+
+  interest_split:
+    sheet: interest_paid_split
+    target_table: interest_paid_split
+
+  lease_maturity:
+    sheet: lease_maturity_ladder
+    target_table: lease_maturity_ladder
+
+# ═══════════════════════════════════════════════════════════════
+# CANONICAL SHEETS (non-statement data)
+# ═══════════════════════════════════════════════════════════════
 
 canonical:
   debt_instruments:
     sheet: debt_instruments
+    target_table: debt_instruments
     key: instrument_id
-    # Required columns: instrument_id, instrument_name, instrument_type,
-    #   currency, opening_balance, maturity_date, interest_rate, rate_type
-    # rate_type: fixed | floating
-    # interest_rate: numeric (0.05 = 5%, not "5%")
+    # Required: instrument_id, instrument_name, db_type, currency,
+    #   opening_balance_mUSD, maturity_date, interest_rate, rate_type
+
+  debt_cashflows:
+    sheet: debt_cashflows
+    target_table: debt_cashflows
+    key: [instrument_id, year, cashflow_type]
 
   macro_factors:
     sheet: macro_factors
+    target_table: macro_factors
     key: factor_name
-    # Wide format: factor_name | 2010 | 2011 | ... | 2025
-    # Common factors: lme_aluminium, brent, gdp_world, cpi_us, usd_rub
+    # Wide format: factor | 2011 | 2012 | ... | 2025
 
   segments_financial:
     sheet: segments_financial
+    target_table: segment_data
     keys: [segment_name, metric]
-    # Wide format: segment_name | metric | 2010 | ... | 2024 | unit
-    # Metrics: revenue, ebitda, ebit, net_income, capex
+    # Wide: segment_name | metric | 2011 | ... | 2025
 
   segments_operational:
     sheet: segments_operational
+    target_table: segment_data
     keys: [segment_name, metric]
-    # Non-monetary data: production_kt, sales_kt, avg_price_usd_t
-    # Values stored raw (no unit conversion)
 
-  Production_KPI:
-    sheet: Production_KPI
-    key: metric
-    target: preprocess_metrics
-    # Wide format: metric | unit | 2019 | 2020 | ... | 2024
-    # Metrics: production_al_kt, sales_al_kt, avg_al_price_usd_t, etc.
+  ppe_components:
+    sheet: ppe_components
+    target_table: ppe_components
+    key: [component_id, value_type, year]
 
-# ── Sign Convention Notes ────────────────────────────────────
-# US GAAP (credit_negative): income items stored as NEGATIVE in Excel
-#   revenue = positive, cogs = negative, interest_income = NEGATIVE
-# IFRS (natural): income items stored as POSITIVE
-#   revenue = positive, cogs = negative, interest_income = POSITIVE
+  operational_drivers:
+    sheet: operational_drivers
+    target_table: operational_drivers
+    key: [driver, year]
+    # Wide: driver | unit | 2011 | ... | 2025
+
+  balancing_adjustments:
+    sheet: balancing_adjustments
+    target_table: balancing_adjustments
+
+# ═══════════════════════════════════════════════════════════════
+# REFERENCE SHEETS (dictionaries — optional, for validation)
+# ═══════════════════════════════════════════════════════════════
+
+dictionaries:
+  metrics:
+    sheet: dictionary_metrics
+    key: canonical_metric
+
+  debt_types:
+    sheet: dictionary_debt_types
+    key: instrument_type
+
+  segments:
+    sheet: dictionary_segments
+    key: segment_name
+
+  units:
+    sheet: dictionary_units
+    key: unit
+
+# ═══════════════════════════════════════════════════════════════
+# SIGN CONVENTION
+# ═══════════════════════════════════════════════════════════════
+# US GAAP (credit_negative): cogs negative, interest_income NEGATIVE
+# IFRS (natural): cogs negative, interest_income POSITIVE
 # Configure in project.yaml: accounting_conventions.is_income_sign
 
-# ── Instrument ID Normalization ──────────────────────────────
-# ExcelLoader normalizes instrument_id: lowercase + spaces→underscores
-# "CNY 4.75%" → "cny_4.75%"
-# "RUB KeyRate + 2%" → "rub_keyrate_+_2%"
-# This ensures upsert works correctly on reload (no duplicates)
-
-# ── Reload Idempotency ──────────────────────────────────────
-# ExcelLoader uses INSERT OR REPLACE (upsert) for all tables.
-# Running load() multiple times produces identical DB state.
-# Debt instruments: rates must be NUMERIC in Excel (0.0475, not "4.75%")
+# ═══════════════════════════════════════════════════════════════
+# IDEMPOTENCY
+# ═══════════════════════════════════════════════════════════════
+# All loaders use INSERT OR REPLACE (upsert).
+# Running load multiple times produces identical DB state.
+# Debt rates must be NUMERIC in Excel (0.0475, not "4.75%").

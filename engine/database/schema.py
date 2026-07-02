@@ -528,6 +528,38 @@ CREATE TABLE IF NOT EXISTS debt_cashflows (
     PRIMARY KEY (company_id, instrument_id, year, cashflow_type)
 );
 
+CREATE TABLE IF NOT EXISTS provisions_schedule (
+    company_id  TEXT    NOT NULL REFERENCES companies(company_id),
+    period_id   INTEGER NOT NULL REFERENCES periods(period_id),
+    category    TEXT    NOT NULL,
+    closing     REAL,
+    source      TEXT,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, period_id, category)
+);
+
+CREATE TABLE IF NOT EXISTS associates_schedule (
+    company_id  TEXT    NOT NULL REFERENCES companies(company_id),
+    period_id   INTEGER NOT NULL REFERENCES periods(period_id),
+    category    TEXT    NOT NULL,
+    movement    TEXT    NOT NULL,
+    value       REAL,
+    source      TEXT,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, period_id, category, movement)
+);
+
+CREATE TABLE IF NOT EXISTS operational_drivers (
+    company_id  TEXT    NOT NULL,
+    metric      TEXT    NOT NULL,
+    year        INTEGER NOT NULL,
+    value       REAL,
+    unit        TEXT,
+    source      TEXT,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, metric, year)
+);
+
 -- ═══════════════════════════════════════════════════════════════
 -- ИНДЕКСЫ
 -- ═══════════════════════════════════════════════════════════════
@@ -548,13 +580,51 @@ CREATE INDEX IF NOT EXISTS idx_sched_lease_oper_company ON sched_lease_operating
 CREATE INDEX IF NOT EXISTS idx_debt_cashflows_company   ON debt_cashflows(company_id, instrument_id);
 CREATE INDEX IF NOT EXISTS idx_balancing_company        ON balancing_adjustments(company_id, period_id);
 CREATE INDEX IF NOT EXISTS idx_intangibles_company      ON intangible_assets(company_id, period_id);
+CREATE INDEX IF NOT EXISTS idx_provisions_company       ON provisions_schedule(company_id, period_id);
+CREATE INDEX IF NOT EXISTS idx_associates_company       ON associates_schedule(company_id, period_id);
+"""
+
+# Migration for legacy operational_drivers table (has 'company' instead of 'company_id')
+MIGRATE_OPERATIONAL_DRIVERS = """
+ALTER TABLE operational_drivers RENAME TO _operational_drivers_old;
+
+CREATE TABLE operational_drivers (
+    company_id  TEXT    NOT NULL,
+    metric      TEXT    NOT NULL,
+    year        INTEGER NOT NULL,
+    value       REAL,
+    unit        TEXT,
+    source      TEXT,
+    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, metric, year)
+);
+
+INSERT INTO operational_drivers (company_id, metric, year, value, source)
+SELECT company, metric, year, value, source FROM _operational_drivers_old;
+
+DROP TABLE _operational_drivers_old;
 """
 
 
 def create_schema(conn) -> None:
     """Применить DDL к существующему соединению."""
+    # Check if legacy operational_drivers table needs migration
+    _migrate_operational_drivers(conn)
     conn.executescript(SCHEMA_DDL)
     conn.commit()
+
+
+def _migrate_operational_drivers(conn) -> None:
+    """Migrate legacy operational_drivers (company → company_id) if needed."""
+    try:
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(operational_drivers)")]
+    except Exception:
+        return  # table doesn't exist yet — will be created by DDL
+    if not cols:
+        return  # table doesn't exist
+    if 'company' in cols and 'company_id' not in cols:
+        conn.executescript(MIGRATE_OPERATIONAL_DRIVERS)
+        conn.commit()
 
 
 def get_table_names() -> list[str]:
