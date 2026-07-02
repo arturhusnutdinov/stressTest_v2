@@ -24,6 +24,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from engine.constants import RATING_MARGIN_NORM_CAP, RATING_CYCLE_AVG_MARGIN_DEFAULT
+
 logger = logging.getLogger(__name__)
 
 
@@ -185,7 +187,7 @@ class RatingConfig:
     # Корректировка за размер/рыночную позицию (крупный интегрированный производитель)
     size_adjustment: float = 2.0
     # Through-the-cycle (through_the_cycle): нормализованная EBITDA маржа (историческое среднее 2018-2024)
-    cycle_avg_ebitda_margin: float = 0.10   # 10% for US Steel
+    cycle_avg_ebitda_margin: float = RATING_CYCLE_AVG_MARGIN_DEFAULT   # 10% for US Steel
 
     @property
     def cycle_avg_margin(self) -> float:
@@ -346,7 +348,7 @@ class RatingEngine:
         if m.ebitda_margin is not None:
             # Through-the-cycle: нормализуем к cycle_avg если выше среднего
             cycle_avg = self.config.cycle_avg_ebitda_margin
-            normalized_margin = min(m.ebitda_margin, cycle_avg * 1.5)  # cap at 150% of avg
+            normalized_margin = min(m.ebitda_margin, cycle_avg * RATING_MARGIN_NORM_CAP)  # cap at 150% of avg
             em = normalized_margin
             if em > 0.20:    s = 82
             elif em > 0.15:  s = 68   # BBB zone

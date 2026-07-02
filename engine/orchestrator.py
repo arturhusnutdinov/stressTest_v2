@@ -149,7 +149,14 @@ def build_model(
             if run_macro:
                 t0 = time.time()
                 logger.info("▶ Макро-прогноз...")
-                macro_cfg = config_path.parent / "macro_ecm.yaml" if config_path.exists() else None
+                # macro_ecm.yaml: check forecast/ subdirectory first, then configs/ directly
+                _macro_forecast = config_path.parent / "forecast" / "macro_ecm.yaml"
+                _macro_direct = config_path.parent / "macro_ecm.yaml"
+                macro_cfg = (
+                    _macro_forecast if _macro_forecast.exists()
+                    else _macro_direct if _macro_direct.exists()
+                    else None
+                )
                 macro_result = _run_macro(
                     company_id=company_id,
                     repo=repo,
@@ -167,8 +174,8 @@ def build_model(
                         f"методы: {set(macro_result.methods_used.values())}"
                     )
                 else:
-                    result.warnings += macro_result.errors
-                    logger.warning(f"  ⚠ Макро: {macro_result.errors}")
+                    result.errors += macro_result.errors
+                    logger.error(f"  ✗ Макро: {macro_result.errors}")
 
             # ── 2. Модель ─────────────────────────────────────────────────
             if run_model:

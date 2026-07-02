@@ -8,6 +8,8 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+# NOTE: legacy DataMart API — should be migrated to Repository API in a future refactor.
+# Currently works via fallback; do not change the logic without updating callers.
 try:
     from engine.database.data_mart import get_data_mart
 except ImportError:

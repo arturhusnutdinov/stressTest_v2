@@ -3,13 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from engine.constants import INTEREST_PAYABLE_TIMING_DEFAULT
+
 
 @dataclass
 class InterestPayableBlock:
     # Inputs
     interest_payable_open:  float = 0.0
     interest_accrued:       float = 0.0   # total interest expense for period
-    payment_timing:         str   = "current_year"   # "current_year" | "next_year"
+    payment_timing:         str   = INTEREST_PAYABLE_TIMING_DEFAULT   # "current_year" | "next_year"
 
     # Outputs
     interest_payable_close: Optional[float] = None

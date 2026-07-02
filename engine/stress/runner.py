@@ -98,7 +98,7 @@ class StressRunner:
 
             # Применяем macro_shocks — модифицируем macro_forecasts в historic
             stressed_historic = self._apply_macro_shocks(
-                historic, scenario.macro_shocks, config.forecast_years
+                historic, scenario.macro_shocks, config.forecast_years, config
             )
 
             # Применяем driver_shocks — модифицируем config
@@ -173,7 +173,7 @@ class StressRunner:
 
     # ── Применение шоков ───────────────────────────────────────────────────────
 
-    def _apply_macro_shocks(self, historic, shocks: List[ShockSpec], forecast_years) -> object:
+    def _apply_macro_shocks(self, historic, shocks: List[ShockSpec], forecast_years, config=None) -> object:
         """
         Применяет macro_shocks к копии historic.macro_forecasts.
         Возвращает модифицированный historic (deepcopy).
@@ -216,7 +216,10 @@ class StressRunner:
 
         # Если есть шок revenue-драйвера (HRC) — сбрасываем revenue в base_year_state
         # чтобы _solve_revenue пересчитал chain-link от истории, а не от base прогноза
-        revenue_factors = {"steel_price_hrc", "steel_price", "gdp_us", "gdp_world"}
+        # Get revenue factors from project config, fallback to common set
+        revenue_factors = set(getattr(config, 'revenue_macro_factors', None) or
+                              getattr(config, 'macro_policy_factors', None) or
+                              ["steel_price_hrc", "gdp_us", "gdp_world"])
         has_revenue_shock = any(s.factor in revenue_factors for s in shocks)
         if has_revenue_shock:
             # base_year_state.revenue остаётся историческим (2024 факт) — это правильно
@@ -322,21 +325,6 @@ class StressRunner:
 
             except Exception as e:
                 logger.debug(f"  Driver shock {shock.factor}: ошибка — {e}")
-
-        # Специальная обработка rate шоков для schedule-based режима
-        rate_shocks = [s for s in shocks if s.factor in ("avg_rate", "rate_spread")]
-        if rate_shocks and hasattr(stressed_cfg, "debt_instruments"):
-            for shock in rate_shocks:
-                n_updated = 0
-                for inst in stressed_cfg.debt_instruments:
-                    if inst.interest_rate is not None:
-                        old_rate = inst.interest_rate
-                        if shock.shock_type == "absolute":
-                            inst.interest_rate = max(0.001, old_rate + shock.value / 100.0)
-                        else:
-                            inst.interest_rate = max(0.001, old_rate * (1 + shock.value / 100.0))
-                        n_updated += 1
-                logger.info(f"  Rate shock: обновлено {n_updated} инструментов (+{shock.value:.1f}bps)")
 
         return stressed_cfg
 

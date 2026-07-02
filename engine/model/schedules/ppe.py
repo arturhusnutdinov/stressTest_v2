@@ -1,7 +1,10 @@
 """PP&E corkscrew block."""
 from __future__ import annotations
+import logging
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -56,6 +59,11 @@ class PPEBlock:
         if gross_open == 0 and net_open > 0:
             gross_open  = net_open * 2
             accdep_open = gross_open - net_open
+            logger.warning(
+                "PPE gross reconstruction: gross_open=0 but net_open=%.0f; "
+                "estimating gross_open=%.0f (2x net). Consider providing ppe_gross in DB.",
+                net_open, gross_open,
+            )
         gross_disposals   = capex * min(disposal_pct_of_capex, 0.5)
         dep_on_disposals  = gross_disposals * (accdep_open / max(gross_open, 1e-9))
         avg_net = (net_open + max(net_open + capex - (gross_open*dep_rate), 0)) / 2

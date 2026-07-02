@@ -42,6 +42,10 @@ IS_METRICS = {
     "net_income":                 "net_income",
     "eps_basic":                  "eps_basic",
     "eps_diluted":                "eps_diluted",
+    "distribution_expenses":      "distribution_expenses",
+    "cfo_stock_compensation":     "cfo_stock_compensation",
+    "current_tax":                "current_tax_expense",
+    "deferred_tax":               "deferred_tax_expense",
 }
 
 BS_METRICS = {
@@ -85,6 +89,13 @@ BS_METRICS = {
     "nci":                        "nci",
     "total_equity":               "total_equity",
     "total_liab_equity":          "total_liab_equity",
+    "finance_lease_asset":        "finance_lease_asset_net",
+    "finance_lease_liab_current": "finance_lease_liab_current",
+    "finance_lease_liab_noncurrent": "finance_lease_liab_noncurrent",
+    "ppe_net_ex_lease":           "ppe_net_ex_lease",
+    "accrued_liabilities":        "accrued_liabilities",
+    "accounts_payable_rp":        "accounts_payable_related_parties",
+    "deferred_credits":           "deferred_credits",
 }
 
 CF_METRICS = {
@@ -117,6 +128,10 @@ CF_METRICS = {
     "cf_net_change":              "net_change",
     "cf_cash_opening":            "cash_opening",
     "cf_cash_ending":             "cash_ending",
+    "cfo_change_other_wc":        "change_other_wc",
+    "cfo_lease_payments_operating": "lease_payments_cfo",
+    "cfo_stock_comp":             "cfo_stock_compensation",
+    "cff_finance_lease_principal": "fin_lease_principal_cff",
 }
 
 
@@ -287,11 +302,11 @@ class ModelSaver:
                 "INSERT INTO model_versions (company_id, version, status, description) "
                 "VALUES (?, ?, 'published', ?) "
                 "ON CONFLICT(company_id, version) DO UPDATE SET status='published'",
-                (self.company_id, "v2.0", f"Прогноз {self._config.forecast_start_year}–{self._config.forecast_end_year}"),
+                (self.company_id, "v2.1", f"Прогноз {self._config.forecast_start_year}–{self._config.forecast_end_year}"),
             )
             row = self._repo.query_one(
                 "SELECT version_id FROM model_versions WHERE company_id=? AND version=?",
-                (self.company_id, "v2.0"),
+                (self.company_id, "v2.1"),
             )
             return row["version_id"] if row else None
         except Exception as e:

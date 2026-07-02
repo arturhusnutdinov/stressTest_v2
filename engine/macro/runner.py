@@ -63,7 +63,10 @@ def run_macro(
     # Разрешаем путь к конфигу
     from engine import ROOT as root
     if config_path is None:
-        config_path = root / "companies" / company_id / "configs" / "macro_ecm.yaml"
+        # Check forecast/ subdirectory first, then configs/ directly
+        _forecast = root / "companies" / company_id / "configs" / "forecast" / "macro_ecm.yaml"
+        _direct = root / "companies" / company_id / "configs" / "macro_ecm.yaml"
+        config_path = _forecast if _forecast.exists() else _direct
 
     if not config_path.exists():
         msg = f"macro_ecm.yaml не найден: {config_path}"

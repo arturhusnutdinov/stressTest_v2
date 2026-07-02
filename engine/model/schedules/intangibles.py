@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from engine.constants import INTANG_AMORT_RATE_FALLBACK
+
 
 @dataclass
 class IntangiblesBlock:
@@ -51,7 +53,7 @@ class IntangiblesBlock:
     def from_prev_state(
         cls,
         prev,
-        amort_rate: float = 0.10,
+        amort_rate: float = INTANG_AMORT_RATE_FALLBACK,
         additions_pct_revenue: float = 0.0,
         revenue: float = 0.0,
     ) -> "IntangiblesBlock":

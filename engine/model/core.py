@@ -22,13 +22,21 @@ from .schedules import (
     TaxBlock, LeaseBlock, EquityBlock, InterestPayableBlock,
     IntangiblesBlock, WCBlock,
 )
+from engine.constants import (
+    SOLVER_MAX_ITER, SOLVER_TOL,
+    BS_TOLERANCE, CF_TOLERANCE, BS_DIFF_LOG_THRESHOLD,
+    INTANG_AMORT_RATE_FALLBACK, DEBT_MIN_RATE,
+    DEBT_MANDATORY_ST_MULTIPLIER, DEBT_ST_RATIO_MIN, DEBT_ST_RATIO_MAX,
+    DEBT_ST_RATIO_DEFAULT, DEBT_AVG_RATE_DEFAULT,
+    CAPEX_INTEREST_DECAY_RATE, CAPEX_PCT_DEFAULT,
+)
 
 logger = logging.getLogger(__name__)
 
-# Толерантность BS Identity и CF Bridge
-BS_TOL   = 1.0       # $1 (в единицах db_unit)
-CF_TOL   = 1.0
-ITER_MAX = 15        # максимум итераций joint solver
+# Толерантность BS Identity и CF Bridge (aliases from constants)
+BS_TOL   = BS_TOLERANCE
+CF_TOL   = CF_TOLERANCE
+ITER_MAX = SOLVER_MAX_ITER
 
 
 class ModelError(Exception):
@@ -241,8 +249,8 @@ class ThreeStatementModel:
             max_iter: максимум итераций (дефолт 10, обычно сходится за 3-4)
             tol:      допуск сходимости в абсолютных единицах (дефолт 1000 = $1K)
         """
-        max_iter = getattr(self._c, 'max_iter', 10)
-        tol      = getattr(self._c, 'tol', 1000.0)  # $1K допуск
+        max_iter = getattr(self._c, 'max_iter', SOLVER_MAX_ITER)
+        tol      = getattr(self._c, 'tol', SOLVER_TOL)  # $1K допуск
 
         state = YearState(year=year)
 
@@ -509,7 +517,7 @@ class ThreeStatementModel:
             # Intangibles: amort rate from preprocessor or last-resort 10%
             _intang_rec = self._h.preprocess.get('capex', {}).get('intang_amort_rate_recommended')
             if isinstance(_intang_rec, dict): _intang_rec = _intang_rec.get(-1)
-            intang_rate = float(_intang_rec) if _intang_rec else 0.10
+            intang_rate = float(_intang_rec) if _intang_rec else INTANG_AMORT_RATE_FALLBACK
             state.intangibles       = max(0.0, prev.intangibles * (1 - intang_rate))
             state.amort_intangibles = prev.intangibles * intang_rate
             state.total_da = dep_charge + state.amort_intangibles
@@ -527,7 +535,7 @@ class ThreeStatementModel:
             if not _rec:
                 _rec = _pp_cap.get('dep_to_rev_recommended')
                 if isinstance(_rec, dict): _rec = _rec.get(-1)
-            capex_pct = float(_rec) if _rec else 0.05
+            capex_pct = float(_rec) if _rec else CAPEX_PCT_DEFAULT
         raw_capex = abs(state.revenue * capex_pct)
         # Economic floor: CapEx >= min_capex_da_ratio × DA (maintenance of asset base)
         _prev_da = prev.dep_ppe or 0.0
@@ -574,7 +582,7 @@ class ThreeStatementModel:
         hist_amort = float(
             self._h.is_data.get(self._h.base_year, {}).get("amortization") or 0.0
         )
-        amort_rate = (hist_amort / max(prev.intangibles, 1.0)) if hist_amort > 0 else 0.0
+        amort_rate = (hist_amort / max(prev.intangibles, 1.0)) if hist_amort > 0 else INTANG_AMORT_RATE_FALLBACK
         intang_block = IntangiblesBlock.from_prev_state(
             prev, amort_rate=amort_rate, revenue=state.revenue,
             additions_pct_revenue=0.0,
@@ -941,7 +949,7 @@ class ThreeStatementModel:
             # Estimate remaining finance lease liability from running balance
             _fl_liab_est = self._fl_liab_remaining
             if _fl_liab_est == 0:
-                _fl_liab_est = 209_000_000.0  # 10-K 2024: $209M total fin lease liab
+                _fl_liab_est = getattr(self._c, 'finance_lease_liab_initial', 0) or (prev.other_ncl * 0.1)
             _fl_principal = _fl_liab_est * _fl_rate
             # Update running balance (new leases flow through capex→ppe_net, not here)
             self._fl_liab_remaining = max(0, _fl_liab_est - _fl_principal)
@@ -1034,13 +1042,13 @@ class ThreeStatementModel:
         if not hist_st_ratio:
             prev_hist_total = prev.short_term_debt + prev.long_term_debt
             hist_st_ratio = (prev.short_term_debt / prev_hist_total
-                            if prev_hist_total > 0 else 0.15)
+                            if prev_hist_total > 0 else DEBT_ST_RATIO_DEFAULT)
 
         # Clamp: ST ratio 5%-40% (реалистичный диапазон)
-        hist_st_ratio = max(0.05, min(0.40, hist_st_ratio or 0.15))
+        hist_st_ratio = max(DEBT_ST_RATIO_MIN, min(DEBT_ST_RATIO_MAX, hist_st_ratio or DEBT_ST_RATIO_DEFAULT))
 
         # Обязательная ST амортизация (текущая порция LT долга)
-        mandatory_st = prev.long_term_debt * hist_st_ratio * 0.5  # ~50% ST ratio = амортизация
+        mandatory_st = prev.long_term_debt * hist_st_ratio * DEBT_MANDATORY_ST_MULTIPLIER
 
         # RC остаток — draw/repay в зависимости от cash gap
         min_cash = getattr(cfg.rc, 'min_cash', 0) if hasattr(cfg, 'rc') else 0
@@ -1096,7 +1104,7 @@ class ThreeStatementModel:
             _rate_rec = _debt_pp.get('avg_interest_rate_recommended')
             if isinstance(_rate_rec, dict): _rate_rec = _rate_rec.get(-1)
             avg_rate = float(_rate_rec) if _rate_rec else None
-        avg_rate = avg_rate or 0.05  # last-resort: 5% neutral rate
+        avg_rate = avg_rate or DEBT_AVG_RATE_DEFAULT  # last-resort: 5% neutral rate
         avg_debt = (prev_total + new_total) / 2.0
         gross_interest = avg_debt * avg_rate
 
@@ -1111,7 +1119,7 @@ class ThreeStatementModel:
         if isinstance(_cap_series, dict) and state.year in _cap_series:
             cap_pct = float(_cap_series[state.year])          # фактическое значение для года
         else:
-            cap_pct = max(0.0, float(_cap_rec) - 0.15 * years_from_base)
+            cap_pct = max(0.0, float(_cap_rec) - CAPEX_INTEREST_DECAY_RATE * years_from_base)
 
         state.interest_expense_debt = gross_interest * (1.0 - cap_pct)
         state.interest_expense      = state.interest_expense_debt + abs(state.interest_expense_leases or 0)
@@ -1178,6 +1186,7 @@ class ThreeStatementModel:
                 gross_rate = max(historical_rate, self._c.debt.avg_rate_pct)
             else:
                 gross_rate = self._c.debt.avg_rate_pct + self._c.debt.general_rate_delta_pct
+            gross_rate = max(DEBT_MIN_RATE, gross_rate)
             gross_interest = (total_st + total_lt) * gross_rate
             # Применяем cap_pct: year-specific из препроцессора, затем decay
             _capex_pp2  = self._h.preprocess.get("capex", {})
@@ -1189,7 +1198,7 @@ class ThreeStatementModel:
             if isinstance(_cap_series2, dict) and year in _cap_series2:
                 cap_pct = float(_cap_series2[year])
             else:
-                cap_pct = max(0.0, float(_cap_rec2) - 0.15 * years_elapsed)
+                cap_pct = max(0.0, float(_cap_rec2) - CAPEX_INTEREST_DECAY_RATE * years_elapsed)
             capitalized = gross_interest * cap_pct
             total_interest = max(0.0, gross_interest - capitalized)
             logger.debug(

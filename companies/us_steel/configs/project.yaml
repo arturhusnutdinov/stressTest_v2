@@ -42,10 +42,7 @@ macro_forecast:
   - companies/us_steel/data/macro
   - macro/industry/metallurgy/drivers
   - macro/global/drivers
-history:
-  is: companies/us_steel/history/is_history_us_steel.csv
-  bs: companies/us_steel/history/bs_history_us_steel.csv
-  cf: companies/us_steel/history/cf_history_us_steel.csv
+# history: loaded from data_mart_v2.db via ExcelLoader
 model:
   engine_version: v2
   mode: custom

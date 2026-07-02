@@ -121,6 +121,7 @@ DEFAULT_COVENANTS = [
 ]
 
 # Ковенанты для стальной отрасли (более жёсткие)
+# NOTE: used as default when project.yaml doesn't specify covenants and industry is metals/steel/mining
 STEEL_COVENANTS = [
     CovenantSpec("Net Debt/EBITDA",  "net_debt_ebitda",   "max", 3.5,  0.10, "Steel industry leverage"),
     CovenantSpec("Interest Coverage","interest_coverage",  "min", 2.5,  0.15, "Steel ICR"),
@@ -347,6 +348,7 @@ class CovenantsChecker:
             )
         return results
 
+    # NOTE: reserved for future covenant acceleration implementation
     def get_acceleration_breach_instruments(
         self, state, year: int, debt_instruments: list
     ) -> set:

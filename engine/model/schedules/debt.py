@@ -10,6 +10,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
+from engine.constants import DEBT_AVG_RATE_DEFAULT, DEBT_MIN_RATE, REFI_FEES_BPS_DIVISOR, SOLVER_EPSILON
+
 logger = logging.getLogger(__name__)
 
 
@@ -227,7 +229,7 @@ class DebtOptimizer:
             if inst.is_lease:
                 continue
             mandatory = mandatorys[idx]
-            if mandatory <= 1e-9:
+            if mandatory <= SOLVER_EPSILON:
                 continue
 
             should_refi = (
@@ -241,13 +243,13 @@ class DebtOptimizer:
             refi_amt     = mandatory * refi_availability
             non_refi_amt = mandatory - refi_amt
 
-            if non_refi_amt > 1e-9:
+            if non_refi_amt > SOLVER_EPSILON:
                 repays[idx] += non_refi_amt
                 mandatory    = refi_amt
                 mandatorys[idx] = refi_amt
 
             # Комиссия
-            fee = mandatory * _nz(refi_fees_bps) / 10_000.0
+            fee = mandatory * _nz(refi_fees_bps) / REFI_FEES_BPS_DIVISOR
             refi_fees_[idx] += fee
             total_refi_fees  += fee
 
@@ -301,7 +303,7 @@ class DebtOptimizer:
         draw_order = cls._order_indices(insts, draw_order_override)
 
         for idx in draw_order:
-            if required_draw <= 1e-9:
+            if required_draw <= SOLVER_EPSILON:
                 break
             inst = insts[idx]
             if inst.is_lease:
@@ -313,20 +315,20 @@ class DebtOptimizer:
             else:
                 cap = float("inf")
             take = min(required_draw, cap)
-            if take <= 1e-9:
+            if take <= SOLVER_EPSILON:
                 continue
             draws[idx]    += take
             required_draw -= take
 
         # Fallback: если RC не хватило → новый LT-инструмент (new money)
-        if required_draw > 1e-9 and allow_new_money:
+        if required_draw > SOLVER_EPSILON and allow_new_money:
             # Средняя рыночная ставка — берём из существующих LT-инструментов
             lt_rates = [
                 insts[i].rate for i in range(len(insts))
                 if not insts[i].is_revolving and not insts[i].is_lease
                 and insts[i].rate > 0
             ]
-            avg_lt_rate = sum(lt_rates) / len(lt_rates) if lt_rates else 0.05
+            avg_lt_rate = sum(lt_rates) / len(lt_rates) if lt_rates else DEBT_AVG_RATE_DEFAULT
             new_money_inst = DebtInstrumentOpen(
                 instrument_id=f"_newmoney_{year}",
                 name=f"NewMoney_{year}",
@@ -363,7 +365,7 @@ class DebtOptimizer:
         total_repays_voluntary = 0.0
 
         for idx in repay_order:
-            if surplus <= 1e-9 or total_repays_voluntary >= vol_cap:
+            if surplus <= SOLVER_EPSILON or total_repays_voluntary >= vol_cap:
                 break
             inst = insts[idx]
             if inst.is_lease:
@@ -381,7 +383,7 @@ class DebtOptimizer:
             if cash_check < min_cash:
                 max_pay = max(0.0, cash_after_draws - total_repays_voluntary - min_cash)
 
-            if max_pay <= 1e-9:
+            if max_pay <= SOLVER_EPSILON:
                 continue
             repays[idx]           += max_pay
             total_repays_voluntary += max_pay

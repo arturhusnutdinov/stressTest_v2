@@ -3,6 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
 
+from engine.constants import (
+    WC_OTHER_CA_PCT_REV, WC_ACCRUED_PCT_SGA, WC_OTHER_CL_PCT_REV,
+    WC_CYCLICAL_ADJ_MIN, WC_CYCLICAL_ADJ_MAX,
+    WC_DSO_CYCLICAL_ELASTICITY, WC_DIH_CYCLICAL_ELASTICITY,
+    WC_DPO_CYCLICAL_ELASTICITY,
+)
+
 
 @dataclass
 class WCBlock:
@@ -123,9 +130,9 @@ class WCBlock:
         dso: float = 45.0,
         dih: float = 60.0,
         dpo: float = 50.0,
-        other_ca_pct_rev: float = 0.02,
-        accrued_pct_sga:  float = 0.10,
-        other_cl_pct_rev: float = 0.01,
+        other_ca_pct_rev: float = WC_OTHER_CA_PCT_REV,
+        accrued_pct_sga:  float = WC_ACCRUED_PCT_SGA,
+        other_cl_pct_rev: float = WC_OTHER_CL_PCT_REV,
         revenue_growth_rate: float = 0.0,
     ) -> "WCBlock":
         """
@@ -151,9 +158,9 @@ class WCBlock:
         # dih_adj = dih × (1 - 0.4 × g):  more inventory-sensitive than DSO
         # dpo_adj = dpo × (1 + 0.2 × g):  g<0 → factor<1 → suppliers tighten
         g = revenue_growth_rate
-        adj_factor_dso = max(0.80, min(1.20, 1.0 - 0.3 * g))
-        adj_factor_dih = max(0.80, min(1.20, 1.0 - 0.4 * g))
-        adj_factor_dpo = max(0.80, min(1.20, 1.0 + 0.2 * g))
+        adj_factor_dso = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DSO_CYCLICAL_ELASTICITY * g))
+        adj_factor_dih = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DIH_CYCLICAL_ELASTICITY * g))
+        adj_factor_dpo = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 + WC_DPO_CYCLICAL_ELASTICITY * g))
         dso = dso * adj_factor_dso
         dih = dih * adj_factor_dih
         dpo = dpo * adj_factor_dpo

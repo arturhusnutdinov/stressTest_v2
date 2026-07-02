@@ -13,21 +13,32 @@
 #   pp         — add percentage points to ratio:     {type: pp, value: 3.0}
 #   level      — set to absolute value:              {type: level, value: 50.0}
 #
+# NOTE: Replace COMMODITY_FACTOR and FX_PAIR placeholders with your
+# company-specific macro factors from project.yaml → macro_forecast.factors[].
+#
+# Common commodity factors:
+#   steel_price_hrc, lme_aluminium, lme_nickel, lme_copper, brent,
+#   iron_ore_price, lme_palladium, lme_platinum, gold_price
+#
+# Common FX pairs:
+#   usd_rub, usd_eur, usd_cny, dxy
+#
+# Common energy factors:
+#   russian_power_price, natural_gas_price, electricity_price
+#
 # NOTE: If CogsBlock (cogs.mode=component) is active, macro_shocks on
-# lme_alumina, russian_power_price, usd_rub flow through automatically.
+# commodity/energy factors flow through automatically.
 # Remove redundant driver_shocks.cogs_pct in that case.
 
 scenarios:
 
   # ── Commodity Downturn ───────────────────────────────────────
-  # (customize commodity factors for your industry)
   commodity_downturn:
-    description: "Primary commodity -25%, secondary -15%"
+    description: "Primary commodity -25%, WC deterioration"
     macro_shocks:
-      # Steel: steel_price_hrc: {type: percentage, value: -25.0}
-      # Aluminium: lme_aluminium: {type: percentage, value: -25.0}
-      # Oil: brent: {type: percentage, value: -30.0}
-      steel_price_hrc:
+      # ⚠ REPLACE with your primary commodity factor:
+      #   steel_price_hrc / lme_aluminium / lme_nickel / brent / etc.
+      COMMODITY_FACTOR:
         type: percentage
         value: -25.0
     driver_shocks:
@@ -39,33 +50,26 @@ scenarios:
         value: 20.0
 
   # ── FX Shock ────────────────────────────────────────────────
-  # (for companies with FX-denominated costs)
   fx_shock:
     description: "Local currency devaluation +30%"
     macro_shocks:
-      usd_rub:                     # change to your FX pair
+      # ⚠ REPLACE with your FX pair: usd_rub / usd_eur / usd_cny
+      FX_PAIR:
         type: percentage
         value: 30.0
-      # If energy costs are FX-linked:
-      # russian_power_price:
-      #   type: percentage
-      #   value: 15.0
 
   # ── Energy Spike ────────────────────────────────────────────
   energy_spike:
-    description: "Power price +40%, oil +30%"
+    description: "Energy cost +40%, oil +30%"
     macro_shocks:
-      russian_power_price:         # change to your energy factor
+      # ⚠ REPLACE with your energy factor:
+      #   russian_power_price / natural_gas_price / electricity_price
+      ENERGY_FACTOR:
         type: percentage
         value: 40.0
       brent:
         type: percentage
         value: 30.0
-    # If NOT using CogsBlock, add flat COGS override:
-    # driver_shocks:
-    #   cogs_pct:
-    #     type: pp
-    #     value: 5.0
 
   # ── Rate Spike ──────────────────────────────────────────────
   rate_spike:
@@ -79,7 +83,8 @@ scenarios:
   covenant_breach:
     description: "Combined: commodity -20%, rates +200bp, WC stress"
     macro_shocks:
-      steel_price_hrc:             # change to your primary commodity
+      # ⚠ REPLACE with your primary commodity factor
+      COMMODITY_FACTOR:
         type: percentage
         value: -20.0
     driver_shocks:

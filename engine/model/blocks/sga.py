@@ -1,6 +1,9 @@
 """SGA forecast block: Revenue × sga_pct × (1 + CPI uplift)."""
 from __future__ import annotations
 from typing import TYPE_CHECKING
+
+from engine.constants import SGA_PCT_MIN, SGA_PCT_MAX, SGA_CPI_UPLIFT_MAX, SGA_HIST_CLAMP_LOW, SGA_HIST_CLAMP_HIGH
+
 if TYPE_CHECKING:
     from ..inputs import YearState, HistoricState, ModelConfig
 
@@ -33,7 +36,7 @@ def solve_sga(state, prev, historic, config):
             cpi_growth = (cpi_curr / cpi_prev) - 1.0
             beta_clamped = min(cpi_beta, 1.0)
             uplift = cpi_growth * beta_clamped
-            uplift = max(-0.03, min(0.03, uplift))
+            uplift = max(-SGA_CPI_UPLIFT_MAX, min(SGA_CPI_UPLIFT_MAX, uplift))
             sga_pct = sga_pct * (1.0 + uplift)
 
     hist_sga = historic.preprocess.get("margin_ratios", {}).get("opex_ratio") or \
@@ -41,9 +44,9 @@ def solve_sga(state, prev, historic, config):
     if isinstance(hist_sga, dict):
         hist_vals = [v for k, v in hist_sga.items() if isinstance(k, int) and k > 0 and v is not None]
         if hist_vals:
-            sga_pct = max(min(hist_vals)*0.80, min(max(hist_vals)*1.20, sga_pct))
+            sga_pct = max(min(hist_vals)*SGA_HIST_CLAMP_LOW, min(max(hist_vals)*SGA_HIST_CLAMP_HIGH, sga_pct))
     else:
-        sga_pct = max(0.01, min(0.30, sga_pct))
+        sga_pct = max(SGA_PCT_MIN, min(SGA_PCT_MAX, sga_pct))
 
     state.sga = -abs(state.revenue * sga_pct)
     return state

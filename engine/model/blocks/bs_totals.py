@@ -2,6 +2,9 @@
 from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
+
+from engine.constants import BS_DIFF_LOG_THRESHOLD
+
 if TYPE_CHECKING:
     from ..inputs import YearState
 
@@ -43,7 +46,7 @@ def solve_bs_totals(state):
     state.total_liab_equity = state.total_liabilities + state.total_equity
 
     bs_diff = state.total_assets - state.total_liab_equity
-    if abs(bs_diff) > 100:
+    if abs(bs_diff) > BS_DIFF_LOG_THRESHOLD:
         logger.debug(
             f"  {state.year}: BS diff={bs_diff/1e6:.2f}M "
             f"(assets={state.total_assets/1e6:.0f} L+E={state.total_liab_equity/1e6:.0f})"

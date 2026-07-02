@@ -712,6 +712,289 @@ class Repository:
             )
         return rating_id or 0
 
+    # ── расписания: tax / equity / lease / ppe / segment / operational / intangible ──
+
+    def upsert_tax_schedule(self, company_id: str, year: int, **fields) -> int:
+        """Upsert tax_schedule row for a year."""
+        period_id = self.ensure_period(company_id, year)
+        allowed = (
+            "ebt", "current_tax", "deferred_tax", "effective_rate",
+            "dta_open", "dta_additions", "dta_used", "dta_close",
+            "dtl_open", "dtl_additions", "dtl_reversal", "dtl_close",
+            "nol_open", "nol_additions", "nol_used", "nol_close", "source",
+        )
+        filtered = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not filtered:
+            return 0
+        cols = ", ".join(filtered.keys())
+        placeholders = ", ".join("?" * len(filtered))
+        updates = ", ".join(f"{k} = excluded.{k}" for k in filtered)
+        self.execute(
+            f"""
+            INSERT INTO tax_schedule (company_id, period_id, {cols}, updated_at)
+            VALUES (?, ?, {placeholders}, CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, period_id) DO UPDATE SET
+                {updates}, updated_at = CURRENT_TIMESTAMP
+            """,
+            (company_id, period_id, *filtered.values()),
+        )
+        return 1
+
+    def get_tax_schedule(self, company_id: str) -> Dict[int, Dict[str, Any]]:
+        """Get all tax_schedule rows. Returns {year: {field: value}}."""
+        rows = self.query(
+            """
+            SELECT p.year, t.*
+            FROM tax_schedule t
+            JOIN periods p ON t.period_id = p.period_id
+            WHERE t.company_id = ?
+            ORDER BY p.year
+            """,
+            (company_id,),
+        )
+        result: Dict[int, Dict[str, Any]] = {}
+        for row in rows:
+            yr = row.pop("year")
+            row.pop("company_id", None)
+            row.pop("period_id", None)
+            row.pop("updated_at", None)
+            result[yr] = row
+        return result
+
+    def upsert_equity_schedule(self, company_id: str, year: int, **fields) -> int:
+        """Upsert equity_schedule row for a year."""
+        period_id = self.ensure_period(company_id, year)
+        allowed = (
+            "re_open", "net_income", "dividends", "buybacks",
+            "issuance", "other_equity_changes", "re_close", "source",
+        )
+        filtered = {k: v for k, v in fields.items() if k in allowed and v is not None}
+        if not filtered:
+            return 0
+        cols = ", ".join(filtered.keys())
+        placeholders = ", ".join("?" * len(filtered))
+        updates = ", ".join(f"{k} = excluded.{k}" for k in filtered)
+        self.execute(
+            f"""
+            INSERT INTO equity_schedule (company_id, period_id, {cols}, updated_at)
+            VALUES (?, ?, {placeholders}, CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, period_id) DO UPDATE SET
+                {updates}, updated_at = CURRENT_TIMESTAMP
+            """,
+            (company_id, period_id, *filtered.values()),
+        )
+        return 1
+
+    def upsert_lease_schedule(
+        self, company_id: str, year: int, rows: List[Dict[str, Any]]
+    ) -> int:
+        """Batch upsert lease_schedule rows for a year. rows = [{lease_id, lease_type, ...}]"""
+        period_id = self.ensure_period(company_id, year)
+        data = [
+            (
+                company_id, period_id,
+                r["lease_id"], r.get("lease_name"), r.get("lease_type", "finance"),
+                r.get("rou_open", 0), r.get("rou_dep", 0), r.get("rou_close", 0),
+                r.get("liab_open", 0), r.get("interest_exp", 0),
+                r.get("payment", 0), r.get("liab_close", 0),
+                r.get("discount_rate"), r.get("source"),
+            )
+            for r in rows
+        ]
+        self.conn.executemany(
+            """
+            INSERT INTO lease_schedule
+                (company_id, period_id, lease_id, lease_name, lease_type,
+                 rou_open, rou_dep, rou_close, liab_open, interest_exp,
+                 payment, liab_close, discount_rate, source, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, period_id, lease_id) DO UPDATE SET
+                lease_name    = excluded.lease_name,
+                lease_type    = excluded.lease_type,
+                rou_open      = excluded.rou_open,
+                rou_dep       = excluded.rou_dep,
+                rou_close     = excluded.rou_close,
+                liab_open     = excluded.liab_open,
+                interest_exp  = excluded.interest_exp,
+                payment       = excluded.payment,
+                liab_close    = excluded.liab_close,
+                discount_rate = excluded.discount_rate,
+                source        = excluded.source,
+                updated_at    = CURRENT_TIMESTAMP
+            """,
+            data,
+        )
+        return len(data)
+
+    def upsert_ppe_components(
+        self, company_id: str, year: int, rows: List[Dict[str, Any]]
+    ) -> int:
+        """Batch upsert ppe_components rows. rows = [{component_id, value_type, value, ...}]"""
+        period_id = self.ensure_period(company_id, year)
+        data = [
+            (
+                company_id, period_id,
+                r["component_id"], r.get("component_name"),
+                r["value_type"], r.get("value"),
+                r.get("useful_life"), r.get("source"),
+            )
+            for r in rows
+        ]
+        self.conn.executemany(
+            """
+            INSERT INTO ppe_components
+                (company_id, period_id, component_id, component_name,
+                 value_type, value, useful_life, source, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, period_id, component_id, value_type) DO UPDATE SET
+                component_name = excluded.component_name,
+                value          = excluded.value,
+                useful_life    = excluded.useful_life,
+                source         = excluded.source,
+                updated_at     = CURRENT_TIMESTAMP
+            """,
+            data,
+        )
+        return len(data)
+
+    def upsert_segment_data(
+        self, company_id: str, year: int, rows: List[Dict[str, Any]]
+    ) -> int:
+        """Batch upsert segment_data rows. rows = [{segment_id, segment_name, metric, value}]"""
+        period_id = self.ensure_period(company_id, year)
+        data = [
+            (
+                company_id, period_id,
+                r["segment_id"], r.get("segment_name"),
+                r["metric"], r.get("value"), r.get("source"),
+            )
+            for r in rows
+        ]
+        self.conn.executemany(
+            """
+            INSERT INTO segment_data
+                (company_id, period_id, segment_id, segment_name, metric, value, source, updated_at)
+            VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, period_id, segment_id, metric) DO UPDATE SET
+                segment_name = excluded.segment_name,
+                value        = excluded.value,
+                source       = excluded.source,
+                updated_at   = CURRENT_TIMESTAMP
+            """,
+            data,
+        )
+        return len(data)
+
+    def get_segment_data(
+        self, company_id: str, years: Optional[List[int]] = None
+    ) -> Dict[int, Dict[str, Dict[str, Any]]]:
+        """Get segment data. Returns {year: {segment_id: {metric: value}}}."""
+        if years:
+            placeholders = ",".join("?" * len(years))
+            sql = f"""
+                SELECT p.year, s.segment_id, s.segment_name, s.metric, s.value
+                FROM segment_data s
+                JOIN periods p ON s.period_id = p.period_id
+                WHERE s.company_id = ? AND p.year IN ({placeholders})
+                ORDER BY p.year, s.segment_id
+            """
+            rows = self.query(sql, (company_id, *years))
+        else:
+            rows = self.query(
+                """
+                SELECT p.year, s.segment_id, s.segment_name, s.metric, s.value
+                FROM segment_data s
+                JOIN periods p ON s.period_id = p.period_id
+                WHERE s.company_id = ?
+                ORDER BY p.year, s.segment_id
+                """,
+                (company_id,),
+            )
+        result: Dict[int, Dict[str, Dict[str, Any]]] = {}
+        for row in rows:
+            yr = row["year"]
+            sid = row["segment_id"]
+            if yr not in result:
+                result[yr] = {}
+            if sid not in result[yr]:
+                result[yr][sid] = {}
+            result[yr][sid][row["metric"]] = row["value"]
+        return result
+
+    def upsert_operational_drivers(
+        self, company_id: str, data: Dict[str, Dict[int, float]]
+    ) -> int:
+        """Upsert operational_drivers. data = {metric: {year: value}}"""
+        rows = []
+        for metric, series in data.items():
+            for year, value in series.items():
+                if value is not None:
+                    rows.append((company_id, metric, year, value))
+        if not rows:
+            return 0
+        self.conn.executemany(
+            """
+            INSERT INTO operational_drivers (company_id, metric, year, value, updated_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, metric, year) DO UPDATE SET
+                value      = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            rows,
+        )
+        return len(rows)
+
+    def get_operational_drivers(
+        self, company_id: str
+    ) -> Dict[str, Dict[int, float]]:
+        """Get all operational drivers. Returns {metric: {year: value}}."""
+        rows = self.query(
+            "SELECT metric, year, value FROM operational_drivers "
+            "WHERE company_id = ? ORDER BY metric, year",
+            (company_id,),
+        )
+        result: Dict[str, Dict[int, float]] = {}
+        for row in rows:
+            m = row["metric"]
+            if m not in result:
+                result[m] = {}
+            result[m][row["year"]] = row["value"]
+        return result
+
+    def upsert_intangible_assets(
+        self, company_id: str, year: int, rows: List[Dict[str, Any]]
+    ) -> int:
+        """Batch upsert intangible_assets. rows = [{category, gross, accum, net, ...}]"""
+        period_id = self.ensure_period(company_id, year)
+        data = [
+            (
+                company_id, period_id,
+                r["category"],
+                r.get("gross", r.get("gross_amount", 0)),
+                r.get("accum", r.get("accumulated_amortization", 0)),
+                r.get("net", r.get("net_amount", 0)),
+                r.get("useful_life"), r.get("source"),
+            )
+            for r in rows
+        ]
+        self.conn.executemany(
+            """
+            INSERT INTO intangible_assets
+                (company_id, period_id, category, gross_amount,
+                 accumulated_amortization, net_amount, useful_life, source, updated_at)
+            VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+            ON CONFLICT(company_id, period_id, category) DO UPDATE SET
+                gross_amount             = excluded.gross_amount,
+                accumulated_amortization = excluded.accumulated_amortization,
+                net_amount               = excluded.net_amount,
+                useful_life              = excluded.useful_life,
+                source                   = excluded.source,
+                updated_at               = CURRENT_TIMESTAMP
+            """,
+            data,
+        )
+        return len(data)
+
     # ── аудит ──────────────────────────────────────────────────────────────────
 
     def log(

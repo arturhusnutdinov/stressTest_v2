@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from engine.constants import DIVIDEND_PAYOUT_DEFAULT, BUYBACK_PCT_FCF_DEFAULT, BUYBACK_LEVERAGE_MAX  # noqa: F401
+
 
 @dataclass
 class EquityBlock:

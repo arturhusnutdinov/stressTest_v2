@@ -32,7 +32,7 @@ class ForecastMethodConfig:
     # DRIVER
     driver_base: Optional[str] = None
     driver_ratio: Optional[float] = None
-    driver_ratio_source: Optional[str] = None  # history_ewa | fixed
+    driver_ratio_source: Optional[str] = None  # reserved for future use (history_ewa | fixed)
     # DAYS
     days_metric: Optional[str] = None   # dso | dih | dpo
     days_base: Optional[str] = None     # revenue | cogs
@@ -134,6 +134,8 @@ class DebtSettings:
 
 # ─── lease drivers ────────────────────────────────────────────────────────────
 
+# NOTE: legacy dataclass — LeaseParams (EWA-calibrated) is the primary lease config;
+# LeaseDrivers is retained for opening balances and backward compatibility with older YAML configs
 @dataclass
 class LeaseDrivers:
     enabled: bool = False

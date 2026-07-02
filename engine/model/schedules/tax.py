@@ -22,6 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from engine.constants import TAX_STATUTORY_RATE_DEFAULT, NOL_MAX_UTILIZATION_PCT, SOLVER_EPSILON
+
 
 @dataclass
 class TaxBlock:
@@ -33,11 +35,11 @@ class TaxBlock:
 
     # ── Income / rate ─────────────────────────────────────────────────────────
     ebt:                float = 0.0
-    statutory_rate:     float = 0.21
+    statutory_rate:     float = TAX_STATUTORY_RATE_DEFAULT
 
     # ── NOL config ────────────────────────────────────────────────────────────
     nol_enabled:        bool  = False
-    nol_limit_pct:      float = 0.80  # max % of taxable income offsettable by NOL (TCJA)
+    nol_limit_pct:      float = NOL_MAX_UTILIZATION_PCT  # max % of taxable income offsettable by NOL (TCJA)
 
     # ── Temporary differences (all as positive magnitudes / deltas) ───────────
     # accel_dep_excess = dep_ppe × accel_dep_excess_pct  →  DTL grows
@@ -122,7 +124,7 @@ class TaxBlock:
         # ── 7. Effective rate ────────────────────────────────────────────────
         self.effective_rate = (
             abs(self.total_tax_expense) / abs(self.ebt)
-            if abs(self.ebt) > 1e-9 else 0.0
+            if abs(self.ebt) > SOLVER_EPSILON else 0.0
         )
 
         # ── 8. CFO deferred tax add-back ─────────────────────────────────────

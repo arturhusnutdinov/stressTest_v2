@@ -212,8 +212,8 @@ def run_ecm_all(root: Path, company: str):
         # Если не нашли - используем кандидатов
         if cfg_path is None:
             cfg_candidates = [
+                root / f'companies/{company}/configs/forecast/macro_ecm.yaml',
                 root / f'companies/{company}/configs/macro_ecm.yaml',
-                root / 'configs' / 'forecast' / 'macro_ecm.yaml',
             ]
             for candidate in cfg_candidates:
                 if candidate.exists():

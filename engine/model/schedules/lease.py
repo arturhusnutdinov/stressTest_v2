@@ -19,6 +19,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Tuple
 
+from engine.constants import LEASE_FIN_DEP_RATE_DEFAULT, LEASE_DEFAULT_DISCOUNT_RATE
+
 
 # ─── Finance Lease (одинаково для обоих стандартов) ──────────────────────────
 
@@ -36,8 +38,8 @@ class FinanceLeaseBlock:
     rou_additions:      float = 0.0
     liab_additions:     float = 0.0
     # Params
-    dep_rate:           float = 0.15   # ~6-7 лет средний срок
-    discount_rate:      float = 0.05
+    dep_rate:           float = LEASE_FIN_DEP_RATE_DEFAULT   # ~6-7 лет средний срок
+    discount_rate:      float = LEASE_DEFAULT_DISCOUNT_RATE
     # Computed
     rou_dep:            Optional[float] = None
     interest_exp:       Optional[float] = None
@@ -87,8 +89,8 @@ class OperatingLeaseUSGAAP:
     liab_open:          float = 0.0
     rou_additions:      float = 0.0
     liab_additions:     float = 0.0
-    discount_rate:      float = 0.05
-    dep_rate:           float = 0.15
+    discount_rate:      float = LEASE_DEFAULT_DISCOUNT_RATE
+    dep_rate:           float = LEASE_FIN_DEP_RATE_DEFAULT
     # Computed
     lease_expense:      Optional[float] = None   # единая строка в IS
     interest_component: Optional[float] = None   # только для расчёта ROU амортизации
@@ -143,8 +145,8 @@ class OperatingLeaseIFRS16:
     liab_open:          float = 0.0
     rou_additions:      float = 0.0
     liab_additions:     float = 0.0
-    discount_rate:      float = 0.05
-    dep_rate:           float = 0.15
+    discount_rate:      float = LEASE_DEFAULT_DISCOUNT_RATE
+    dep_rate:           float = LEASE_FIN_DEP_RATE_DEFAULT
     # Exemptions (short-term / low-value) — доля от общего портфеля
     exemption_pct:      float = 0.0
     # Computed
@@ -353,9 +355,9 @@ class LeaseBlock:
         cls,
         prev,
         accounting_standard: str = "US_GAAP",
-        finance_discount_rate: float = 0.05,
-        operating_discount_rate: float = 0.05,
-        dep_rate: float = 0.15,
+        finance_discount_rate: float = LEASE_DEFAULT_DISCOUNT_RATE,
+        operating_discount_rate: float = LEASE_DEFAULT_DISCOUNT_RATE,
+        dep_rate: float = LEASE_FIN_DEP_RATE_DEFAULT,
         exemption_pct: float = 0.0,
     ) -> "LeaseBlock":
         """Создать блок из YearState предыдущего года."""

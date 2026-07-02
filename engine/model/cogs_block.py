@@ -1,13 +1,15 @@
 """
 Component-based COGS for commodity producers.
 
-COGS = alumina_cost + energy_cost + labour_cost + other_cost
+COGS = commodity_cost + energy_cost + labour_cost + other_cost
 
 Where:
-  alumina_cost = production_kt × 1000 × alumina_intensity × lme_alumina_price
-  energy_cost  = production_kt × 1000 × energy_kwh_per_t × power_price_rub / usd_rub
-  labour_cost  = prev_labour × (1 + cpi_growth)
-  other_cost   = prev_other × (1 + ppi_growth)
+  commodity_cost = production_kt × commodity_index × volume_adj
+  energy_cost    = base_energy × power_index × fx_index × volume_adj
+  labour_cost    = base_labour × inflation_index × fx_index × volume_adj
+  other_cost     = base_other × ppi_index × volume_adj
+
+Macro factor names are configurable per company via YAML (defaults match RUSAL).
 """
 from __future__ import annotations
 
@@ -15,6 +17,8 @@ import math
 import logging
 from dataclasses import dataclass, field
 from typing import Optional,  Dict, Optional
+
+from engine.constants import COGS_CLAMP_MIN_FACTOR, COGS_CLAMP_MAX_FACTOR
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +41,13 @@ class CogsBlockConfig:
     # Clamp: max deviation from anchor (±sigma)
     clamp_sigma: float = 0.06
 
+    # Macro factor names (configurable per company via YAML)
+    commodity_factor: str = "lme_alumina"      # Primary commodity index
+    energy_factor: str = "russian_power_price"  # Energy cost factor
+    fx_factor: str = "usd_rub"                 # FX rate factor
+    inflation_factor: str = "cpi_ru"           # Labour cost inflation index
+    ppi_factor: str = "ppi_ru"                 # Producer price index for other costs
+
     # Base year values (computed from base_cogs × shares)
     base_year: int = 2025
     base_cogs: float = 0.0
@@ -48,10 +59,14 @@ class CogsBlockConfig:
 
 class CogsBlock:
     """
-    Compute COGS from macro-linked components.
+    Compute COGS from macro-linked components for any commodity producer.
+
+    Macro factor names are configurable via CogsBlockConfig fields
+    (commodity_factor, energy_factor, fx_factor, inflation_factor, ppi_factor).
 
     Usage:
-        cfg = CogsBlockConfig(base_cogs=9.26e9, base_production_kt=3992)
+        cfg = CogsBlockConfig(base_cogs=9.26e9, base_production_kt=3992,
+                              commodity_factor='lme_nickel', fx_factor='usd_rub')
         block = CogsBlock(cfg, macro_forecasts)
         cogs_2026 = block.compute(2026, production_kt=4000)
     """
@@ -81,11 +96,11 @@ class CogsBlock:
         by = config.base_year
         def _base(factor):
             return (self.hist.get(factor) or {}).get(by) or self._get_macro(factor, by)
-        self._lme_alumina_base = _base('lme_alumina')
-        self._power_base = _base('russian_power_price')
-        self._usdrub_base = _base('usd_rub') or _base('fx_usdrub')
-        self._cpi_ru_base = _base('cpi_ru')
-        self._ppi_ru_base = _base('ppi_ru')
+        self._commodity_base = _base(config.commodity_factor)
+        self._power_base = _base(config.energy_factor)
+        self._usdrub_base = _base(config.fx_factor) or _base('fx_' + config.fx_factor)
+        self._cpi_base = _base(config.inflation_factor)
+        self._ppi_base = _base(config.ppi_factor)
 
     def _get_macro(self, factor: str, year: int) -> float:
         """Get macro value from forecasts or history."""
@@ -108,19 +123,19 @@ class CogsBlock:
         # Production volume: use forecast or EWA from base
         prod_kt = production_kt or self.cfg.base_production_kt
 
-        # 1. Alumina: indexed to LME Alumina
-        lme_alm = self._get_macro('lme_alumina', year)
-        if lme_alm > 0 and self._lme_alumina_base > 0:
-            alumina_index = lme_alm / self._lme_alumina_base
+        # 1. Commodity: indexed to primary commodity factor
+        commodity_val = self._get_macro(self.cfg.commodity_factor, year)
+        if commodity_val > 0 and self._commodity_base > 0:
+            commodity_index = commodity_val / self._commodity_base
         else:
-            alumina_index = 1.0
+            commodity_index = 1.0
         # Volume adjustment
         vol_adj = prod_kt / self.cfg.base_production_kt if self.cfg.base_production_kt > 0 else 1.0
-        alumina_cost = self._alumina_base * alumina_index * vol_adj
+        commodity_cost = self._alumina_base * commodity_index * vol_adj
 
-        # 2. Energy: indexed to power_price / usd_rub
-        power = self._get_macro('russian_power_price', year)
-        usdrub = self._get_macro('usd_rub', year) or self._get_macro('fx_usdrub', year)
+        # 2. Energy: indexed to energy factor / FX
+        power = self._get_macro(self.cfg.energy_factor, year)
+        usdrub = self._get_macro(self.cfg.fx_factor, year) or self._get_macro('fx_' + self.cfg.fx_factor, year)
         if power > 0 and self._power_base > 0:
             power_index = power / self._power_base
         else:
@@ -131,23 +146,23 @@ class CogsBlock:
             fx_index = 1.0
         energy_cost = self._energy_base * power_index * fx_index * vol_adj
 
-        # 3. Labour: indexed to CPI Russia
-        cpi = self._get_macro('cpi_ru', year)
-        if cpi > 0 and self._cpi_ru_base > 0:
-            cpi_index = cpi / self._cpi_ru_base
+        # 3. Labour: indexed to inflation factor
+        cpi = self._get_macro(self.cfg.inflation_factor, year)
+        if cpi > 0 and self._cpi_base > 0:
+            cpi_index = cpi / self._cpi_base
         else:
             cpi_index = 1.0
         labour_cost = self._labour_base * cpi_index * fx_index * vol_adj
 
-        # 4. Other: indexed to PPI Russia
-        ppi = self._get_macro('ppi_ru', year)
-        if ppi > 0 and self._ppi_ru_base > 0:
-            ppi_index = ppi / self._ppi_ru_base
+        # 4. Other: indexed to PPI factor
+        ppi = self._get_macro(self.cfg.ppi_factor, year)
+        if ppi > 0 and self._ppi_base > 0:
+            ppi_index = ppi / self._ppi_base
         else:
             ppi_index = 1.0
         other_cost = self._other_base * ppi_index * vol_adj
 
-        total = alumina_cost + energy_cost + labour_cost + other_cost
+        total = commodity_cost + energy_cost + labour_cost + other_cost
 
         # Revenue-relative scaling with MEAN-REVERSION.
         # For commodity producers: COGS% is historically stable (beta ≈ 0 to LME).
@@ -168,6 +183,7 @@ class CogsBlock:
             cogs_ratio = max(anchor - sigma, min(anchor + sigma, cogs_ratio))
             total = revenue * cogs_ratio
         else:
-            total = max(self.cfg.base_cogs * 0.5, min(self.cfg.base_cogs * 1.5, total))
+            total = max(self.cfg.base_cogs * COGS_CLAMP_MIN_FACTOR,
+                       min(self.cfg.base_cogs * COGS_CLAMP_MAX_FACTOR, total))
 
         return total
