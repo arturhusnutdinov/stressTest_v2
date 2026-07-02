@@ -5,13 +5,6 @@ from .vecm import run_vecm_all as _run_vecm_all
 from .svar import run_svar_block
 from typing import Dict
 
-# Импорт БД модуля для сохранения результатов
-try:
-    from engine.database.data_mart import get_data_mart
-    DM_AVAILABLE = True
-except ImportError:
-    get_data_mart = None
-    DM_AVAILABLE = False
 
 def _read_yaml(p: Path):
     return yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
@@ -80,12 +73,9 @@ def ensure_outputs_even_if_insufficient_history_2005(root: Path, company: str):
     min_years = int(mf.get("require_min_history_years", 20))
     factors = _factors(root, company)
 
-    mart = None
-    if DM_AVAILABLE:
-        try:
-            mart = get_data_mart(root, company)
-        except Exception:
-            mart = None
+    # Use io module's adapter if available
+    from .io import _adapter as _io_adapter
+    mart = _io_adapter  # may be None — functions handle gracefully
 
     summary_rows = []
     for f in factors:
@@ -222,13 +212,9 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
         ensure_outputs_even_if_insufficient_history_2005(root, company)
         return
 
-    # Инициализация БД
-    db = None
-    if DM_AVAILABLE:
-        try:
-            db = get_data_mart(root, company)
-        except Exception:
-            db = None
+    # Use io module's adapter if available
+    from .io import _adapter as _io_adapter
+    db = _io_adapter  # may be None — functions handle gracefully
 
     # Определяем блоки для SVAR
     svar_blocks = svar_cfg.get('blocks', [])

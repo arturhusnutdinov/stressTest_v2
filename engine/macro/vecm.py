@@ -21,62 +21,57 @@ try:
 except ImportError:
     PMDARIMA_AVAILABLE = False
 
-# Импорт витрины данных для сохранения результатов
-try:
-    from engine.database.data_mart import get_data_mart
-    DM_AVAILABLE = True
-except ImportError:
-    get_data_mart = None
-    DM_AVAILABLE = False
+# DB adapter — set by caller (vecm_bridge/runner) before running VECM
+_db_adapter = None
 
-if DM_AVAILABLE:
-    def _save_forecast(db, company: str, factor_name: str, data: Dict[int, float], method: str) -> None:
-        if db is None or not data:
-            return
-        try:
-            db.save_macro_forecast(factor_name, data, method=method)
-        except Exception:
-            pass
 
-    def _save_diagnostics(db, company: str, factor_name: str, method: str, block_name: str,
-                          p: int = None, rank: int = None, span_start: int = None, span_end: int = None,
-                          lb_pvalue: float = None, note: str = None, cv_smape: float = None) -> None:
-        if db is None:
-            return
-        try:
-            db.save_ecm_diagnostics(company, factor_name, method, block_name, p, rank, span_start, span_end, lb_pvalue, note, cv_smape)
-        except Exception:
-            pass
+def set_db_adapter(adapter) -> None:
+    """Set module-level DB adapter for saving results."""
+    global _db_adapter
+    _db_adapter = adapter
 
-    def _save_actual_vs_fitted(db, company: str, factor_name: str, actual: Dict[int, float], fitted: Dict[int, float]) -> None:
-        if db is None:
-            return
-        try:
-            db.save_ecm_actual_vs_fitted(company, factor_name, actual, fitted)
-        except Exception:
-            pass
 
-    def _save_forecast_diag(db, company: str, factor_name: str, slope: float, flat_flag: bool) -> None:
-        if db is None:
-            return
-        try:
-            db.save_ecm_forecast_diag(company, factor_name, slope, flat_flag)
-        except Exception:
-            pass
-else:
-    def _save_forecast(db, company: str, factor_name: str, data: Dict[int, float], method: str) -> None:
+def _save_forecast(db, company: str, factor_name: str, data: Dict[int, float], method: str) -> None:
+    """Save forecast via adapter. db parameter kept for backward compat but _db_adapter preferred."""
+    target = db or _db_adapter
+    if target is None or not data:
         return
+    try:
+        target.save_macro_forecast(factor_name, data, method=method)
+    except Exception:
+        pass
 
-    def _save_diagnostics(db, company: str, factor_name: str, method: str, block_name: str,
-                          p: int = None, rank: int = None, span_start: int = None, span_end: int = None,
-                          lb_pvalue: float = None, note: str = None, cv_smape: float = None) -> None:
-        return
 
-    def _save_actual_vs_fitted(db, company: str, factor_name: str, actual: Dict[int, float], fitted: Dict[int, float]) -> None:
+def _save_diagnostics(db, company: str, factor_name: str, method: str, block_name: str,
+                      p: int = None, rank: int = None, span_start: int = None, span_end: int = None,
+                      lb_pvalue: float = None, note: str = None, cv_smape: float = None) -> None:
+    target = db or _db_adapter
+    if target is None:
         return
+    try:
+        target.save_ecm_diagnostics(company, factor_name, method, block_name, p, rank, span_start, span_end, lb_pvalue, note, cv_smape)
+    except Exception:
+        pass
 
-    def _save_forecast_diag(db, company: str, factor_name: str, slope: float, flat_flag: bool) -> None:
+
+def _save_actual_vs_fitted(db, company: str, factor_name: str, actual: Dict[int, float], fitted: Dict[int, float]) -> None:
+    target = db or _db_adapter
+    if target is None:
         return
+    try:
+        target.save_actual_vs_fitted(company, factor_name, actual, fitted)
+    except Exception:
+        pass
+
+
+def _save_forecast_diag(db, company: str, factor_name: str, slope: float, flat_flag: bool) -> None:
+    target = db or _db_adapter
+    if target is None:
+        return
+    try:
+        target.save_ecm_forecast_diag(company, factor_name, slope, flat_flag)
+    except Exception:
+        pass
 DEFAULT_FALLBACK_ORDER = ["arima011", "rw_drift"]
 def _read_yaml(p: Path) -> dict:
     try:
@@ -124,61 +119,24 @@ def _stack_block_ln(
     ЗАГРУЗКА ТОЛЬКО ИЗ БД (CSV fallback удален из основного кода, но может оставаться в read_one_row_annual для совместимости)
     """
     cols={}
-    db_path = root / "data_mart.db"
-    
+
     for f in facs:
         if cleaned_overrides and f in cleaned_overrides:
             override_series = pd.Series(cleaned_overrides[f], dtype=float).dropna().sort_index()
             if not override_series.empty:
                 cols[f'ln_{f}'] = override_series
                 continue
-        # ПЕРВЫЙ ПРИОРИТЕТ: загрузка истории из БД (macro_factors) - уровни
+        # Load factor history via io.read_one_row_annual (uses adapter or DB fallback)
         history_data = {}
-        if db_path.exists():
-            try:
-                import sqlite3
-                conn = sqlite3.connect(db_path)
-                # Сначала пробуем company-specific историю
-                df_hist = pd.read_sql_query(
-                    "SELECT year, value FROM macro_factors WHERE factor_name = ? AND company = ? ORDER BY year",
-                    conn, params=(f, company)
-                )
-                # Если нет, пробуем global
-                if df_hist.empty:
-                    df_hist = pd.read_sql_query(
-                        "SELECT year, value FROM macro_factors WHERE factor_name = ? AND (company IS NULL OR company = '') AND scope = 'global' ORDER BY year",
-                        conn, params=(f,)
-                    )
-                conn.close()
-                
-                if not df_hist.empty:
-                    # Фильтруем только валидные значения (> 0) - это уровни
-                    valid_data = df_hist[(df_hist['value'].notna()) & (df_hist['value'] > 0)]
-                    if not valid_data.empty:
-                        history_data = valid_data.set_index('year')['value'].to_dict()
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Не удалось загрузить историю макро-фактора {f} из БД: {e}")
-        
-        # Если история из БД не найдена, пробуем через read_one_row_annual (который также использует БД как первый приоритет)
-        # ВАЖНО: read_one_row_annual теперь использует только БД (CSV fallback удален)
-        if not history_data:
-            try:
-                lv, _ = read_one_row_annual(root, company, f, file_map, search_paths)
-                # Проверяем что данные в уровнях (положительные), а не в ln формате
-                if lv:
-                    sample_values = [v for v in list(lv.values())[:10] if pd.notna(v)]
-                    if sample_values and all(v > 0 for v in sample_values):
-                        # Данные в уровнях - используем как есть
-                        history_data = lv
-                    else:
-                        # Данные в ln формате - фильтруем только положительные (уровни)
-                        history_data = {k: v for k, v in lv.items() if pd.notna(v) and v > 0}
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.warning(f"Не удалось загрузить макро-фактор {f} через read_one_row_annual: {e}")
+        try:
+            lv, _ = read_one_row_annual(root, company, f, file_map, search_paths)
+            if lv:
+                # Filter to positive values only (levels, not ln)
+                history_data = {k: v for k, v in lv.items() if pd.notna(v) and v > 0}
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Не удалось загрузить макро-фактор {f}: {e}")
         
         # Преобразуем уровни в ln формат для VECM
         if history_data:
@@ -890,12 +848,7 @@ def run_vecm_all(root: str|Path, company: str, cfg_path: str|Path):
     coint_test_cfg = cfg.get('cointegration_testing', {})
     
     # Инициализация БД для сохранения результатов
-    db = None
-    if DM_AVAILABLE:
-        try:
-            db = get_data_mart(root, company)
-        except Exception:
-            db = None
+    db = _db_adapter  # Set by caller via set_db_adapter()
     
     cleaned_ln_overrides: Dict[str, Dict[int, float]] = {}
     preprocess_result = None

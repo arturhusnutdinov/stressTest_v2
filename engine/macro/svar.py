@@ -15,38 +15,23 @@ from typing import Dict, List, Optional, Tuple, Any
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.vector_ar.svar_model import SVAR
 
-try:
-    from engine.database.data_mart import get_data_mart
-    DM_AVAILABLE = True
-except ImportError:
-    get_data_mart = None
-    DM_AVAILABLE = False
-
-if DM_AVAILABLE:
-    def _save_svar_forecast(db, company: str, factor_name: str, data: Dict[int, float], method: str) -> None:
-        if db is None or not data:
-            return
-        try:
-            db.save_macro_forecast(factor_name, data, method=method)
-        except Exception:
-            pass
-
-    def _save_svar_diagnostics(db, company: str, factor_name: str, method: str, 
-                               irf_data: Optional[Dict] = None, variance_decomp: Optional[Dict] = None) -> None:
-        if db is None:
-            return
-        try:
-            # Сохраняем диагностику SVAR (можно расширить таблицу ecm_diagnostics)
-            pass
-        except Exception:
-            pass
-else:
-    def _save_svar_forecast(db, company: str, factor_name: str, data: Dict[int, float], method: str) -> None:
+def _save_svar_forecast(db, company: str, factor_name: str, data: Dict[int, float], method: str) -> None:
+    if db is None or not data:
         return
+    try:
+        db.save_macro_forecast(factor_name, data, method=method)
+    except Exception:
+        pass
 
-    def _save_svar_diagnostics(db, company: str, factor_name: str, method: str,
-                               irf_data: Optional[Dict] = None, variance_decomp: Optional[Dict] = None) -> None:
+
+def _save_svar_diagnostics(db, company: str, factor_name: str, method: str,
+                           irf_data: Optional[Dict] = None, variance_decomp: Optional[Dict] = None) -> None:
+    if db is None:
         return
+    try:
+        db.save_ecm_diagnostics(company, factor_name, method, "svar")
+    except Exception:
+        pass
 
 
 def _create_identification_matrix(n_vars: int, identification_type: str = "short_run") -> Optional[np.ndarray]:

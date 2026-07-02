@@ -8,12 +8,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-# NOTE: legacy DataMart API — should be migrated to Repository API in a future refactor.
-# Currently works via fallback; do not change the logic without updating callers.
-try:
-    from engine.database.data_mart import get_data_mart
-except ImportError:
-    get_data_mart = None
+import sqlite3
 
 EPS = 1e-9
 
@@ -188,6 +183,25 @@ def _detect_cycle_period(
     return period
 
 
+def _load_factor_direct(root: Path, factor: str) -> Dict[int, float]:
+    """Direct DB load fallback when no adapter available."""
+    db_path = root / "data_mart_v2.db"
+    if not db_path.exists():
+        return {}
+    try:
+        conn = sqlite3.connect(str(db_path))
+        df = pd.read_sql_query(
+            "SELECT year, value FROM macro_factors WHERE factor_name = ? AND scope = 'global' ORDER BY year",
+            conn, params=(factor,)
+        )
+        conn.close()
+        if not df.empty:
+            return df.set_index('year')['value'].to_dict()
+    except Exception:
+        pass
+    return {}
+
+
 def preprocess_macro_history(
     root: Path,
     company: str,
@@ -207,156 +221,161 @@ def preprocess_macro_history(
         if factor and factor not in unique_factors:
             unique_factors.append(str(factor))
 
-    with get_data_mart(root_path, company) as mart:
-        for factor in unique_factors:
-            history = mart.get_macro_factor(factor)
-            if not history:
-                continue
+    # Use io module's adapter if available, otherwise try direct DB
+    from .io import _adapter as _io_adapter
+    for factor in unique_factors:
+        if _io_adapter is not None:
+            history = _io_adapter.get_macro_factor(factor)
+        else:
+            # Direct DB fallback for notebook usage
+            history = _load_factor_direct(root_path, factor)
+        if not history:
+            continue
 
-            series_levels = _series_from_dict(history).dropna()
-            if series_levels.empty:
-                continue
+        series_levels = _series_from_dict(history).dropna()
+        if series_levels.empty:
+            continue
 
-            series_original = series_levels.copy()
-            normalization_factor = 1.0
-            if cfg.normalize_enabled:
-                series_levels, normalization_factor = _normalize_levels(series_levels, cfg.normalize_scale)
+        series_original = series_levels.copy()
+        normalization_factor = 1.0
+        if cfg.normalize_enabled:
+            series_levels, normalization_factor = _normalize_levels(series_levels, cfg.normalize_scale)
 
-            # Ensure positivity for log transform
-            positive_values = np.maximum(series_levels.values, EPS)
-            ln_series = pd.Series(np.log(positive_values), index=series_levels.index)
-            ln_series = ln_series.sort_index()
+        # Ensure positivity for log transform
+        positive_values = np.maximum(series_levels.values, EPS)
+        ln_series = pd.Series(np.log(positive_values), index=series_levels.index)
+        ln_series = ln_series.sort_index()
 
-            dln = ln_series.diff()
-            if dln.dropna().empty:
-                # Not enough data for differencing
-                clean_ln = ln_series.copy()
-                result.ln_series[factor] = {int(y): float(v) for y, v in clean_ln.items() if pd.notna(v)}
-                result.original_levels[factor] = {int(y): float(v) for y, v in series_original.items() if pd.notna(v)}
-                metrics = FactorMetrics(normalization_factor=float(normalization_factor))
-                metrics.details["cycle_detection"] = {
-                    "enabled": cfg.detect_cycle_enabled,
-                    "detected_period": None,
-                    "method": "insufficient_history",
-                }
-                result.metrics[factor] = metrics
-                continue
-
-            window = max(2, int(cfg.history_window))
-            rolling_mean = dln.rolling(window=window, center=True, min_periods=1).mean()
-            rolling_std = dln.rolling(window=window, center=True, min_periods=1).std(ddof=0)
-
-            global_std = float(dln.std(ddof=0))
-            if global_std <= 0 or np.isnan(global_std):
-                global_std = float(np.nanstd(dln.values))
-            if global_std <= 0 or np.isnan(global_std):
-                global_std = 1e-6
-
-            rolling_std = rolling_std.replace(0, np.nan)
-            z_scores = (dln - rolling_mean) / rolling_std
-            z_scores = z_scores.fillna(dln / global_std)
-
-            anomalies: List[FactorAnomaly] = []
-            outlier_years: List[int] = []
-
-            for year, z_val in z_scores.dropna().items():
-                delta_val = float(dln.loc[year]) if year in dln.index else np.nan
-                reasons: List[str] = []
-                abs_z = abs(float(z_val))
-                abs_delta = abs(delta_val) if not np.isnan(delta_val) else 0.0
-
-                if abs_z >= cfg.z_threshold:
-                    reasons.append("z_score")
-                if cfg.large_delta_threshold and abs_delta >= cfg.large_delta_threshold:
-                    reasons.append("large_jump")
-                if (
-                    history_end_year
-                    and cfg.detect_recent_years > 0
-                    and year >= history_end_year - cfg.detect_recent_years + 1
-                ):
-                    if abs_z >= cfg.z_threshold:
-                        reasons.append("recent_spike")
-
-                if not reasons:
-                    continue
-
-                suggested_dummy = abs_z >= cfg.dummy_z_threshold or "large_jump" in reasons
-
-                anomaly = FactorAnomaly(
-                    factor_name=factor,
-                    year=int(year),
-                    delta=float(delta_val) if not np.isnan(delta_val) else 0.0,
-                    z_score=float(z_val),
-                    reasons=reasons,
-                    suggested_dummy=suggested_dummy,
-                    value=float(series_levels.get(year, np.nan)),
-                    ln_value=float(ln_series.get(year, np.nan)),
-                )
-                anomalies.append(anomaly)
-                outlier_years.append(int(year))
-
-            # Smoothing / winsorization
+        dln = ln_series.diff()
+        if dln.dropna().empty:
+            # Not enough data for differencing
             clean_ln = ln_series.copy()
-            smoothing_applied = None
-            if cfg.smoothing_method.lower() == "winsorize" and cfg.smoothing_limit > 0:
-                limit = float(cfg.smoothing_limit)
-                clipped_dln = dln.clip(lower=-limit, upper=limit)
-                adjusted = ln_series.iloc[0] + clipped_dln.fillna(0).cumsum()
-                clean_ln.update(adjusted)
-                smoothing_applied = f"winsorize({limit})"
-
-            cyclical_flag = False
-            detected_period: Optional[int] = None
-            if cfg.detect_cycle_enabled:
-                detected_period = _detect_cycle_period(
-                    dln,
-                    max_period=cfg.detect_cycle_max_period,
-                    acf_threshold=cfg.detect_cycle_acf_threshold,
-                    fft_threshold=cfg.detect_cycle_fft_threshold,
-                )
-                cyclical_flag = detected_period is not None
-
-            metrics = FactorMetrics(
-                max_abs_delta=float(np.nanmax(np.abs(dln.values))) if len(dln) else 0.0,
-                max_abs_z=float(np.nanmax(np.abs(z_scores.values))) if len(z_scores) else 0.0,
-                outlier_years=sorted(set(outlier_years)),
-                normalization_factor=float(normalization_factor),
-                smoothing_applied=smoothing_applied,
-                cyclical=cyclical_flag,
-                detected_period=int(detected_period) if detected_period is not None else None,
-            )
-            total_points = len(dln.dropna())
-            metrics.anomaly_share = float(len(outlier_years) / total_points) if total_points else 0.0
-            metrics.details = {
-                "std_global": global_std,
-                "window": window,
-                "anomalies": [a.to_record() for a in anomalies],
-                "cycle_detection": {
-                    "enabled": cfg.detect_cycle_enabled,
-                    "detected_period": detected_period,
-                    "acf_threshold": cfg.detect_cycle_acf_threshold,
-                    "fft_threshold": cfg.detect_cycle_fft_threshold,
-                },
+            result.ln_series[factor] = {int(y): float(v) for y, v in clean_ln.items() if pd.notna(v)}
+            result.original_levels[factor] = {int(y): float(v) for y, v in series_original.items() if pd.notna(v)}
+            metrics = FactorMetrics(normalization_factor=float(normalization_factor))
+            metrics.details["cycle_detection"] = {
+                "enabled": cfg.detect_cycle_enabled,
+                "detected_period": None,
+                "method": "insufficient_history",
             }
-
             result.metrics[factor] = metrics
-            result.ln_series[factor] = {
-                int(year): float(value)
-                for year, value in clean_ln.items()
-                if pd.notna(value)
-            }
-            result.original_levels[factor] = {
-                int(year): float(value)
-                for year, value in series_original.items()
-                if pd.notna(value)
-            }
-            result.normalization_applied[factor] = float(normalization_factor)
-            result.anomalies.extend(anomalies)
+            continue
 
-            for anomaly in anomalies:
-                if anomaly.suggested_dummy:
-                    score = abs(anomaly.z_score)
-                    result.auto_shock_candidates.append((anomaly.year, score))
+        window = max(2, int(cfg.history_window))
+        rolling_mean = dln.rolling(window=window, center=True, min_periods=1).mean()
+        rolling_std = dln.rolling(window=window, center=True, min_periods=1).std(ddof=0)
+
+        global_std = float(dln.std(ddof=0))
+        if global_std <= 0 or np.isnan(global_std):
+            global_std = float(np.nanstd(dln.values))
+        if global_std <= 0 or np.isnan(global_std):
+            global_std = 1e-6
+
+        rolling_std = rolling_std.replace(0, np.nan)
+        z_scores = (dln - rolling_mean) / rolling_std
+        z_scores = z_scores.fillna(dln / global_std)
+
+        anomalies: List[FactorAnomaly] = []
+        outlier_years: List[int] = []
+
+        for year, z_val in z_scores.dropna().items():
+            delta_val = float(dln.loc[year]) if year in dln.index else np.nan
+            reasons: List[str] = []
+            abs_z = abs(float(z_val))
+            abs_delta = abs(delta_val) if not np.isnan(delta_val) else 0.0
+
+            if abs_z >= cfg.z_threshold:
+                reasons.append("z_score")
+            if cfg.large_delta_threshold and abs_delta >= cfg.large_delta_threshold:
+                reasons.append("large_jump")
+            if (
+                history_end_year
+                and cfg.detect_recent_years > 0
+                and year >= history_end_year - cfg.detect_recent_years + 1
+            ):
+                if abs_z >= cfg.z_threshold:
+                    reasons.append("recent_spike")
+
+            if not reasons:
+                continue
+
+            suggested_dummy = abs_z >= cfg.dummy_z_threshold or "large_jump" in reasons
+
+            anomaly = FactorAnomaly(
+                factor_name=factor,
+                year=int(year),
+                delta=float(delta_val) if not np.isnan(delta_val) else 0.0,
+                z_score=float(z_val),
+                reasons=reasons,
+                suggested_dummy=suggested_dummy,
+                value=float(series_levels.get(year, np.nan)),
+                ln_value=float(ln_series.get(year, np.nan)),
+            )
+            anomalies.append(anomaly)
+            outlier_years.append(int(year))
+
+        # Smoothing / winsorization
+        clean_ln = ln_series.copy()
+        smoothing_applied = None
+        if cfg.smoothing_method.lower() == "winsorize" and cfg.smoothing_limit > 0:
+            limit = float(cfg.smoothing_limit)
+            clipped_dln = dln.clip(lower=-limit, upper=limit)
+            adjusted = ln_series.iloc[0] + clipped_dln.fillna(0).cumsum()
+            clean_ln.update(adjusted)
+            smoothing_applied = f"winsorize({limit})"
+
+        cyclical_flag = False
+        detected_period: Optional[int] = None
+        if cfg.detect_cycle_enabled:
+            detected_period = _detect_cycle_period(
+                dln,
+                max_period=cfg.detect_cycle_max_period,
+                acf_threshold=cfg.detect_cycle_acf_threshold,
+                fft_threshold=cfg.detect_cycle_fft_threshold,
+            )
+            cyclical_flag = detected_period is not None
+
+        metrics = FactorMetrics(
+            max_abs_delta=float(np.nanmax(np.abs(dln.values))) if len(dln) else 0.0,
+            max_abs_z=float(np.nanmax(np.abs(z_scores.values))) if len(z_scores) else 0.0,
+            outlier_years=sorted(set(outlier_years)),
+            normalization_factor=float(normalization_factor),
+            smoothing_applied=smoothing_applied,
+            cyclical=cyclical_flag,
+            detected_period=int(detected_period) if detected_period is not None else None,
+        )
+        total_points = len(dln.dropna())
+        metrics.anomaly_share = float(len(outlier_years) / total_points) if total_points else 0.0
+        metrics.details = {
+            "std_global": global_std,
+            "window": window,
+            "anomalies": [a.to_record() for a in anomalies],
+            "cycle_detection": {
+                "enabled": cfg.detect_cycle_enabled,
+                "detected_period": detected_period,
+                "acf_threshold": cfg.detect_cycle_acf_threshold,
+                "fft_threshold": cfg.detect_cycle_fft_threshold,
+            },
+        }
+
+        result.metrics[factor] = metrics
+        result.ln_series[factor] = {
+            int(year): float(value)
+            for year, value in clean_ln.items()
+            if pd.notna(value)
+        }
+        result.original_levels[factor] = {
+            int(year): float(value)
+            for year, value in series_original.items()
+            if pd.notna(value)
+        }
+        result.normalization_applied[factor] = float(normalization_factor)
+        result.anomalies.extend(anomalies)
+
+        for anomaly in anomalies:
+            if anomaly.suggested_dummy:
+                score = abs(anomaly.z_score)
+                result.auto_shock_candidates.append((anomaly.year, score))
 
     # Deduplicate auto shock candidates (keep max z per year)
     if result.auto_shock_candidates:

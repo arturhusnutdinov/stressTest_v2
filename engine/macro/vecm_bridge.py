@@ -1,78 +1,18 @@
 """
-VECM Bridge — подключает математическое ядро engine/ecm/vecm.py к новому Repository.
+VECM Bridge — подключает математическое ядро engine/macro/vecm.py к новому Repository.
 
 Архитектура:
-  Repository (v2) → VecmBridge → engine/ecm/vecm.py (математика) → Repository (v2)
+  Repository (v2) → VecmBridge → engine/macro/vecm.py (математика) → Repository (v2)
 
-Не копирует математику — импортирует напрямую из engine/ecm/.
-IO-слой полностью заменён на Repository.
+IO-слой полностью заменён на MacroDBAdapter / Repository.
 """
 from __future__ import annotations
 
-import importlib
-import importlib.util
 import logging
-import sys
-import types
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
 logger = logging.getLogger(__name__)
-
-# Корень проекта — здесь лежит root engine/ecm/
-from engine import ROOT as _ROOT
-_ECM_PATH = _ROOT / "engine" / "ecm"
-
-
-def _ensure_ecm_package() -> bool:
-    """
-    Регистрирует engine.ecm как пакет в sys.modules, загружая его из root engine/ecm/.
-
-    Проблема: sys.modules['engine'] уже указывает на refactoring_v2/engine/ (пустой ecm/).
-    Решение: регистрируем engine.ecm.* явно через importlib, не трогая sys.path.
-
-    Returns True если пакет доступен.
-    """
-    if not _ECM_PATH.exists() or not (_ECM_PATH / "vecm.py").exists():
-        return False
-
-    if "engine.ecm" in sys.modules and "engine.ecm.vecm" in sys.modules:
-        return True  # уже загружен
-
-    # Заглушка для старого engine.database.data_mart (не существует в refactoring_v2)
-    # preprocess.py импортирует его на уровне модуля, но мы не вызываем preprocess функции
-    if "engine.database.data_mart" not in sys.modules:
-        stub = types.ModuleType("engine.database.data_mart")
-        stub.get_data_mart = lambda *a, **kw: None  # type: ignore[attr-defined]
-        sys.modules["engine.database.data_mart"] = stub
-
-    # Создаём фиктивный пакет engine.ecm
-    ecm_pkg = types.ModuleType("engine.ecm")
-    ecm_pkg.__path__ = [str(_ECM_PATH)]
-    ecm_pkg.__package__ = "engine.ecm"
-    ecm_pkg.__spec__ = None
-    sys.modules["engine.ecm"] = ecm_pkg
-
-    # Загружаем submodules в порядке зависимостей
-    for mod_name in ["io", "cointegration_test", "preprocess", "svar", "vecm_engine", "vecm"]:
-        full_key = f"engine.ecm.{mod_name}"
-        if full_key in sys.modules:
-            continue
-        path = _ECM_PATH / f"{mod_name}.py"
-        if not path.exists():
-            continue
-        try:
-            spec = importlib.util.spec_from_file_location(full_key, path)
-            mod = importlib.util.module_from_spec(spec)
-            mod.__package__ = "engine.ecm"
-            sys.modules[full_key] = mod
-            spec.loader.exec_module(mod)
-            # Делаем атрибутом пакета для относительных импортов
-            setattr(ecm_pkg, mod_name, mod)
-        except Exception as e:
-            logger.debug(f"  ecm.{mod_name}: {e}")
-
-    return "engine.ecm.vecm" in sys.modules
 
 
 def _check_dependencies() -> Dict[str, bool]:
@@ -127,7 +67,7 @@ def run_vecm_for_factors(
 
     Алгоритм:
     1. Загружает исторические ряды из Repository
-    2. Пытается запустить VECM через engine.ecm._fit_vecm
+    2. Пытается запустить VECM через engine.macro.vecm._fit_vecm
     3. При неудаче → univariate fallback (_choose_univariate_fallback)
     4. Возвращает {factor_name: {year: value}}
 
@@ -142,6 +82,14 @@ def run_vecm_for_factors(
     Returns:
         {factor_name: {year: value}} — прогнозы
     """
+    # Set adapter for io.py and vecm.py to use
+    from .db_adapter import MacroDBAdapter
+    _adapter = MacroDBAdapter(repo, company_id, scenario_id)
+    from . import io as _io_mod
+    _io_mod.set_adapter(_adapter)
+    from . import vecm as _vecm_mod
+    _vecm_mod.set_db_adapter(_adapter)
+
     deps = _check_dependencies()
     if not deps.get("statsmodels") or not deps.get("pandas"):
         logger.warning("statsmodels/pandas недоступны — VECM невозможен")
@@ -198,16 +146,12 @@ def _try_vecm(
     forecast_index: List[int],
     cfg: Dict,
 ) -> Dict[str, Dict[int, float]]:
-    """Попытка VECM через engine.ecm._fit_vecm."""
+    """Попытка VECM через engine.macro.vecm._fit_vecm."""
     try:
         import pandas as pd
         import numpy as np
 
-        if not _ensure_ecm_package():
-            logger.debug("engine.ecm недоступен")
-            return {}
-
-        from engine.ecm.vecm import _fit_vecm  # noqa: E402
+        from engine.macro.vecm import _fit_vecm
 
         # Собираем матрицу в log-пространстве
         ln_data = {}
@@ -281,7 +225,7 @@ def _try_vecm(
         return forecasts
 
     except ImportError as e:
-        logger.debug(f"engine.ecm недоступен: {e}")
+        logger.debug(f"vecm._fit_vecm недоступен: {e}")
         return {}
     except Exception as e:
         logger.warning(f"VECM ошибка: {e}")
@@ -385,6 +329,14 @@ def run_full_macro_forecast(
         {factor_name: {year: value}}
     """
     from .commodity_models import mean_reversion_forecast, rw_drift_clamped
+
+    # Set adapter for io.py and vecm.py to use
+    from .db_adapter import MacroDBAdapter
+    _adapter = MacroDBAdapter(repo, company_id, scenario_id)
+    from . import io as _io_mod
+    _io_mod.set_adapter(_adapter)
+    from . import vecm as _vecm_mod
+    _vecm_mod.set_db_adapter(_adapter)
 
     all_forecasts: Dict[str, Dict[int, float]] = {}
 
@@ -522,10 +474,7 @@ def _univariate_forecast(
     steps = len(forecast_index)
 
     try:
-        if not _ensure_ecm_package():
-            raise ImportError("engine.ecm недоступен")
-
-        from engine.ecm.vecm import (  # noqa: E402
+        from engine.macro.vecm import (
             _forecast_arima011_ln,
             _forecast_ets_ln,
             _forecast_rw_drift_ln,
