@@ -41,22 +41,25 @@ def run_macro(
     config_path: Optional[Path] = None,
     scenario_name: str = "base",
     forecast_years: int = 5,
+    project_config: Optional[dict] = None,
 ) -> MacroResult:
     """
     Запустить макро-прогноз для компании.
 
     Порядок:
-    1. Читает macro_ecm.yaml
-    2. Загружает исторические ряды из БД
-    3. Запускает VECM/ARIMA по блокам
-    4. Сохраняет прогноз в macro_forecasts через Repository
+    1. [Опционально] Загрузить внешние прогнозы из modelMacro (external_loader)
+    2. Читает macro_ecm.yaml
+    3. Загружает исторические ряды из БД
+    4. Запускает VECM/ARIMA для факторов, не покрытых external
+    5. Сохраняет прогноз в macro_forecasts через Repository
 
     Args:
-        company_id:    ID компании
-        repo:          Repository (должен быть уже подключён)
-        config_path:   путь к macro_ecm.yaml
-        scenario_name: имя сценария
+        company_id:     ID компании
+        repo:           Repository (должен быть уже подключён)
+        config_path:    путь к macro_ecm.yaml
+        scenario_name:  имя сценария
         forecast_years: горизонт прогноза в годах
+        project_config: project.yaml (dict) — для external macro config
     """
     result = MacroResult(company_id=company_id)
 
@@ -78,10 +81,22 @@ def run_macro(
         from .db_adapter import get_macro_adapter
         adapter = get_macro_adapter(repo, company_id, scenario_name)
 
+        # ── External macro (modelMacro integration) ──────────────────
+        external_factors: set = set()
+        if project_config:
+            external_factors = _load_external_if_enabled(
+                project_config, company_id, scenario_name,
+                adapter, result, forecast_years,
+            )
+
         logger.info(f"Запуск макро-прогноза для {company_id} (сценарий: {scenario_name})...")
         # run_full_macro_forecast обрабатывает все сценарии:
         # commodity → MR с kappa по сценарию, macro → VECM, прочие → EWA
-        _run_with_adapter(company_id, adapter, config_path, root, result, forecast_years, scenario_name)
+        _run_with_adapter(
+            company_id, adapter, config_path, root, result,
+            forecast_years, scenario_name,
+            skip_factors=external_factors,
+        )
 
     except Exception as e:
         result.errors.append(str(e))
@@ -89,6 +104,67 @@ def run_macro(
 
     result.success = len(result.errors) == 0
     return result
+
+
+def _load_external_if_enabled(
+    project_config: dict,
+    company_id: str,
+    scenario_name: str,
+    adapter,
+    result: MacroResult,
+    forecast_years: int,
+) -> set:
+    """
+    Загрузить внешние макро-данные если external.enabled=True.
+    Возвращает set факторов, которые НЕ надо прогнозировать через VECM.
+    """
+    from .external_loader import ExternalConfig, load_all_external
+
+    ext_cfg = ExternalConfig.from_yaml(project_config)
+    if not ext_cfg.enabled:
+        return set()
+
+    # Определяем forecast_start_year из project.yaml
+    model_cfg = project_config.get("model", {})
+    mode = model_cfg.get("mode", "standard")
+    mode_cfg = model_cfg.get(mode, model_cfg.get("standard", {}))
+    periods = mode_cfg.get("periods", {})
+    forecast_start = periods.get("forecast_start_year")
+    if not forecast_start:
+        # fallback: history_end + 1
+        forecast_start = (periods.get("history_end_year", 2025)) + 1
+
+    logger.info(f"  External macro: загрузка из {ext_cfg.source_path}...")
+
+    forecasts, ext_result = load_all_external(
+        config=ext_cfg,
+        company_id=company_id,
+        scenario_name=scenario_name,
+        forecast_start_year=forecast_start,
+        forecast_years=forecast_years,
+    )
+
+    if ext_result.errors:
+        for err in ext_result.errors:
+            result.warnings.append(f"External: {err}")
+        return set()
+
+    # Сохраняем в DB через adapter
+    for factor_name, fc_data in forecasts.items():
+        method = ext_result.methods_used.get(factor_name, "external")
+        adapter.save_macro_forecast(factor_name, fc_data, method=method)
+        result.factors_forecast.append(factor_name)
+        result.methods_used[factor_name] = method
+
+    if ext_result.warnings:
+        result.warnings.extend(ext_result.warnings)
+
+    loaded = set(forecasts.keys())
+    logger.info(
+        f"  External macro: загружено {len(loaded)} факторов "
+        f"({', '.join(sorted(loaded))})"
+    )
+    return loaded
 
 
 def _run_with_adapter(
@@ -99,8 +175,12 @@ def _run_with_adapter(
     result: MacroResult,
     forecast_years: int = 5,
     scenario_name: str = "base",
+    skip_factors: Optional[set] = None,
 ) -> None:
-    """Запуск полного макро-прогноза: VECM (макро) + MR (commodity) + EWA (прочие)."""
+    """Запуск полного макро-прогноза: VECM (макро) + MR (commodity) + EWA (прочие).
+
+    skip_factors: факторы, уже загруженные из external — пропускаем их.
+    """
     import yaml
     from .vecm_bridge import _check_dependencies
 
@@ -138,7 +218,13 @@ def _run_with_adapter(
         )
         all_factors = {r["factor_name"] for r in rows}
 
-    logger.info(f"  Факторов в конфиге: {len(all_factors)}")
+    # Исключаем факторы, уже загруженные из external
+    if skip_factors:
+        all_factors -= skip_factors
+        logger.info(f"  Факторов в конфиге: {len(all_factors)} "
+                     f"(пропущено {len(skip_factors)} external)")
+    else:
+        logger.info(f"  Факторов в конфиге: {len(all_factors)}")
 
     # Получаем scenario_id
     scenario_id = adapter._scenario_id

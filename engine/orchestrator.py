@@ -124,6 +124,13 @@ def build_model(
     logger.info(f"  Config: {config_path}")
     logger.info(f"{'='*60}")
 
+    # Читаем project.yaml для external macro config
+    _project_cfg = {}
+    if config_path and config_path.exists():
+        import yaml as _yaml_loader
+        with open(config_path) as _cf:
+            _project_cfg = _yaml_loader.safe_load(_cf) or {}
+
     try:
         with Repository(db_path=db_path) as repo:
 
@@ -165,6 +172,7 @@ def build_model(
                     forecast_years=(
                         5  # будет обновлено из config после загрузки
                     ),
+                    project_config=_project_cfg,
                 )
                 result.macro_result = macro_result
                 result.timings["macro"] = time.time() - t0

@@ -31,6 +31,31 @@ macro_forecast:
   - companies/rusal/data/macro
   - macro/industry/aluminum/drivers
   - macro/global/drivers
+  # External macro: integration with modelMacro (quarterly ECM, 13 equations)
+  # Overrides built-in VECM/MR for covered factors (brent, usd_rub, cpi_ru, cbr_key_rate, gdp_ru)
+  # Remaining factors (lme_aluminium, lme_alumina, gdp_world, russian_power_price) → VECM/MR/EWA as before
+  external:
+    enabled: false   # set to true to load from modelMacro scenario_results.csv
+    source_path: /Users/arturhusnutdinov/Documents/IT Development/modelMacro
+    mode: override
+    macro:
+      scenario_map:
+        baseline: base
+        low_oil: bear
+        collapse: severe
+        high_oil: bull
+        uae_bearish: sanctions_shock
+        uae_moderate: energy_spike
+      variable_map:
+        POIL: brent
+        RUBUSD: usd_rub
+        R: cbr_key_rate
+      # CPI→cpi_ru (level→index) and PY→ppi_ru handled automatically
+    sector:
+      company_sector_map:
+        rusal: [mining, manuf]
+        nornickel: [mining]
+      # drivers: [gva_growth, ipi, wages, npl, leverage]  # all by default
 model:
   engine_version: v2
   mode: custom
