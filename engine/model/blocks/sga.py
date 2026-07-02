@@ -1,7 +1,8 @@
 """SGA forecast block: Revenue × sga_pct × (1 + CPI uplift).
 
-If sga_split_enabled: breaks SGA into distribution, admin, ECL, other_opex.
-Total SGA is unchanged — split is IS detail only, zero BS impact.
+If sga_split_enabled: splits total SGA into distribution, admin, ECL, other_opex
+using share-of-total composition (not independent % of revenue).
+This ensures sub-lines always sum to total SGA exactly.
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING
@@ -55,39 +56,57 @@ def solve_sga(state, prev, historic, config):
     total_sga = abs(state.revenue * sga_pct)
     state.sga = -total_sga
 
-    # SGA split: populate sub-lines (IS detail, zero BS impact)
+    # SGA split: use share-of-total composition (не independent % от revenue)
+    # Доля каждой подстатьи в итоговом OpEx — берём из preprocessor *_share_of_opex
+    # Это гарантирует что sub-lines ВСЕГДА суммируются в total SGA
     if getattr(config, 'sga_split_enabled', False):
-        # Priority: YAML config → preprocessor EWA → 0
         pp_mr = historic.preprocess.get('margin_ratios', {})
-        def _get_ratio(yaml_val, pp_key):
-            if yaml_val:
-                return yaml_val
-            pp = pp_mr.get(pp_key)
+
+        def _get_share(yaml_pct_rev, pp_share_key, pp_ratio_key):
+            """Get share of total. YAML pct_rev → convert to share; else use preprocessor share."""
+            # If YAML provides explicit % of revenue, convert to share
+            if yaml_pct_rev and sga_pct > 0:
+                return yaml_pct_rev / sga_pct
+            # Else use preprocessor share-of-opex EWA
+            pp = pp_mr.get(pp_share_key)
             if isinstance(pp, dict):
-                return pp.get('_ewa') or pp.get(-1) or 0.0
-            return float(pp) if pp else 0.0
+                v = pp.get('_ewa') or pp.get(-1)
+                if v:
+                    return float(v)
+            # Last resort: derive from ratio / opex_ratio
+            pp_r = pp_mr.get(pp_ratio_key)
+            pp_total = pp_mr.get('opex_ratio')
+            if isinstance(pp_r, dict) and isinstance(pp_total, dict):
+                r_ewa = pp_r.get('_ewa') or pp_r.get(-1)
+                t_ewa = pp_total.get('_ewa') or pp_total.get(-1)
+                if r_ewa and t_ewa and t_ewa > 0:
+                    return float(r_ewa) / float(t_ewa)
+            return 0.0
 
-        dist_pct = _get_ratio(config.sga_distribution_pct_rev, 'distribution_ratio')
-        admin_pct = _get_ratio(config.sga_admin_pct_rev, 'admin_ratio')
-        ecl_pct = _get_ratio(config.sga_ecl_pct_rev, 'ecl_ratio')
-        other_pct = _get_ratio(config.sga_other_opex_pct_rev, 'other_opex_ratio')
+        dist_share = _get_share(config.sga_distribution_pct_rev,
+                                'distribution_share_of_opex', 'distribution_ratio')
+        admin_share = _get_share(config.sga_admin_pct_rev,
+                                 'admin_share_of_opex', 'admin_ratio')
+        ecl_share = _get_share(config.sga_ecl_pct_rev,
+                               'ecl_share_of_opex', 'ecl_ratio')
+        other_share = _get_share(config.sga_other_opex_pct_rev,
+                                 'other_opex_share_of_opex', 'other_opex_ratio')
 
-        # Calculate sub-lines as % of revenue
-        rev = abs(state.revenue)
-        state.distribution_expenses = -rev * dist_pct
-        state.admin_expenses = -rev * admin_pct
-        state.ecl_expenses = -rev * ecl_pct
-        state.other_opex = -rev * other_pct
+        # Normalize shares to sum to 1.0
+        share_sum = dist_share + admin_share + ecl_share + other_share
+        if share_sum > 0:
+            dist_share /= share_sum
+            admin_share /= share_sum
+            ecl_share /= share_sum
+            other_share /= share_sum
+        else:
+            # Fallback: all in admin
+            admin_share = 1.0
 
-        # Reconcile: ensure sub-lines sum to total SGA
-        sub_total = abs(state.distribution_expenses) + abs(state.admin_expenses) + \
-                    abs(state.ecl_expenses) + abs(state.other_opex)
-        if sub_total > 0 and abs(sub_total - total_sga) > 1.0:
-            # Scale proportionally to match total SGA
-            scale = total_sga / sub_total
-            state.distribution_expenses *= scale
-            state.admin_expenses *= scale
-            state.ecl_expenses *= scale
-            state.other_opex *= scale
+        # Apply shares to total SGA — guaranteed to sum exactly
+        state.distribution_expenses = -total_sga * dist_share
+        state.admin_expenses = -total_sga * admin_share
+        state.ecl_expenses = -total_sga * ecl_share
+        state.other_opex = -total_sga * other_share
 
     return state
