@@ -57,10 +57,20 @@ def solve_sga(state, prev, historic, config):
 
     # SGA split: populate sub-lines (IS detail, zero BS impact)
     if getattr(config, 'sga_split_enabled', False):
-        dist_pct = config.sga_distribution_pct_rev or 0.0
-        admin_pct = config.sga_admin_pct_rev or 0.0
-        ecl_pct = config.sga_ecl_pct_rev or 0.0
-        other_pct = config.sga_other_opex_pct_rev or 0.0
+        # Priority: YAML config → preprocessor EWA → 0
+        pp_mr = historic.preprocess.get('margin_ratios', {})
+        def _get_ratio(yaml_val, pp_key):
+            if yaml_val:
+                return yaml_val
+            pp = pp_mr.get(pp_key)
+            if isinstance(pp, dict):
+                return pp.get('_ewa') or pp.get(-1) or 0.0
+            return float(pp) if pp else 0.0
+
+        dist_pct = _get_ratio(config.sga_distribution_pct_rev, 'distribution_ratio')
+        admin_pct = _get_ratio(config.sga_admin_pct_rev, 'admin_ratio')
+        ecl_pct = _get_ratio(config.sga_ecl_pct_rev, 'ecl_ratio')
+        other_pct = _get_ratio(config.sga_other_opex_pct_rev, 'other_opex_ratio')
 
         # Calculate sub-lines as % of revenue
         rev = abs(state.revenue)

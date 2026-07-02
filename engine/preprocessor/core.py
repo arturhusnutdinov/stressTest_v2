@@ -260,6 +260,62 @@ class ModelPreprocessor:
         if cogs_ex_da_ratios:
             out["cogs_ratio_ex_da"] = _summary(cogs_ex_da_ratios, self._ewa_halflife)
 
+        # SGA sub-line ratios: distribution, admin (sgna), ECL, other opex
+        # SGA sub-line ratios: distribution, admin, ECL, other opex
+        # Distribution and ECL/other_opex are separate IS lines.
+        # Admin = SGA - distribution (if both exist; SGA often = admin only)
+        sga_sublines = [
+            ("distribution_ratio",  "distribution_expenses"),
+            ("ecl_ratio",           "expected_credit_losses"),
+            ("other_opex_ratio",    "other_operating_expenses"),
+        ]
+        for metric_name, is_metric in sga_sublines:
+            sub_series = self._is_series(is_metric)
+            sub_ratios: Dict[int, float] = {}
+            for yr in self._years:
+                rev = revenue.get(yr)
+                val = sub_series.get(yr)
+                if rev and val is not None and abs(rev) > 1e-9:
+                    sub_ratios[yr] = abs(val) / abs(rev)
+            if sub_ratios:
+                out[metric_name] = _summary(sub_ratios, self._ewa_halflife)
+
+        # Admin ratio: derived as SGA - distribution (if distribution is separate IS line)
+        admin_ratios: Dict[int, float] = {}
+        for yr in self._years:
+            rev = revenue.get(yr)
+            sga_v = sga_series_raw.get(yr)
+            dist_v = dist_series.get(yr)
+            if rev and sga_v is not None and abs(rev) > 1e-9:
+                admin = abs(sga_v) - abs(dist_v or 0)
+                if admin > 0:
+                    admin_ratios[yr] = admin / abs(rev)
+        if admin_ratios:
+            out["admin_ratio"] = _summary(admin_ratios, self._ewa_halflife)
+
+        # SGA composition: share of each sub-line in total operating expenses
+        # Total opex = |distribution| + |sga| + |ecl| + |other_opex|
+        ecl_series = self._is_series("expected_credit_losses")
+        other_opex_series = self._is_series("other_operating_expenses")
+        composition_defs = [
+            ("distribution_share_of_opex", dist_series),
+            ("admin_share_of_opex",        sga_series_raw),  # sga here = admin component
+            ("ecl_share_of_opex",          ecl_series),
+            ("other_opex_share_of_opex",   other_opex_series),
+        ]
+        for metric_name, sub_series in composition_defs:
+            shares: Dict[int, float] = {}
+            for yr in self._years:
+                # Total opex = sum of all sub-lines
+                comps = [abs(s.get(yr) or 0) for s in
+                         [dist_series, sga_series_raw, ecl_series, other_opex_series]]
+                total = sum(comps)
+                val = sub_series.get(yr)
+                if total > 1e-9 and val is not None:
+                    shares[yr] = abs(val) / total
+            if shares:
+                out[metric_name] = _summary(shares, self._ewa_halflife)
+
         # Tax rate: tax_expense / ebt
         tax_series  = self._is_series("tax_expense")
         ebt_series  = self._is_series("ebt")
@@ -271,6 +327,46 @@ class ModelPreprocessor:
                 tax_rates[yr] = abs(tax) / ebt
         if tax_rates:
             out["tax_rate"] = _summary(tax_rates, self._ewa_halflife)
+
+        # Current/deferred tax split ratios (for DT categories)
+        cur_tax_series = self._is_series("current_tax")
+        def_tax_series = self._is_series("deferred_tax")
+        for metric_name, tax_sub in [("current_tax_ratio", cur_tax_series),
+                                      ("deferred_tax_ratio", def_tax_series)]:
+            ratios = {}
+            for yr in self._years:
+                ebt = ebt_series.get(yr)
+                val = tax_sub.get(yr)
+                if ebt and val is not None and abs(ebt) > 1e-9 and ebt > 0:
+                    ratios[yr] = abs(val) / ebt
+            if ratios:
+                out[metric_name] = _summary(ratios, self._ewa_halflife)
+
+        # DTA/DTL rates: Δ(DTA or DTL) / total_assets — for deferred tax category calibration
+        dta_series = self._bs_series("dta")
+        dtl_series = self._bs_series("dtl")
+        assets_series = self._bs_series("total_assets")
+        for metric_name, dt_series in [("dta_pct_assets", dta_series),
+                                        ("dtl_pct_assets", dtl_series)]:
+            ratios = {}
+            for yr in self._years:
+                dt = dt_series.get(yr)
+                ta = assets_series.get(yr)
+                if dt is not None and ta and abs(ta) > 1e-9:
+                    ratios[yr] = abs(dt) / abs(ta)
+            if ratios:
+                out[metric_name] = _summary(ratios, self._ewa_halflife)
+
+        # Provisions ratio: employee_benefits / revenue (for provisions corkscrew)
+        eb_series = self._bs_series("employee_benefits")
+        prov_ratios: Dict[int, float] = {}
+        for yr in self._years:
+            eb = eb_series.get(yr)
+            rev = revenue.get(yr)
+            if eb is not None and rev and abs(rev) > 1e-9:
+                prov_ratios[yr] = abs(eb) / abs(rev)
+        if prov_ratios:
+            out["provisions_pct_revenue"] = _summary(prov_ratios, self._ewa_halflife)
 
         return out
 
