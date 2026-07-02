@@ -188,62 +188,10 @@ def ensure_outputs_even_if_insufficient_history_2005(root: Path, company: str):
 
     return pd.DataFrame(summary_rows)
 
-def run_ecm_all(root: Path, company: str):
-    """
-    Запуск ECM/VECM/SVAR прогнозирования для компании
-    
-    Сначала запускает VECM/SVAR с конфигурацией из macro_ecm.yaml,
-    затем fallback на ensure_outputs_even_if_insufficient_history_2005.
-    """
-    # Сначала пытаемся запустить полноценный VECM/SVAR
-    try:
-        # Ищем конфиг macro_ecm.yaml
-        # Сначала проверяем в project.yaml компании
-        proj = _read_yaml(root/f'companies/{company}/configs/project.yaml')
-        mf_cfg = proj.get('macro_forecast', {}).get('config')
-        
-        cfg_path = None
-        if mf_cfg:
-            # Используем путь из project.yaml
-            cfg_path = root / mf_cfg
-            if not cfg_path.exists():
-                cfg_path = None
-        
-        # Если не нашли - используем кандидатов
-        if cfg_path is None:
-            cfg_candidates = [
-                root / f'companies/{company}/configs/forecast/macro_ecm.yaml',
-                root / f'companies/{company}/configs/macro_ecm.yaml',
-            ]
-            for candidate in cfg_candidates:
-                if candidate.exists():
-                    cfg_path = candidate
-                    break
-        
-        if cfg_path:
-            cfg = _read_yaml(cfg_path)
-            
-            # Проверяем, используется ли SVAR
-            use_svar = cfg.get('svar', {}).get('enabled', False)
-            
-            if use_svar:
-                # Запускаем SVAR
-                run_svar_all(root, company, cfg_path)
-            else:
-                # Запускаем VECM
-                _run_vecm_all(root, company, cfg_path)
-            return
-    except Exception as e:
-        print(f"⚠️ ECM/VECM/SVAR не удалось запустить: {e}, используем fallback")
-    
-    # Fallback на базовый метод
-    ensure_outputs_even_if_insufficient_history_2005(root, company)
-
-
 def run_svar_all(root: Path, company: str, cfg_path: Path):
     """
     Запуск SVAR прогнозирования для компании.
-    
+
     Args:
         root: Корень проекта
         company: Название компании
@@ -251,29 +199,29 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
     """
     cfg = _read_yaml(cfg_path)
     svar_cfg = cfg.get('svar', {})
-    
+
     # Параметры из конфига
     identification_type = svar_cfg.get('identification_type', 'short_run')
     maxlags = int(svar_cfg.get('maxlags', 2))
     forecast_years = int(cfg.get('horizon_years', 5))
-    
+
     # Загружаем факторы из project.yaml
     proj = _read_yaml(root / f'companies/{company}/configs/project.yaml')
     factors = proj.get('macro_forecast', {}).get('factors', [])
     file_map = proj.get('macro_forecast', {}).get('file_map', {})
     search_paths = proj.get('macro_forecast', {}).get('search_paths', [])
-    
+
     # Загружаем историю факторов (используем логику из vecm.py)
     from .vecm import _stack_block_ln
     Y_all = _stack_block_ln(
         root, company, factors, file_map, search_paths, cleaned_overrides=None
     )
-    
+
     if Y_all.empty:
         print("⚠️ SVAR: Нет данных для моделирования, используем fallback")
         ensure_outputs_even_if_insufficient_history_2005(root, company)
         return
-    
+
     # Инициализация БД
     db = None
     if DM_AVAILABLE:
@@ -281,27 +229,27 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
             db = get_data_mart(root, company)
         except Exception:
             db = None
-    
+
     # Определяем блоки для SVAR
     svar_blocks = svar_cfg.get('blocks', [])
     if not svar_blocks:
         # Если блоки не указаны, используем все факторы как один блок
         svar_blocks = [{'name': 'all_factors', 'factors': factors}]
-    
+
     # Запускаем SVAR для каждого блока
     for block_cfg in svar_blocks:
         block_name = block_cfg.get('name', 'svar_block')
         block_factors = block_cfg.get('factors', factors)
         var_order = block_cfg.get('var_order', None)  # Порядок переменных для идентификации
-        
+
         # Фильтруем данные по факторам блока
         block_cols = [f'ln_{f}' for f in block_factors if f'ln_{f}' in Y_all.columns]
         if len(block_cols) < 2:
             print(f"⚠️ SVAR блок {block_name}: недостаточно факторов ({len(block_cols)})")
             continue
-        
+
         Y_block = Y_all[block_cols].copy()
-        
+
         # Запускаем SVAR
         results = run_svar_block(
             Y=Y_block,
@@ -313,11 +261,63 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
             company=company,
             block_name=block_name
         )
-        
+
         print(f"✅ SVAR блок {block_name}: прогноз сгенерирован для {len(results.get('forecasts', {}))} факторов")
-    
+
     if db:
         db.close()
+
+
+def run_ecm_all(root: Path, company: str):
+    """
+    Запуск ECM/VECM/SVAR прогнозирования для компании
+
+    Сначала запускает VECM/SVAR с конфигурацией из macro_ecm.yaml,
+    затем fallback на ensure_outputs_even_if_insufficient_history_2005.
+    """
+    # Сначала пытаемся запустить полноценный VECM/SVAR
+    try:
+        # Ищем конфиг macro_ecm.yaml
+        # Сначала проверяем в project.yaml компании
+        proj = _read_yaml(root/f'companies/{company}/configs/project.yaml')
+        mf_cfg = proj.get('macro_forecast', {}).get('config')
+
+        cfg_path = None
+        if mf_cfg:
+            # Используем путь из project.yaml
+            cfg_path = root / mf_cfg
+            if not cfg_path.exists():
+                cfg_path = None
+
+        # Если не нашли - используем кандидатов
+        if cfg_path is None:
+            cfg_candidates = [
+                root / f'companies/{company}/configs/forecast/macro_ecm.yaml',
+                root / f'companies/{company}/configs/macro_ecm.yaml',
+            ]
+            for candidate in cfg_candidates:
+                if candidate.exists():
+                    cfg_path = candidate
+                    break
+
+        if cfg_path:
+            cfg = _read_yaml(cfg_path)
+
+            # Проверяем, используется ли SVAR
+            use_svar = cfg.get('svar', {}).get('enabled', False)
+
+            if use_svar:
+                # Запускаем SVAR
+                run_svar_all(root, company, cfg_path)
+            else:
+                # Запускаем VECM
+                _run_vecm_all(root, company, cfg_path)
+            return
+    except Exception as e:
+        print(f"⚠️ ECM/VECM/SVAR не удалось запустить: {e}, используем fallback")
+
+    # Fallback на базовый метод
+    ensure_outputs_even_if_insufficient_history_2005(root, company)
  
 # Backward-compatible alias used by orchestrator
 ensure_outputs_even_if_insufficient_history = ensure_outputs_even_if_insufficient_history_2005

@@ -81,6 +81,15 @@ class MacroDBAdapter:
     def save_forecast_diagnostics(self, *args, **kwargs) -> None:
         logger.debug("forecast_diagnostics — skipped (v2)")
 
+    def save_ecm_equation(self, *args, **kwargs) -> None:
+        logger.debug("ecm_equation — skipped (v2)")
+
+    def save_ecm_forecast_diag(self, *args, **kwargs) -> None:
+        logger.debug("ecm_forecast_diag — skipped (v2)")
+
+    def save_macro_anomaly_report(self, *args, **kwargs) -> None:
+        logger.debug("macro_anomaly_report — skipped (v2)")
+
     # ── совместимость с DataMart интерфейсом ──────────────────────────────────
 
     def close(self) -> None:

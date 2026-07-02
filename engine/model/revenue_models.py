@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # ─── OLS 1-фактор ─────────────────────────────────────────────────────────────
 
+# NOTE: currently unused — reserved for future multi-factor revenue modeling
 def ols_single_factor(
     revenue_history: Dict[int, float],
     factor_history: Dict[int, float],
@@ -103,6 +104,7 @@ def ols_single_factor(
     return forecast, beta, r2
 
 
+# NOTE: currently unused — reserved for future multi-factor revenue modeling
 def ols_multi_factor(
     revenue_history: Dict[int, float],
     factors_history: Dict[str, Dict[int, float]],

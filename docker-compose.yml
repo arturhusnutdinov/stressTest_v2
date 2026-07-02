@@ -14,6 +14,7 @@ services:
       - "8888:8888"
     volumes:
       - .:/app
+      - ./data_mart_v2.db:/app/data_mart_v2.db
     command: >
       jupyter notebook
       --ip=0.0.0.0

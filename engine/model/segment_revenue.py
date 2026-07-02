@@ -37,6 +37,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional,  Dict, List, Optional
 
+from engine.constants import REVENUE_CLAMP_PERCENTILE_LOW, REVENUE_CLAMP_PERCENTILE_HIGH
+
 logger = logging.getLogger(__name__)
 
 
@@ -226,10 +228,18 @@ class SegmentRevenueModel:
         for g in growth_rates[1:]:
             ewa_growth = alpha * g + (1 - alpha) * ewa_growth
 
+        # Clamp growth to historical percentile range
+        forecast_growth = ewa_growth
+        if len(growth_rates) >= 3:
+            import numpy as np
+            g_lo = float(np.percentile(growth_rates, REVENUE_CLAMP_PERCENTILE_LOW * 100))
+            g_hi = float(np.percentile(growth_rates, REVENUE_CLAMP_PERCENTILE_HIGH * 100))
+            forecast_growth = max(g_lo, min(g_hi, forecast_growth))
+
         result = {}
         val = last_value
         for yr in sorted(forecast_years):
-            val = val * math.exp(ewa_growth)
+            val = val * math.exp(forecast_growth)
             result[yr] = val
         return result
 

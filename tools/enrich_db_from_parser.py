@@ -20,10 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from parsers.pdf_parser import PDFParser
 
-DEFAULT_PDF = Path(
-    '/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/'
-    'RUSAL_consolidated_financial_statement_12m2024_ENG.pdf'
-)
+DEFAULT_PDF = None  # must be provided via --pdf argument
 ADAPTER = Path('parsers/adapters/rusal.yaml')
 DB_PATH = 'data_mart_v2.db'
 COMPANY = 'rusal'
@@ -31,7 +28,7 @@ TOLERANCE = 0.02
 MUSD_TO_USD = 1e6
 
 # Globals set by main()
-PDF_PATH = DEFAULT_PDF
+PDF_PATH = None
 TARGET_YEAR = 2024
 
 
@@ -134,12 +131,12 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true')
-    ap.add_argument('--pdf', type=str, default=None, help='Path to PDF')
+    ap.add_argument('--pdf', type=str, required=True,
+                    help='Path to PDF financial statement (required)')
     args = ap.parse_args()
     dry_run = args.dry_run
 
-    if args.pdf:
-        PDF_PATH = Path(args.pdf)
+    PDF_PATH = Path(args.pdf)
     if not PDF_PATH.exists():
         print(f'ERROR: PDF not found: {PDF_PATH}')
         return 1

@@ -32,6 +32,23 @@ jobs:
         env:
           STRESSTEST_ROOT: ${{ github.workspace }}
 
+      - name: Parser smoke tests
+        run: |
+          if ls companies/*/data/statements/*.pdf 1>/dev/null 2>&1; then
+            python -m pytest tests/ -v --tb=short -k "parser" || echo "Parser tests failed (PDF-dependent, non-blocking)"
+          else
+            echo "No PDF files found — skipping parser smoke tests"
+          fi
+        env:
+          STRESSTEST_ROOT: ${{ github.workspace }}
+        continue-on-error: true
+
+      - name: Type checking (mypy)
+        run: |
+          pip install mypy
+          python -m mypy engine/ --ignore-missing-imports --no-error-summary || echo "mypy found issues (non-blocking)"
+        continue-on-error: true
+
   lint:
     runs-on: ubuntu-latest
     steps:
