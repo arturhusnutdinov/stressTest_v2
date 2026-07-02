@@ -181,6 +181,10 @@ class YearState:
     cogs: float = 0.0
     gross_profit: float = 0.0
     sga: float = 0.0
+    distribution_expenses: float = 0.0   # SGA split: distribution/selling
+    admin_expenses: float = 0.0          # SGA split: administrative
+    ecl_expenses: float = 0.0            # SGA split: expected credit losses
+    other_opex: float = 0.0              # SGA split: other operating expenses
     dep_ppe: float = 0.0
     dep_rou: float = 0.0
     amort_intangibles: float = 0.0
@@ -476,6 +480,26 @@ class ModelConfig:
     #   "natural"         — доход как положительное (IFRS / RUSAL)
     is_income_sign: str = "credit_negative"
 
+    # Intangibles config (from YAML custom.intangibles)
+    intang_amort_rate: Optional[float] = None       # Override for amortization rate
+    intang_additions_pct_rev: float = 0.0            # Additions as % of revenue
+
+    # SGA split config (from YAML custom.sga)
+    sga_split_enabled: bool = False
+    sga_distribution_pct_rev: Optional[float] = None
+    sga_admin_pct_rev: Optional[float] = None
+    sga_ecl_pct_rev: Optional[float] = None
+    sga_other_opex_pct_rev: Optional[float] = None
+
+    # Provisions corkscrew config
+    provisions_corkscrew_enabled: bool = False
+
+    # Deferred tax categories config
+    deferred_tax_categories: Optional[Dict] = None
+
+    # Finance lease initial liability (fallback for overlay in core.py)
+    finance_lease_liab_initial: float = 0.0
+
     # Macro factor configuration (from YAML, used by blocks instead of re-reading YAML)
     revenue_macro_factor: Optional[str] = None
     cogs_revenue_factor: Optional[str] = None
@@ -496,8 +520,9 @@ class ModelConfig:
 
     @property
     def statutory_rate(self) -> float:
-        """Statutory tax rate (alias for tax_rate with fallback to 21%)."""
-        return self.tax_rate or 0.21
+        """Statutory tax rate (alias for tax_rate with fallback from constants)."""
+        from engine.constants import TAX_STATUTORY_RATE_DEFAULT
+        return self.tax_rate or TAX_STATUTORY_RATE_DEFAULT
 
     @property
     def dividend_pct_ni(self) -> float:

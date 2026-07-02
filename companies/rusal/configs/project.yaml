@@ -71,6 +71,8 @@ model:
       chainlink_anchor: history_last
     margins:
       ebitda_margin_default: 0.12
+      # tax_rate_statutory: loaded from preprocessor EWA (~18.5%)
+      # Override to 0.25 when 2025+ data loaded with new Russian rate
       tax_rate_delta_pct: 0.0
     capex_policy:
       method: ratio_to_revenue
@@ -184,6 +186,47 @@ model:
         2030: 0.07
       refinancing:
         fees_pct: 0.001
+    taxes:
+      # Inherit from standard: mode, policy, nol_*, tax_paid_timing
+      # tax_rate_statutory: 0.25  # Uncomment when 2025+ data reflects new 25% rate
+      mode: full
+      policy: statutory_with_floor
+      nol_opening_balance: 0
+      nol_max_utilization_pct: 0.8
+      tax_paid_timing: current_year
+      # Deferred tax temporary difference categories (per Excel prototype)
+      # Enable when historical DTA/DTL reflect these categories
+      deferred_tax_categories:
+        enabled: false    # set to true after calibrating opening DTA/DTL
+        ppe:
+          blended_dep_rate: 0.1462   # Tax depreciation rate on PP&E
+        inventories:
+          rate: 0.0291               # Inventory valuation temporary differences
+        receivables:
+          rate: 0.0808               # Trade & other receivables
+        payables:
+          rate: 0.0717               # Trade & other payables
+    sga:
+      # SGA split into sub-lines (IFRS: distribution separate from admin)
+      split_enabled: true
+      distribution_pct_of_revenue: 0.05    # ~5% historically (2024: 848/12569)
+      admin_pct_of_revenue: 0.04           # ~4% historically (2024: 695/12569)
+      ecl_pct_of_revenue: 0.003            # Expected credit losses ~0.3%
+      other_opex_pct_of_revenue: 0.02      # Other operating expenses ~2%
+    provisions:
+      # Full corkscrew for provisions (pension, site restoration, legal claims)
+      corkscrew_enabled: true
+      categories:
+        pension:
+          annual_charge_pct: 0.12          # ~12% of opening (7/55 avg)
+          utilization_pct: 0.08            # ~8% annual utilization
+        site_restoration:
+          annual_charge_pct: 0.0           # No new provisions historically
+          accretion_rate: 0.02             # Passage of time (discount unwind)
+          fx_sensitivity: 0.15             # FX impact as % of opening
+        legal_claims:
+          annual_charge_pct: 0.30          # ~30% of opening (volatile)
+          utilization_pct: 0.20            # Settlement rate
     covenants:
       enabled: true
       thresholds:

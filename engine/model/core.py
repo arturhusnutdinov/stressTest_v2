@@ -578,14 +578,17 @@ class ThreeStatementModel:
         # Disposal gain → ppe_disposal_gain → included in EBT → flows to NI/RE.
         # Without this, the gain stays in cash (CFI) but not in equity, causing BS drift.
         state.ppe_disposal_gain = block.gain_loss or 0.0
-        # Intangibles corkscrew — amort_rate только если IS историчеcки показывает амортизацию
-        hist_amort = float(
-            self._h.is_data.get(self._h.base_year, {}).get("amortization") or 0.0
-        )
-        amort_rate = (hist_amort / max(prev.intangibles, 1.0)) if hist_amort > 0 else INTANG_AMORT_RATE_FALLBACK
+        # Intangibles corkscrew — amort_rate: YAML config > historical > fallback
+        if self._c.intang_amort_rate is not None and self._c.intang_amort_rate > 0:
+            amort_rate = self._c.intang_amort_rate
+        else:
+            hist_amort = float(
+                self._h.is_data.get(self._h.base_year, {}).get("amortization") or 0.0
+            )
+            amort_rate = (hist_amort / max(prev.intangibles, 1.0)) if hist_amort > 0 else INTANG_AMORT_RATE_FALLBACK
         intang_block = IntangiblesBlock.from_prev_state(
             prev, amort_rate=amort_rate, revenue=state.revenue,
-            additions_pct_revenue=0.0,
+            additions_pct_revenue=self._c.intang_additions_pct_rev,
         )
         state.intangibles       = intang_block.intang_close or 0.0
         state.amort_intangibles = intang_block.amort_is
@@ -678,6 +681,29 @@ class ThreeStatementModel:
         # Pension DTA: employee_benefits reduction → DTA grows
         pension_dta_delta = max(0.0, (prev.employee_benefits or 0.0) - (state.employee_benefits or 0.0))
 
+        # Deferred tax categories: compute other_dtl_delta from BS changes × category rates
+        other_dtl_delta = 0.0
+        other_dta_delta = 0.0
+        dt_cats = getattr(self._c, 'deferred_tax_categories', None)
+        if dt_cats and isinstance(dt_cats, dict) and dt_cats.get('enabled', False):
+            # Inventory: growth creates DTL (tax deduction timing)
+            inv_rate = float((dt_cats.get('inventories') or {}).get('rate', 0.0))
+            if inv_rate:
+                inv_delta = (state.inventory or 0) - (prev.inventory or 0)
+                other_dtl_delta += inv_delta * inv_rate
+
+            # Receivables: growth creates DTL (revenue recognition timing)
+            ar_rate = float((dt_cats.get('receivables') or {}).get('rate', 0.0))
+            if ar_rate:
+                ar_delta = (state.accounts_receivable or 0) - (prev.accounts_receivable or 0)
+                other_dtl_delta += ar_delta * ar_rate
+
+            # Payables: growth creates DTA (expense recognition timing)
+            ap_rate = float((dt_cats.get('payables') or {}).get('rate', 0.0))
+            if ap_rate:
+                ap_delta = abs(state.accounts_payable or 0) - abs(prev.accounts_payable or 0)
+                other_dta_delta += ap_delta * ap_rate
+
         # Use year-opening NOL (frozen before iteration loop) so multi-iteration convergence
         # doesn't deplete the pool mid-year. _nol_carryforward persists the close to next year.
         _nol_open = self._nol_year_open
@@ -696,6 +722,8 @@ class ThreeStatementModel:
             taxes_payable_open=prev.taxes_payable or 0.0,
             accel_dep_excess=accel_dep_excess,
             pension_dta_delta=pension_dta_delta,
+            other_dtl_delta=other_dtl_delta,
+            other_dta_delta=other_dta_delta,
             payment_lag=_pay_lag,
         ).solve()
         ok, issues = block.validate()
@@ -1550,7 +1578,7 @@ class ThreeStatementModel:
 
     def _solve_bs_other(self, state: YearState, prev: YearState) -> YearState:
         from .blocks.bs_other import solve_bs_other
-        return solve_bs_other(state, prev)
+        return solve_bs_other(state, prev, config=self._c)
 
     def _solve_cash_from_cf(self, state: YearState, prev: YearState) -> YearState:
         from .blocks.cash import solve_cash_from_cf

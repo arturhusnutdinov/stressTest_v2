@@ -237,7 +237,8 @@ class ModelInputLoader:
         # EBT years (e.g. 2011=2.96x, 2012=21.8x) and gets clamped to 0.50 even with max clamp.
         _std_margins = cfg.get("model", {}).get("standard", {}).get("margins", {})
         _tax_rate_yaml = (
-            _safe_float(mode_cfg.get("margins", {}).get("tax_rate_statutory"))
+            _safe_float(mode_cfg.get("taxes", {}).get("tax_rate_statutory"))
+            or _safe_float(mode_cfg.get("margins", {}).get("tax_rate_statutory"))
             or _safe_float(_std_margins.get("tax_rate_statutory"))
         )
 
@@ -326,6 +327,43 @@ class ModelInputLoader:
             is_income_sign=str(
                 cfg.get("accounting_conventions", {}).get("is_income_sign", "credit_negative")
             ),
+            # Intangibles config from YAML custom section only
+            # (standard section values used as fallback in core.py via preprocessor)
+            intang_amort_rate=_pct(
+                custom_cfg.get("intangibles", {}).get("amortization_pct_of_balance"),
+                None
+            ),
+            intang_additions_pct_rev=float(
+                custom_cfg.get("intangibles", {}).get("additions_pct_of_revenue") or 0.0
+            ),
+            # SGA split config
+            sga_split_enabled=bool(
+                mode_cfg.get("sga", {}).get("split_enabled", False)
+            ),
+            sga_distribution_pct_rev=_safe_float(
+                mode_cfg.get("sga", {}).get("distribution_pct_of_revenue")
+            ),
+            sga_admin_pct_rev=_safe_float(
+                mode_cfg.get("sga", {}).get("admin_pct_of_revenue")
+            ),
+            sga_ecl_pct_rev=_safe_float(
+                mode_cfg.get("sga", {}).get("ecl_pct_of_revenue")
+            ),
+            sga_other_opex_pct_rev=_safe_float(
+                mode_cfg.get("sga", {}).get("other_opex_pct_of_revenue")
+            ),
+            # Provisions corkscrew
+            provisions_corkscrew_enabled=bool(
+                mode_cfg.get("provisions", {}).get("corkscrew_enabled", False)
+            ),
+            # Deferred tax categories
+            deferred_tax_categories=(
+                mode_cfg.get("taxes", {}).get("deferred_tax_categories")
+            ),
+            # Finance lease initial liability
+            finance_lease_liab_initial=float(
+                mode_cfg.get("leases", {}).get("finance_lease_liab_initial", 0.0) or 0.0
+            ) * 1e6,
             # Macro factor config (from YAML → passed to blocks, no re-read)
             revenue_macro_factor=(
                 mode_cfg.get("revenue", {}).get("macro_factor") or

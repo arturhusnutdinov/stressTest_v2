@@ -1,4 +1,8 @@
-"""SGA forecast block: Revenue × sga_pct × (1 + CPI uplift)."""
+"""SGA forecast block: Revenue × sga_pct × (1 + CPI uplift).
+
+If sga_split_enabled: breaks SGA into distribution, admin, ECL, other_opex.
+Total SGA is unchanged — split is IS detail only, zero BS impact.
+"""
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
@@ -48,5 +52,32 @@ def solve_sga(state, prev, historic, config):
     else:
         sga_pct = max(SGA_PCT_MIN, min(SGA_PCT_MAX, sga_pct))
 
-    state.sga = -abs(state.revenue * sga_pct)
+    total_sga = abs(state.revenue * sga_pct)
+    state.sga = -total_sga
+
+    # SGA split: populate sub-lines (IS detail, zero BS impact)
+    if getattr(config, 'sga_split_enabled', False):
+        dist_pct = config.sga_distribution_pct_rev or 0.0
+        admin_pct = config.sga_admin_pct_rev or 0.0
+        ecl_pct = config.sga_ecl_pct_rev or 0.0
+        other_pct = config.sga_other_opex_pct_rev or 0.0
+
+        # Calculate sub-lines as % of revenue
+        rev = abs(state.revenue)
+        state.distribution_expenses = -rev * dist_pct
+        state.admin_expenses = -rev * admin_pct
+        state.ecl_expenses = -rev * ecl_pct
+        state.other_opex = -rev * other_pct
+
+        # Reconcile: ensure sub-lines sum to total SGA
+        sub_total = abs(state.distribution_expenses) + abs(state.admin_expenses) + \
+                    abs(state.ecl_expenses) + abs(state.other_opex)
+        if sub_total > 0 and abs(sub_total - total_sga) > 1.0:
+            # Scale proportionally to match total SGA
+            scale = total_sga / sub_total
+            state.distribution_expenses *= scale
+            state.admin_expenses *= scale
+            state.ecl_expenses *= scale
+            state.other_opex *= scale
+
     return state

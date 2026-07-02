@@ -6,6 +6,7 @@ from .equity import EquityBlock
 from .interest_payable import InterestPayableBlock
 from .intangibles import IntangiblesBlock
 from .wc import WCBlock
+from .provisions import ProvisionsBlock
 
 __all__ = [
     "PPEBlock",
@@ -17,4 +18,5 @@ __all__ = [
     "InterestPayableBlock",
     "IntangiblesBlock",
     "WCBlock",
+    "ProvisionsBlock",
 ]
