@@ -271,11 +271,14 @@ External перезаписывает VECM/MR для покрытых факто
 
 | Сектор | Spec | λ | R² | LR: ln(PPI) = f(...) |
 |--------|------|------|-----|----------------------|
-| mining (B) | ECM | -0.221*** | 0.832 | POIL, RUBCNY, R |
-| manuf (C) | ECM | -0.051 | 0.718 | POIL, RUBCNY, R |
+| mining (B) | ECM | -0.219*** | 0.833 | POIL, RUBCNY, R |
+| manuf (C) | ECM | -0.050 | 0.717 | POIL, RUBCNY, R |
+| transp (H) | ECM | -0.144*** | 0.641 | POIL, RUBCNY, R |
+| constr (F) | ECM | -0.025** | 0.537 | POIL, RUBCNY, R |
+| agric (A) | ECM | -0.193** | 0.437 | POIL, RUBCNY, R |
 | other (D/E) | ADL-FD | — | 0.570 | тарифное регулирование |
 
-Oil shock ($63→$45): mining PPI -22%, manuf -3.5%, other -2%
+Oil shock ($63→$45): mining PPI -22%, manuf -3.5%, transp/constr/agric -2..5%
 
 ### YAML конфиг
 
