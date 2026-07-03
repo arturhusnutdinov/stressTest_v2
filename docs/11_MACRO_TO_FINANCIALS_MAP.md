@@ -265,6 +265,18 @@ External перезаписывает VECM/MR для покрытых факто
 
 `lme_aluminium`, `lme_alumina`, `gdp_world`, `russian_power_price`
 
+### PPI ECM модель (modelMacro sector_ppi_model.py)
+
+3 уравнения по паттерну GVA Layer 1 (Engle-Granger 2-step, BIC lags, HC1):
+
+| Сектор | Spec | λ | R² | LR: ln(PPI) = f(...) |
+|--------|------|------|-----|----------------------|
+| mining (B) | ECM | -0.221*** | 0.832 | POIL, RUBCNY, R |
+| manuf (C) | ECM | -0.051 | 0.718 | POIL, RUBCNY, R |
+| other (D/E) | ADL-FD | — | 0.570 | тарифное регулирование |
+
+Oil shock ($63→$45): mining PPI -22%, manuf -3.5%, other -2%
+
 ### YAML конфиг
 
 ```yaml
