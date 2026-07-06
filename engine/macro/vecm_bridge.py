@@ -631,8 +631,10 @@ def _validate_macro_forecasts(
 
         if failed:
             logger.warning(f"  SANITY FAIL: {fail_reason}")
-            # Attempt EWA repair from history
-            repaired = _repair_with_ewa(name, history, len(fc_data))
+            # Attempt EWA repair from history — repair ALL forecast years
+            fc_years_sorted = sorted(fc_data.keys())
+            n_fc = len([y for y in fc_years_sorted if y > last_year])
+            repaired = _repair_with_ewa(name, history, max(n_fc, len(fc_data)))
             if repaired:
                 # Re-validate repaired forecast
                 repaired_ok = True
@@ -644,8 +646,11 @@ def _validate_macro_forecasts(
                             repaired_ok = False
                             break
                 if repaired_ok:
-                    logger.info(f"  SANITY REPAIR: {name} → EWA fallback OK")
-                    validated[name] = repaired
+                    # Preserve historical values from original, replace only forecast
+                    merged = {yr: v for yr, v in fc_data.items() if yr <= last_year}
+                    merged.update(repaired)
+                    logger.info(f"  SANITY REPAIR: {name} → EWA fallback OK ({len(repaired)} fc yrs)")
+                    validated[name] = merged
                 else:
                     logger.warning(f"  SANITY REPAIR FAILED: {name} — EWA also bad, dropping")
             else:

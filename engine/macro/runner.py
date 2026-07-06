@@ -260,6 +260,10 @@ def _run_with_adapter(
                 _fill_missing_with_fallback(missing, adapter, result, forecast_years)
 
             logger.info(f"  Итого: {len(result.factors_forecast)} факторов спрогнозировано")
+
+            # Очистка дубликатов FX: если есть и fx_usdrub и usd_rub — удаляем fx_usdrub
+            _cleanup_duplicate_fx(adapter, result)
+
             return
 
         except Exception as e:
@@ -294,6 +298,23 @@ def _fill_missing_with_fallback(
                                       forecast_years=forecast_years, halflife=5.0)
             method = "ewa(halflife=5)"
         if fc:
+            # Sanity check: forecast should stay within 0.5x–2.0x of last historical value
+            last_val = history[max(history.keys())]
+            sane = True
+            if last_val and abs(last_val) > 1e-6:
+                for yr, val in fc.items():
+                    ratio = val / last_val
+                    if ratio < 0.1 or ratio > 10:
+                        sane = False
+                        logger.warning(
+                            f"  Gap-fill {factor_name}: yr={yr} val={val:.2f} "
+                            f"ratio={ratio:.2f} — insane, using flat forecast"
+                        )
+                        break
+            if not sane:
+                # Flat forecast = last historical value (safest fallback)
+                fc = {yr: last_val for yr in fc}
+                method = "flat(sanity_fallback)"
             adapter.save_macro_forecast(factor_name, fc, method=method)
             result.factors_forecast.append(factor_name)
             result.methods_used[factor_name] = method
@@ -383,4 +404,29 @@ def _run_fallback(
             adapter.save_macro_forecast(factor_name, forecast, method=used_method)
             result.factors_forecast.append(factor_name)
             result.methods_used[factor_name] = used_method
+
+
+def _cleanup_duplicate_fx(adapter, result: MacroResult) -> None:
+    """
+    Удаляет дубликат fx_usdrub из macro_forecasts если usd_rub уже есть.
+
+    Модель использует usd_rub (из project.yaml / external ECM).
+    fx_usdrub — артефакт старого macro_ecm.yaml, EWA даёт нереалистичный +10%/yr.
+    """
+    if "usd_rub" not in result.factors_forecast:
+        return
+    if "fx_usdrub" not in result.factors_forecast:
+        return
+
+    try:
+        adapter._repo.execute(
+            "DELETE FROM macro_forecasts "
+            "WHERE company_id = ? AND scenario_id = ? AND variable = 'fx_usdrub'",
+            (adapter._company, adapter._scenario_id),
+        )
+        result.factors_forecast.remove("fx_usdrub")
+        result.methods_used.pop("fx_usdrub", None)
+        logger.info("  FX cleanup: удалён дубликат fx_usdrub (модель использует usd_rub)")
+    except Exception as e:
+        logger.debug(f"  FX cleanup failed: {e}")
 
