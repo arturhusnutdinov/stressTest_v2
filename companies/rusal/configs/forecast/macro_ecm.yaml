@@ -32,14 +32,10 @@ factors:
     anchor: level
     transform: log
     span_check: true
-  - id: fx_usdrub
-    path: macro/global/drivers/fx_usdrub.csv
-    column: value
-    anchor: level
-    transform: log
-    span_check: true
-  - id: dxy
-    path: macro/global/drivers/dxy.csv
+  # fx_usdrub removed — model uses usd_rub from project.yaml (external ECM)
+  # dxy removed — excluded from VECM (too volatile), not used by model
+  - id: usd_rub
+    path: macro/global/drivers/usd_rub.csv
     column: value
     anchor: level
     transform: log
@@ -78,7 +74,7 @@ factors:
 vecm:
   groups:
     - name: energy_metals
-      factors: [brent_usd, lme_al_usd, fx_usdrub]
+      factors: [brent_usd, lme_al_usd]
     - name: inflation_block
       factors: [cpi_ru, ppi_ru]
     - name: growth_block
