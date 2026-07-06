@@ -167,6 +167,10 @@ class ModelSaver:
         )
         version_id = self._get_or_create_version()
 
+        # Удаляем прогнозы за годы ДО forecast_start (стейл от предыдущих прогонов)
+        forecast_start = self._config.forecast_start_year
+        self._cleanup_stale_forecasts(scenario_id, forecast_start)
+
         total = 0
         for year, state in sorted(result.years.items()):
             total += self._save_year(year, state, scenario_id, version_id)
@@ -243,8 +247,25 @@ class ModelSaver:
         """
         Записывает прогнозный долговой график в таблицу debt_schedule.
         Одна строка на инструмент × год (period_id берётся из таблицы periods).
+
+        Before upserting, deletes stale model_forecast rows for each forecast year
+        so that instruments removed from the current instrument set don't persist
+        from previous runs (prevents double-counting).
         """
         try:
+            # Clean stale forecast entries before writing
+            for year in sorted(debt_lines_by_year.keys()):
+                row_period = self._repo.query_one(
+                    "SELECT period_id FROM periods WHERE company_id=? AND year=?",
+                    (self.company_id, year),
+                )
+                if row_period is not None:
+                    self._repo.execute(
+                        "DELETE FROM debt_schedule "
+                        "WHERE company_id=? AND period_id=? AND source='model_forecast'",
+                        (self.company_id, row_period["period_id"]),
+                    )
+
             for year, lines in sorted(debt_lines_by_year.items()):
                 row_period = self._repo.query_one(
                     "SELECT period_id FROM periods WHERE company_id=? AND year=?",
@@ -298,6 +319,29 @@ class ModelSaver:
             )
         except Exception as e:
             logger.warning(f"  debt_schedule save failed: {e}")
+
+    def _cleanup_stale_forecasts(self, scenario_id: int, forecast_start: int) -> None:
+        """
+        Удаляет прогнозные строки за годы < forecast_start.
+
+        При смене history_end_year (напр. 2024→2025) старые прогнозы за 2025
+        остаются в БД и конфликтуют с актуальными данными.
+        """
+        tables = ["forecast_is", "forecast_bs", "forecast_cf"]
+        for table in tables:
+            try:
+                self._repo.execute(
+                    f"DELETE FROM {table} "
+                    f"WHERE company_id = ? AND scenario_id = ? "
+                    f"AND period_id IN (SELECT period_id FROM periods WHERE company_id = ? AND year < ?)",
+                    (self.company_id, scenario_id, self.company_id, forecast_start),
+                )
+            except Exception as e:
+                logger.debug(f"  stale cleanup {table}: {e}")
+        logger.info(
+            f"  Stale forecast cleanup: удалены строки year < {forecast_start} "
+            f"для {self.company_id} scenario_id={scenario_id}"
+        )
 
     def _get_or_create_version(self) -> Optional[int]:
         try:
