@@ -271,10 +271,11 @@ class StressRunner:
 
         # Если есть шок revenue-драйвера (HRC) — сбрасываем revenue в base_year_state
         # чтобы _solve_revenue пересчитал chain-link от истории, а не от base прогноза
-        # Get revenue factors from project config, fallback to common set
+        # Get revenue factors from project config, fallback to common commodity set
         revenue_factors = set(getattr(config, 'revenue_macro_factors', None) or
                               getattr(config, 'macro_policy_factors', None) or
-                              ["steel_price_hrc", "gdp_us", "gdp_world"])
+                              ["steel_price_hrc", "lme_aluminium", "lme_alumina",
+                               "gdp_us", "gdp_world", "brent"])
         has_revenue_shock = any(s.factor in revenue_factors for s in shocks)
         if has_revenue_shock:
             # base_year_state.revenue остаётся историческим (2024 факт) — это правильно
