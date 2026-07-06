@@ -471,6 +471,7 @@ class ModelConfig:
     nol_opening_balance: float = 0.0
     nol_max_utilization_pct: float = 0.80
     tax_paid_timing: str = "next_year"  # "current_year" | "next_year"
+    interest_payable_payment_timing: str = "next_year"  # "current_year" | "next_year"
 
     # Accounting conventions (from project.yaml accounting_conventions section)
     da_in_cogs: bool = True

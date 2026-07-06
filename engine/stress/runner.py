@@ -449,33 +449,50 @@ class StressRunner:
         result: StressResult,
         model_result,
     ) -> None:
-        """Сохраняет результаты стресс-теста в БД через Repository."""
+        """Сохраняет полные IS/BS/CF результаты стресс-теста в БД."""
         try:
-            # Получаем/создаём stress scenario_id
+            from ..model.saver import IS_METRICS, BS_METRICS, CF_METRICS
+
             stress_sid = self._repo.ensure_scenario(
                 self.company_id, scenario_name, type_="stress",
                 description=f"Stress: {scenario_name} (base={base_scenario})",
             )
             total = 0
-            for yr, kpis in result.stress_values.items():
-                # IS metrics
-                is_metrics = {k: v for k, v in kpis.items()
-                              if k in ('revenue', 'ebitda', 'ebitda_margin', 'ebit',
-                                       'net_income', 'interest_expense', 'total_da')}
+            for yr, s in model_result.years.items():
+                # IS — полный набор метрик как в ModelSaver
+                is_data = {}
+                for attr, db_name in IS_METRICS.items():
+                    val = getattr(s, attr, None)
+                    if val is not None:
+                        is_data[db_name] = val
                 total += self._repo.upsert_stress_results(
-                    self.company_id, stress_sid, yr, 'is', is_metrics)
-                # BS metrics
-                bs_metrics = {k: v for k, v in kpis.items()
-                              if k in ('cash', 'short_term_debt', 'long_term_debt',
-                                       'net_debt', 'net_debt_ebitda', 'interest_coverage')}
+                    self.company_id, stress_sid, yr, 'is', is_data)
+
+                # BS — полный набор
+                bs_data = {}
+                for attr, db_name in BS_METRICS.items():
+                    val = getattr(s, attr, None)
+                    if val is not None:
+                        bs_data[db_name] = val
+                # Расчётные метрики
+                nd = (s.short_term_debt or 0) + (s.long_term_debt or 0) - (s.cash or 0)
+                bs_data['net_debt'] = nd
+                bs_data['net_debt_ebitda'] = nd / s.ebitda if s.ebitda and s.ebitda > 0 else None
+                bs_data['interest_coverage'] = s.ebit / s.interest_expense if s.interest_expense and s.interest_expense > 0 else None
                 total += self._repo.upsert_stress_results(
-                    self.company_id, stress_sid, yr, 'bs', bs_metrics)
-                # CF metrics
-                cf_metrics = {k: v for k, v in kpis.items()
-                              if k in ('cfo_total', 'capex', 'fcf')}
+                    self.company_id, stress_sid, yr, 'bs', bs_data)
+
+                # CF — полный набор
+                cf_data = {}
+                for attr, db_name in CF_METRICS.items():
+                    val = getattr(s, attr, None)
+                    if val is not None:
+                        cf_data[db_name] = val
+                cf_data['fcf'] = (s.cfo_total or 0) + (s.cfi_capex or 0)
                 total += self._repo.upsert_stress_results(
-                    self.company_id, stress_sid, yr, 'cf', cf_metrics)
+                    self.company_id, stress_sid, yr, 'cf', cf_data)
+
             self._repo.conn.commit()
-            logger.info(f"  Стресс сохранён: {scenario_name} → {total} строк")
+            logger.info(f"  Стресс сохранён: {scenario_name} → {total} строк (полный 3-statement)")
         except Exception as e:
             logger.error(f"  Ошибка сохранения стресса {scenario_name}: {e}")

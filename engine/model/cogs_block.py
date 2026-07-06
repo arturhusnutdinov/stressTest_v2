@@ -42,6 +42,9 @@ class CogsBlockConfig:
     clamp_sigma: float = 0.06
 
     # Macro factor names (configurable per company via YAML)
+    # commodity_factor: set to "none" for vertically integrated producers
+    # where the primary raw material is self-produced (e.g. Rusal mines bauxite
+    # → refines alumina internally). LME spot price does not drive internal cost.
     commodity_factor: str = "lme_alumina"      # Primary commodity index
     energy_factor: str = "russian_power_price"  # Energy cost factor
     fx_factor: str = "usd_rub"                 # FX rate factor
@@ -96,7 +99,9 @@ class CogsBlock:
         by = config.base_year
         def _base(factor):
             return (self.hist.get(factor) or {}).get(by) or self._get_macro(factor, by)
-        self._commodity_base = _base(config.commodity_factor)
+        # "none" = self-produced commodity, no LME indexation
+        self._commodity_disabled = (config.commodity_factor.lower() == "none")
+        self._commodity_base = 0.0 if self._commodity_disabled else _base(config.commodity_factor)
         self._power_base = _base(config.energy_factor)
         self._usdrub_base = _base(config.fx_factor) or _base('fx_' + config.fx_factor)
         self._cpi_base = _base(config.inflation_factor)
@@ -124,11 +129,16 @@ class CogsBlock:
         prod_kt = production_kt or self.cfg.base_production_kt
 
         # 1. Commodity: indexed to primary commodity factor
-        commodity_val = self._get_macro(self.cfg.commodity_factor, year)
-        if commodity_val > 0 and self._commodity_base > 0:
-            commodity_index = commodity_val / self._commodity_base
-        else:
+        # When commodity_factor="none" (vertically integrated, self-produced),
+        # commodity cost grows only with volume and PPI, not LME spot.
+        if self._commodity_disabled:
             commodity_index = 1.0
+        else:
+            commodity_val = self._get_macro(self.cfg.commodity_factor, year)
+            if commodity_val > 0 and self._commodity_base > 0:
+                commodity_index = commodity_val / self._commodity_base
+            else:
+                commodity_index = 1.0
         # Volume adjustment
         vol_adj = prod_kt / self.cfg.base_production_kt if self.cfg.base_production_kt > 0 else 1.0
         commodity_cost = self._alumina_base * commodity_index * vol_adj

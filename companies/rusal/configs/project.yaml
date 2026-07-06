@@ -199,6 +199,11 @@ model:
       energy_kwh_per_t: 15500.0     # kWh per tonne Al
       mean_reversion_dampening: 0.30  # 30% of macro deviation passes through
       clamp_sigma: 0.06             # max ±6pp from anchor (historical 1σ)
+      # Rusal is vertically integrated: mines bauxite → refines alumina internally.
+      # Internal alumina transfer cost is production-based, not LME spot.
+      # LME alumina only affects REVENUE (external alumina sales segment).
+      # Set to "none" to disable LME alumina indexation of the cost component.
+      commodity_factor: none
     ppe:
       min_capex_da_ratio: 0.9
       expansion_capex_pct_of_rev_growth: 0.1

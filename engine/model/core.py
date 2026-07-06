@@ -169,6 +169,11 @@ class ThreeStatementModel:
                         energy_kwh_per_t=float(_cogs_cfg.get('energy_kwh_per_t', 15500.0)),
                         mean_reversion_dampening=float(_cogs_cfg.get('mean_reversion_dampening', 0.30)),
                         clamp_sigma=float(_cogs_cfg.get('clamp_sigma', 0.06)),
+                        commodity_factor=str(_cogs_cfg.get('commodity_factor', 'lme_alumina')),
+                        energy_factor=str(_cogs_cfg.get('energy_factor', 'russian_power_price')),
+                        fx_factor=str(_cogs_cfg.get('fx_factor', 'usd_rub')),
+                        inflation_factor=str(_cogs_cfg.get('inflation_factor', 'cpi_ru')),
+                        ppi_factor=str(_cogs_cfg.get('ppi_factor', 'ppi_ru')),
                         base_year=config.history_end_year,
                         base_cogs=_base_cogs,
                         base_revenue=abs(_base.revenue or 0),
@@ -993,7 +998,7 @@ class ThreeStatementModel:
         block = InterestPayableBlock(
             interest_payable_open=prev.interest_payable or 0.0,
             interest_accrued=state.interest_expense,
-            payment_timing="next_year",
+            payment_timing=self._c.interest_payable_payment_timing,
         ).solve()
         ok, issues = block.validate()
         if not ok:

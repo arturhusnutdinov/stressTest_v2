@@ -247,7 +247,7 @@ _MACRO_FACTORS = {
 }
 
 # Нестабильные FX/currency факторы — исключаем из VECM
-_EXCLUDE_FROM_VECM = {"fx_usdrub", "rub_usd", "dxy"}
+_EXCLUDE_FROM_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy"}
 
 
 def auto_group_factors(
@@ -278,7 +278,7 @@ def auto_group_factors(
         "industrial_production_us",
     }
     # FX исключаем из VECM — слишком волатильны для коротких выборок
-    EXCLUDE_VECM = {"fx_usdrub", "rub_usd", "dxy"}
+    EXCLUDE_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy"}
 
     commodity_factors = [f for f in factor_names if f in COMMODITY]
     macro_factors     = [f for f in factor_names if f in MACRO]
@@ -405,6 +405,14 @@ def run_full_macro_forecast(
             if fc:
                 all_forecasts[factor_name] = fc
 
+    # ── Пост-валидация: проверяем адекватность прогнозов ──────────────────────
+    factor_histories = {}
+    for name in all_forecasts:
+        hist = repo.get_macro_factor(name)
+        if hist:
+            factor_histories[name] = hist
+    all_forecasts = _validate_macro_forecasts(all_forecasts, factor_histories)
+
     return all_forecasts
 
 
@@ -529,3 +537,162 @@ def _univariate_forecast(
         return result
     except Exception:
         return {}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# POST-FORECAST VALIDATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Sanity rules for known factor types.
+# Each rule: (factor_keyword, min_ratio_to_last, max_ratio_to_last, description)
+# ratio = forecast_value / last_historical_value
+_SANITY_RULES = {
+    # GDP levels (trillions): should stay within 50%-200% of last value over 5yr
+    "gdp_world":  (0.50, 2.00, "GDP world level"),
+    "gdp_us":     (0.50, 2.00, "GDP US level"),
+    "gdp_ru":     (0.50, 2.00, "GDP Russia level"),
+    "gdp_china":  (0.50, 2.00, "GDP China level"),
+    # CPI/PPI indices: monotonically increasing, no deflation (ratio >= 0.95)
+    "cpi_ru":     (0.95, 1.50, "CPI Russia index — deflation check"),
+    "cpi_us":     (0.95, 1.30, "CPI US index — deflation check"),
+    "ppi_ru":     (0.90, 1.60, "PPI Russia index"),
+    "ppi_us":     (0.90, 1.40, "PPI US index"),
+    # GDP deflator: similar to CPI
+    "gdp_deflator_ru": (0.90, 1.60, "GDP deflator Russia"),
+}
+
+
+def _validate_macro_forecasts(
+    forecasts: Dict[str, Dict[int, float]],
+    factor_histories: Dict[str, Dict[int, float]],
+) -> Dict[str, Dict[int, float]]:
+    """
+    Пост-валидация прогнозов макро-факторов.
+
+    Проверяет:
+    1. Известные факторы (GDP, CPI) — ratio к последнему историческому значению
+    2. Общий sanity: прогноз не должен отклоняться > 10x от последнего значения
+    3. Монотонность CPI/PPI индексов (нет дефляции по дефолту)
+
+    При нарушении — заменяет на EWA fallback из истории или удаляет фактор.
+    """
+    import math
+
+    validated = {}
+
+    for name, fc_data in forecasts.items():
+        history = factor_histories.get(name, {})
+        if not history or not fc_data:
+            validated[name] = fc_data
+            continue
+
+        last_year = max(history.keys())
+        last_val = history[last_year]
+
+        if abs(last_val) < 1e-12:
+            validated[name] = fc_data
+            continue
+
+        # Find matching sanity rule (exact match or keyword in name)
+        rule = _SANITY_RULES.get(name)
+        if rule is None:
+            # Try keyword matching
+            for keyword, r in _SANITY_RULES.items():
+                if keyword in name:
+                    rule = r
+                    break
+
+        failed = False
+        fail_reason = ""
+
+        if rule:
+            min_ratio, max_ratio, desc = rule
+            for yr, val in sorted(fc_data.items()):
+                ratio = val / last_val if last_val != 0 else 0
+                if ratio < min_ratio or ratio > max_ratio:
+                    failed = True
+                    fail_reason = (
+                        f"{name} ({desc}): yr={yr} val={val:.2f} "
+                        f"ratio={ratio:.4f} outside [{min_ratio}, {max_ratio}] "
+                        f"(last_hist={last_val:.2f})"
+                    )
+                    break
+        else:
+            # Generic check: forecast should stay within 0.01x–100x of last value
+            for yr, val in fc_data.items():
+                ratio = val / last_val if last_val != 0 else 0
+                if ratio < 0.01 or ratio > 100:
+                    failed = True
+                    fail_reason = (
+                        f"{name}: yr={yr} val={val:.2f} "
+                        f"ratio={ratio:.4f} — extreme deviation from last_hist={last_val:.2f}"
+                    )
+                    break
+
+        if failed:
+            logger.warning(f"  SANITY FAIL: {fail_reason}")
+            # Attempt EWA repair from history
+            repaired = _repair_with_ewa(name, history, len(fc_data))
+            if repaired:
+                # Re-validate repaired forecast
+                repaired_ok = True
+                if rule:
+                    min_ratio, max_ratio, _ = rule
+                    for yr, val in repaired.items():
+                        r = val / last_val
+                        if r < min_ratio or r > max_ratio:
+                            repaired_ok = False
+                            break
+                if repaired_ok:
+                    logger.info(f"  SANITY REPAIR: {name} → EWA fallback OK")
+                    validated[name] = repaired
+                else:
+                    logger.warning(f"  SANITY REPAIR FAILED: {name} — EWA also bad, dropping")
+            else:
+                logger.warning(f"  SANITY: {name} dropped — no valid fallback")
+        else:
+            validated[name] = fc_data
+
+    n_dropped = len(forecasts) - len(validated)
+    if n_dropped:
+        logger.info(f"  Post-validation: {n_dropped} факторов отброшено/заменено")
+
+    return validated
+
+
+def _repair_with_ewa(
+    factor_name: str,
+    history: Dict[int, float],
+    forecast_years: int,
+) -> Optional[Dict[int, float]]:
+    """EWA repair для провалившего sanity-check фактора."""
+    from .commodity_models import _ewa_forecast_local
+
+    if len(history) < 3:
+        return None
+
+    # CPI/PPI indices: ensure non-negative growth (floor at 0%)
+    is_price_index = any(kw in factor_name.lower() for kw in ["cpi", "ppi", "deflator"])
+
+    fc = _ewa_forecast_local(history, forecast_years, halflife=5.0)
+    if not fc:
+        return None
+
+    if is_price_index:
+        # Enforce monotonicity for price indices (no deflation)
+        sorted_years = sorted(history.keys())
+        prev_val = history[sorted_years[-1]]
+        repaired = {}
+        for yr in sorted(fc.keys()):
+            val = fc[yr]
+            if val < prev_val:
+                # Floor: at least flat (0% inflation), better: use long-run avg growth
+                values = [history[y] for y in sorted_years]
+                avg_growth = (values[-1] / values[max(0, len(values) - 6)]) ** (1.0 / min(5, len(values) - 1)) - 1
+                avg_growth = max(avg_growth, 0.005)  # min 0.5% inflation
+                val = prev_val * (1 + avg_growth)
+            repaired[yr] = val
+            prev_val = val
+        return repaired
+
+    return fc
