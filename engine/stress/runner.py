@@ -104,6 +104,10 @@ class StressRunner:
             # Применяем driver_shocks — модифицируем config
             stressed_config = self._apply_driver_shocks(config, scenario.driver_shocks)
 
+            # Пересобираем segment revenue model если есть макро-шоки, влияющие на price
+            if scenario.macro_shocks and getattr(config, '_segment_model', None) is not None:
+                self._rebuild_segment_model(stressed_historic, stressed_config, config)
+
             # Применяем rate шоки к debt_instruments в stressed_historic напрямую.
             # Только floating-rate инструменты: fixed-rate купоны зафиксированы
             # на дату выпуска и не реагируют на движение ставок.
@@ -170,6 +174,57 @@ class StressRunner:
             results[name] = self.run(name, base_scenario=base_scenario)
 
         return results
+
+    def _rebuild_segment_model(self, stressed_historic, stressed_config, original_config):
+        """Пересобирает сегментную revenue-модель с шокнутыми макро-прогнозами."""
+        try:
+            import yaml
+            from .core import ScenarioLoader
+            from ..model.segment_revenue import SegmentRevenueModel
+
+            proj_path = self._config_path
+            if proj_path is None or not proj_path.exists():
+                return
+            with open(proj_path, encoding="utf-8") as f:
+                cfg = yaml.safe_load(f) or {}
+
+            mode = cfg.get("model", {}).get("mode", "custom")
+            rev_cfg = cfg.get("model", {}).get(mode, {}).get("revenue", {})
+            if not rev_cfg.get("segment_modeling", False):
+                return
+
+            # Собираем combined macro с шокнутыми прогнозами
+            _factors_needed = set(
+                f for sc in rev_cfg.get("segments", {}).values()
+                for f in sc.get("price_factors", []) + sc.get("volume_factors", [])
+            )
+            _combined_macro = dict(stressed_historic.macro_forecasts)
+            for _fn in _factors_needed:
+                _hist = self._repo.get_macro_factor(_fn) if hasattr(self._repo, 'get_macro_factor') else None
+                if _hist:
+                    _combined = {**_hist, **_combined_macro.get(_fn, {})}
+                    _combined_macro[_fn] = _combined
+
+            seg_model = SegmentRevenueModel.from_yaml_config(rev_cfg, _combined_macro)
+            if seg_model:
+                forecast_years = list(range(
+                    stressed_config.forecast_start_year,
+                    stressed_config.forecast_end_year + 1,
+                ))
+                seg_forecasts = seg_model.forecast(forecast_years)
+                stressed_config._segment_model = seg_model.total_revenue(seg_forecasts)
+
+                # Логируем изменение
+                orig = original_config._segment_model or {}
+                new = stressed_config._segment_model or {}
+                if orig and new:
+                    first_yr = min(new.keys())
+                    o = orig.get(first_yr, 0)
+                    n = new.get(first_yr, 0)
+                    delta = (n / o - 1) * 100 if o else 0
+                    logger.info(f"  Segment model rebuilt: {first_yr} revenue {o/1e9:.2f}B → {n/1e9:.2f}B ({delta:+.1f}%)")
+        except Exception as e:
+            logger.warning(f"  Segment model rebuild failed: {e}")
 
     # ── Применение шоков ───────────────────────────────────────────────────────
 
@@ -394,22 +449,33 @@ class StressRunner:
         result: StressResult,
         model_result,
     ) -> None:
-        """Сохраняет результаты стресс-теста в БД."""
+        """Сохраняет результаты стресс-теста в БД через Repository."""
         try:
-            import json
-            self._repo.execute("""
-                INSERT OR REPLACE INTO stress_results
-                (company_id, scenario_name, base_scenario, status,
-                 comparison_json, kpis_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-            """, (
-                self.company_id,
-                scenario_name,
-                base_scenario,
-                "success" if result.success else "fail",
-                json.dumps(result.comparison),
-                json.dumps(result.stress_values),
-            ))
-            logger.debug(f"  Результаты сохранены: {scenario_name}")
+            # Получаем/создаём stress scenario_id
+            stress_sid = self._repo.ensure_scenario(
+                self.company_id, scenario_name, type_="stress",
+                description=f"Stress: {scenario_name} (base={base_scenario})",
+            )
+            total = 0
+            for yr, kpis in result.stress_values.items():
+                # IS metrics
+                is_metrics = {k: v for k, v in kpis.items()
+                              if k in ('revenue', 'ebitda', 'ebitda_margin', 'ebit',
+                                       'net_income', 'interest_expense', 'total_da')}
+                total += self._repo.upsert_stress_results(
+                    self.company_id, stress_sid, yr, 'is', is_metrics)
+                # BS metrics
+                bs_metrics = {k: v for k, v in kpis.items()
+                              if k in ('cash', 'short_term_debt', 'long_term_debt',
+                                       'net_debt', 'net_debt_ebitda', 'interest_coverage')}
+                total += self._repo.upsert_stress_results(
+                    self.company_id, stress_sid, yr, 'bs', bs_metrics)
+                # CF metrics
+                cf_metrics = {k: v for k, v in kpis.items()
+                              if k in ('cfo_total', 'capex', 'fcf')}
+                total += self._repo.upsert_stress_results(
+                    self.company_id, stress_sid, yr, 'cf', cf_metrics)
+            self._repo.conn.commit()
+            logger.info(f"  Стресс сохранён: {scenario_name} → {total} строк")
         except Exception as e:
-            logger.debug(f"  Сохранение результатов: {e} (таблица может отсутствовать)")
+            logger.error(f"  Ошибка сохранения стресса {scenario_name}: {e}")

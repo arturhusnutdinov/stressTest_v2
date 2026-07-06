@@ -157,9 +157,28 @@ class RatingRunner:
         return result
 
     def _save(self, result: RatingResult) -> None:
-        """Сохраняет рейтинги в БД."""
+        """Сохраняет рейтинги в БД через Repository."""
         try:
             import json
+            # Определяем scenario_id
+            scenario_name = result.rating_type  # 'base', 'forecast', 'stress'
+            sid = self._repo.ensure_scenario(
+                self.company_id, scenario_name, type_=scenario_name,
+            )
+            total = 0
+            for yr, r in result.ratings.items():
+                yr_int = int(yr)
+                self._repo.upsert_rating(
+                    company_id=self.company_id,
+                    scenario_id=sid,
+                    year=yr_int,
+                    methodology='sp_scoring',
+                    grade=r.get('rating', '?'),
+                    score=r.get('score', 0),
+                )
+                total += 1
+
+            # Также сохраняем в legacy rating_results для обратной совместимости
             self._repo.execute("""
                 CREATE TABLE IF NOT EXISTS rating_results (
                     id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,10 +200,10 @@ class RatingRunner:
                 (company_id, rating_type, ratings_json, metrics_json, created_at)
                 VALUES (?, ?, ?, ?, datetime('now'))
             """, (
-                self.company_id,
-                result.rating_type,
-                json.dumps(result.ratings),
-                json.dumps(metrics_serializable),
+                self.company_id, result.rating_type,
+                json.dumps(result.ratings), json.dumps(metrics_serializable),
             ))
+            self._repo.conn.commit()
+            logger.info(f"  Рейтинг сохранён: {result.rating_type} → {total} лет (ratings + rating_results)")
         except Exception as e:
-            logger.debug(f"Сохранение рейтинга: {e}")
+            logger.error(f"  Ошибка сохранения рейтинга: {e}")

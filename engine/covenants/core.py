@@ -373,40 +373,27 @@ class CovenantsChecker:
         }
 
     def _save(self, result: CovenantsCheckResult) -> None:
+        """Сохраняет ковенанты в БД через Repository."""
         try:
-            import json
-            self._repo.execute("""
-                CREATE TABLE IF NOT EXISTS covenant_results (
-                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id   TEXT NOT NULL,
-                    scenario_name TEXT NOT NULL,
-                    n_breaches   INTEGER DEFAULT 0,
-                    n_warnings   INTEGER DEFAULT 0,
-                    first_breach_year INTEGER,
-                    results_json TEXT,
-                    created_at   TEXT DEFAULT (datetime('now')),
-                    UNIQUE(company_id, scenario_name)
+            sid = self._repo.ensure_scenario(
+                self.company_id, result.scenario_name, type_="base",
+            )
+            # Группируем по году
+            by_year: dict = {}
+            for r in result.results:
+                by_year.setdefault(r.year, []).append({
+                    "covenant_name": r.covenant_name,
+                    "value": r.value,
+                    "threshold": r.threshold,
+                    "headroom_pct": round(r.headroom, 4),
+                    "breached": r.status.lower() == "breach",
+                })
+            total = 0
+            for yr, cov_list in by_year.items():
+                total += self._repo.upsert_covenant_results(
+                    self.company_id, sid, yr, cov_list,
                 )
-            """)
-            rows = [
-                {
-                    "year": r.year, "covenant": r.covenant_name,
-                    "metric": r.metric, "value": r.value,
-                    "threshold": r.threshold, "status": r.status,
-                    "headroom": round(r.headroom, 4),
-                }
-                for r in result.results
-            ]
-            self._repo.execute("""
-                INSERT OR REPLACE INTO covenant_results
-                (company_id, scenario_name, n_breaches, n_warnings,
-                 first_breach_year, results_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-            """, (
-                self.company_id, result.scenario_name,
-                len(result.breaches()), len(result.warnings()),
-                result.first_breach_year(),
-                json.dumps(rows),
-            ))
+            self._repo.conn.commit()
+            logger.info(f"  Ковенанты сохранены: {result.scenario_name} → {total} строк")
         except Exception as e:
-            logger.debug(f"Сохранение ковенантов: {e}")
+            logger.error(f"  Ошибка сохранения ковенантов: {e}")
