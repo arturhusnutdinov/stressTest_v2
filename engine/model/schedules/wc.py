@@ -154,13 +154,14 @@ class WCBlock:
           Adjustments capped at ±20% of base days.
         """
         # ── Cyclical adjustment of WC days ───────────────────────
-        # dso_adj = dso × (1 - 0.3 × g):  g<0 → factor>1 → longer days
-        # dih_adj = dih × (1 - 0.4 × g):  more inventory-sensitive than DSO
-        # dpo_adj = dpo × (1 + 0.2 × g):  g<0 → factor<1 → suppliers tighten
+        # Calibrated from Rusal 2011-2025 OLS regressions:
+        # DSO: rev↑ → DSO↓ (customers pay faster when prices high)
+        # DIH: rev↑ → DIH↑ (build inventory when demand strong)
+        # DPO: rev↑ → DPO↓ (pay suppliers faster when cash available)
         g = revenue_growth_rate
         adj_factor_dso = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DSO_CYCLICAL_ELASTICITY * g))
-        adj_factor_dih = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DIH_CYCLICAL_ELASTICITY * g))
-        adj_factor_dpo = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 + WC_DPO_CYCLICAL_ELASTICITY * g))
+        adj_factor_dih = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 + WC_DIH_CYCLICAL_ELASTICITY * g))
+        adj_factor_dpo = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DPO_CYCLICAL_ELASTICITY * g))
         dso = dso * adj_factor_dso
         dih = dih * adj_factor_dih
         dpo = dpo * adj_factor_dpo

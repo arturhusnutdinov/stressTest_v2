@@ -350,7 +350,7 @@ def run_full_macro_forecast(
         commodity_kappa  = None
     else:
         commodity_method = "mean_reversion"
-        commodity_kappa  = 0.15
+        commodity_kappa  = 0.12  # OU MLE on LME Al 1990-2029: phi=0.88, kappa=0.124, HL=5.6yr
 
     # Автоматическое разделение на потоки
     vecm_groups, commodity_factors, ewa_factors = auto_group_factors(

@@ -178,8 +178,7 @@ model:
           volume_history: {2017: 1694, 2018: 1753, 2019: 1753, 2020: 1729, 2021: 1677, 2022: 1169, 2023: 759, 2024: 888, 2025: 1204}
           price_history:  {2017: 406000, 2018: 435000, 2019: 379000, 2020: 308000, 2021: 364000, 2022: 470000, 2023: 676000, 2024: 849000, 2025: 537000}
           volume_method: ewa
-          price_method: macro
-          price_factors: [lme_alumina]
+          price_method: ewa  # was: macro (broken OLS, beta=-0.72, R²=0.13)
           ewa_halflife: 4.0
         other:
           # Foil + Other products: volume=1 (unit), price = total segment revenue in USD
@@ -197,8 +196,8 @@ model:
       other_share: 0.24
       alumina_intensity: 1.93       # tonnes alumina per tonne Al
       energy_kwh_per_t: 15500.0     # kWh per tonne Al
-      mean_reversion_dampening: 0.30  # 30% of macro deviation passes through
-      clamp_sigma: 0.06             # max ±6pp from anchor (historical 1σ)
+      mean_reversion_dampening: 0.80  # calibrated: OLS Δln(COGS/Rev)~β×Δln(PPI), β=1.21, R²=0.76; capped at 0.80
+      clamp_sigma: 0.09             # calibrated: 1.5 × historical σ(COGS/Rev) = 1.5 × 0.059 = 0.089
       # Rusal is vertically integrated: mines bauxite → refines alumina internally.
       # Internal alumina transfer cost is production-based, not LME spot.
       # LME alumina only affects REVENUE (external alumina sales segment).
@@ -221,7 +220,7 @@ model:
         fees_pct: 0.001
     taxes:
       # Inherit from standard: mode, policy, nol_*, tax_paid_timing
-      # tax_rate_statutory: 0.25  # Uncomment when 2025+ data reflects new 25% rate
+      tax_rate_statutory: 0.25  # Russian corporate rate from 2025 (was 20%)
       mode: full
       policy: statutory_with_floor
       nol_opening_balance: 0

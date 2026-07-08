@@ -59,9 +59,9 @@ WC_ACCRUED_PCT_SGA = 0.10            # Accrued liabilities as % SGA
 WC_OTHER_CL_PCT_REV = 0.01           # Other current liabilities as % revenue
 WC_CYCLICAL_ADJ_MIN = 0.80           # Min cyclical adjustment factor
 WC_CYCLICAL_ADJ_MAX = 1.20           # Max cyclical adjustment factor
-WC_DSO_CYCLICAL_ELASTICITY = 0.3     # DSO sensitivity to revenue growth
-WC_DIH_CYCLICAL_ELASTICITY = 0.4     # DIH sensitivity to revenue growth
-WC_DPO_CYCLICAL_ELASTICITY = 0.2     # DPO sensitivity to revenue growth
+WC_DSO_CYCLICAL_ELASTICITY = 0.87    # calibrated: OLS Δ(DSO)/DSO ~ β×Δ(Rev)/Rev, β=-0.87 (n=14)
+WC_DIH_CYCLICAL_ELASTICITY = 0.36   # calibrated: β=+0.36 (n=14); revenue↑ → inventory days↑
+WC_DPO_CYCLICAL_ELASTICITY = 0.64   # calibrated: β=-0.64 (n=12); revenue↑ → pay suppliers faster
 
 # ── Margin defaults ──────────────────────────────────────────────────
 COGS_PCT_DEFAULT = 0.85              # COGS / Revenue fallback
