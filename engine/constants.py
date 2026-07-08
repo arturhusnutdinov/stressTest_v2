@@ -54,9 +54,9 @@ WC_DPO_DEFAULT = 50.0                # Days Payable Outstanding
 WC_NWC_RATIO_DEFAULT = 0.08          # Net Working Capital / Revenue
 WC_NWC_RATIO_MIN = 0.02
 WC_NWC_RATIO_MAX = 0.25
-WC_OTHER_CA_PCT_REV = 0.02           # Other current assets as % revenue
-WC_ACCRUED_PCT_SGA = 0.10            # Accrued liabilities as % SGA
-WC_OTHER_CL_PCT_REV = 0.01           # Other current liabilities as % revenue
+WC_OTHER_CA_PCT_REV = 0.07           # calibrated: Rusal avg 2021-2025 = 6.5-9.3%, median ~7%
+WC_ACCRUED_PCT_SGA = 0.10            # Accrued liabilities as % SGA (TODO: calibrate per company)
+WC_OTHER_CL_PCT_REV = 0.04           # calibrated: Rusal avg 2021-2025 = 0.9-7.4%, median ~4%
 WC_CYCLICAL_ADJ_MIN = 0.80           # Min cyclical adjustment factor
 WC_CYCLICAL_ADJ_MAX = 1.20           # Max cyclical adjustment factor
 WC_DSO_CYCLICAL_ELASTICITY = 0.87    # calibrated: OLS Δ(DSO)/DSO ~ β×Δ(Rev)/Rev, β=-0.87 (n=14)
