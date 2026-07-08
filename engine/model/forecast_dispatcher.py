@@ -209,7 +209,15 @@ class ForecastDispatcher:
 
         if f_curr and f_prev and f_prev > 0 and prev_val:
             growth = math.log(f_curr / f_prev)
-            beta = 1.0  # дефолт
+            # Try preprocessor beta for this factor; fallback to 1.0
+            beta = 1.0
+            _factor = getattr(fm, 'macro_factor', None) or (fm.factors[0] if getattr(fm, 'factors', None) else None)
+            if _factor and hasattr(self, '_preprocess'):
+                _pp_betas = (self._preprocess or {}).get('revenue_betas', {})
+                _pp_beta = _pp_betas.get(f'rev_beta_{_factor}')
+                _pp_r2 = _pp_betas.get(f'rev_r2_{_factor}', 0)
+                if _pp_beta is not None and _pp_r2 and _pp_r2 > 0.3:
+                    beta = float(_pp_beta)
             return prev_val * math.exp(beta * growth)
 
         return None

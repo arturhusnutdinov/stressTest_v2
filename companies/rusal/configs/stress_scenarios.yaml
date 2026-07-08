@@ -131,3 +131,17 @@ scenarios:
       dih_days:
         type: percentage
         value: 10.0
+
+  demand_shock:
+    description: "Global recession — LME -15%, WC deterioration (DSO+20%, DIH+25%)"
+    macro_shocks:
+      lme_aluminium:
+        type: percentage
+        value: -15.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0

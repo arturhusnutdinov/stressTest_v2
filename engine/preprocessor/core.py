@@ -57,7 +57,36 @@ def _summary(series: Dict[int, float], halflife: float = 3.0) -> Dict:
         result["_ewa_winsorized"] = ewa(clipped, halflife)
     else:
         result["_ewa_winsorized"] = result["_ewa"]
-    result["_recommended"] = result["_ewa"]
+    # AR(1): ratio_t = a + b × ratio_{t-1}
+    # Captures persistence/mean-reversion better than EWA for ratios
+    sorted_yrs = sorted(valid.keys())
+    if len(sorted_yrs) >= 5:
+        vals = [valid[y] for y in sorted_yrs]
+        x, y_ar = vals[:-1], vals[1:]
+        n_ar = len(x)
+        mx_ar = sum(x) / n_ar
+        my_ar = sum(y_ar) / n_ar
+        cov_ar = sum((x[i] - mx_ar) * (y_ar[i] - my_ar) for i in range(n_ar))
+        var_ar = sum((xi - mx_ar) ** 2 for xi in x)
+        ar1_b = cov_ar / var_ar if abs(var_ar) > 1e-12 else 0
+        ar1_a = my_ar - ar1_b * mx_ar
+        # R²
+        ss_res = sum((y_ar[i] - (ar1_a + ar1_b * x[i])) ** 2 for i in range(n_ar))
+        ss_tot = sum((y_ar[i] - my_ar) ** 2 for i in range(n_ar))
+        ar1_r2 = 1 - ss_res / ss_tot if ss_tot > 1e-12 else 0
+        # AR(1) forecast = a + b × last_value
+        ar1_forecast = ar1_a + ar1_b * vals[-1]
+        result["_ar1_coef"] = ar1_b
+        result["_ar1_intercept"] = ar1_a
+        result["_ar1_r2"] = ar1_r2
+        result["_ar1_recommended"] = ar1_forecast
+        # Use AR(1) if R² > 0.3 (meaningful persistence)
+        if ar1_r2 > 0.3:
+            result["_recommended"] = ar1_forecast
+        else:
+            result["_recommended"] = result["_ewa"]
+    else:
+        result["_recommended"] = result["_ewa"]
     return result
 
 
