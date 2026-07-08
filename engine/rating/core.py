@@ -58,6 +58,54 @@ def score_to_sp(score: float) -> str:
     return SP_SCALE[idx]
 
 
+# ── Национальная шкала (маппинг international → RU) ──────────────────────────
+
+# Суверенный рейтинг РФ по международной шкале = BBB+ = индекс 6 в SP_SCALE
+# По национальной шкале суверен = AAA(RU)
+# Маппинг: intl_notch + uplift_notches = national_notch (с потолком AAA)
+# uplift = SP_SCALE.index("BBB+") = 6 нотчей (BBB+ → AAA = 6 ступеней)
+
+# Национальная шкала (АКРА / Expert RA / НРА / НКР)
+RU_NATIONAL_SCALE = [
+    "AAA(RU)", "AA+(RU)", "AA(RU)", "AA-(RU)",
+    "A+(RU)", "A(RU)", "A-(RU)",
+    "BBB+(RU)", "BBB(RU)", "BBB-(RU)",
+    "BB+(RU)", "BB(RU)", "BB-(RU)",
+    "B+(RU)", "B(RU)", "B-(RU)",
+    "CCC(RU)", "CC(RU)", "C(RU)", "D(RU)",
+]
+
+
+def intl_to_national(
+    intl_rating: str,
+    sovereign_intl: str = "BBB+",
+) -> str:
+    """
+    Конвертирует международный рейтинг в национальную шкалу РФ.
+
+    Логика: суверенный рейтинг РФ (BBB+ intl) = AAA по национальной шкале.
+    Каждый нотч ниже суверена в intl шкале = один нотч ниже в national шкале.
+    Рейтинг выше суверена невозможен → потолок AAA(RU).
+
+    Пример: BBB+ intl → AAA(RU), B+ intl → A+(RU), CCC intl → BB(RU)
+    """
+    try:
+        intl_idx = SP_SCALE.index(intl_rating)
+    except ValueError:
+        return "NR(RU)"
+    try:
+        sov_idx = SP_SCALE.index(sovereign_intl)
+    except ValueError:
+        sov_idx = 6  # BBB+ default
+
+    # Сколько нотчей ниже суверена
+    notches_below_sov = intl_idx - sov_idx
+    # В national шкале: 0 = AAA(RU)
+    national_idx = max(0, notches_below_sov)
+    national_idx = min(national_idx, len(RU_NATIONAL_SCALE) - 1)
+    return RU_NATIONAL_SCALE[national_idx]
+
+
 def score_to_moodys(score: float) -> str:
     """Числовой скор [0-100] → Moody's рейтинг."""
     idx = max(0, min(len(MOODYS_SCALE) - 1, int((100 - score) / 100 * (len(MOODYS_SCALE) - 1))))
@@ -188,6 +236,8 @@ class RatingConfig:
     size_adjustment: float = 2.0
     # Through-the-cycle (through_the_cycle): нормализованная EBITDA маржа (историческое среднее 2018-2024)
     cycle_avg_ebitda_margin: float = RATING_CYCLE_AVG_MARGIN_DEFAULT   # 10% for US Steel
+    # Суверенный рейтинг для маппинга international → national шкала
+    sovereign_rating: str = "BBB+"  # РФ по международной шкале
 
     @property
     def cycle_avg_margin(self) -> float:
@@ -445,10 +495,15 @@ class RatingEngine:
         else:
             rating = score_to_sp(score)
 
+        # Национальная шкала (RU) — маппинг через суверенный рейтинг
+        sovereign = getattr(self.config, 'sovereign_rating', 'BBB+')
+        national = intl_to_national(rating, sovereign) if meth != "moodys" else ""
+
         return {
             "score":               round(score, 2),
             "base_score":          round(base_score, 2),
             "rating":              rating,
+            "rating_national":     national,
             "is_investment_grade": is_investment_grade(rating),
             "numeric":             sp_to_numeric(rating),
             "sub_scores":          {k: round(v, 1) for k, v in sub_scores.items()},
@@ -457,4 +512,5 @@ class RatingEngine:
                 "size":     size_adj,
             },
             "methodology":         meth,
+            "sovereign_rating":    sovereign,
         }

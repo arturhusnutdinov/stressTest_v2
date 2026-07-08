@@ -29,8 +29,10 @@ class RatingResult:
         ]
         for yr, r in sorted(self.ratings.items()):
             ig = "IG" if r.get("is_investment_grade") else "HY"
+            nat = r.get('rating_national', '')
+            nat_str = f" / {nat}" if nat else ""
             lines.append(
-                f"  {yr}: {r['rating']:<5} скор={r['score']:.0f}  [{ig}]  "
+                f"  {yr}: {r['rating']:<5}{nat_str:<12} скор={r['score']:.0f}  [{ig}]  "
                 f"lev={r['sub_scores'].get('leverage', 0):.0f} "
                 f"cov={r['sub_scores'].get('coverage', 0):.0f} "
                 f"prof={r['sub_scores'].get('profitability', 0):.0f} "
@@ -84,6 +86,9 @@ class RatingRunner:
             )
             config.cycle_avg_ebitda_margin = float(
                 rating_cfg.get("cycle_avg_ebitda_margin", 0.10)
+            )
+            config.sovereign_rating = rating_cfg.get(
+                "sovereign_rating", "BBB+"
             )
             weights = rating_cfg.get("weights", {})
             if weights:
