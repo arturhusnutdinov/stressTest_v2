@@ -274,11 +274,12 @@ def auto_group_factors(
         "lme_aluminum", "lme_al", "copper_price",
     }
     MACRO = {
-        "gdp_us", "gdp_world", "gdp_china", "cpi_us", "ppi_us",
+        "gdp_us", "gdp_china", "cpi_us", "ppi_us",
         "industrial_production_us",
     }
+    # Excluded: gdp_world — pre-loaded as IMF consensus, not forecasted by VECM/EWA
     # FX исключаем из VECM — слишком волатильны для коротких выборок
-    EXCLUDE_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy"}
+    EXCLUDE_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy", "gdp_world"}
 
     commodity_factors = [f for f in factor_names if f in COMMODITY]
     macro_factors     = [f for f in factor_names if f in MACRO]
