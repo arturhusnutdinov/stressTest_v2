@@ -327,6 +327,7 @@ rating:
   industry_adjustment: -6.0
   size_adjustment: 2.0
   cycle_avg_ebitda_margin: 0.12
+  sovereign_rating: BBB+  # for intl → national RU scale mapping
   weights:
     leverage: 0.35
     coverage: 0.3

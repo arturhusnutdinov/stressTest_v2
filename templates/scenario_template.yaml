@@ -97,3 +97,19 @@ scenarios:
       dih_days:
         type: percentage
         value: 10.0
+
+  # ── Demand Shock (v2.3) ──────────────────────────────────────
+  demand_shock:
+    description: "Global recession — commodity -15%, WC deterioration"
+    macro_shocks:
+      # ⚠ REPLACE with your primary commodity factor
+      COMMODITY_FACTOR:
+        type: percentage
+        value: -15.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0
