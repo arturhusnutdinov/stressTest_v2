@@ -418,6 +418,8 @@ class ModelConfig:
     capex_pct: Optional[float] = None
     capex_pct_by_year: Optional[Dict[int, float]] = None  # year-specific overrides
     min_capex_da_ratio: float = 0.90  # CapEx/DA floor — maintenance of existing asset base
+    sustaining_capex_da_ratio: float = 0.0  # sustaining CapEx = ratio × DA (0=use min_capex_da_ratio)
+    expansion_capex_pct_of_rev_growth: float = 0.0  # growth capex = pct × revenue growth
     additional_capex_schedule: Dict[int, float] = field(default_factory=dict)  # {year: $}
     dep_rate: Optional[float] = None
     accel_dep_excess_pct: float = 0.0  # % of book dep by which tax dep exceeds book dep (generates DTL)

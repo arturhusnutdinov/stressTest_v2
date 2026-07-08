@@ -205,7 +205,7 @@ model:
       # Set to "none" to disable LME alumina indexation of the cost component.
       commodity_factor: none
     ppe:
-      sustaining_capex_da_ratio: 1.10  # sustaining CapEx = 110% of D&A (industry norm)
+      sustaining_capex_da_ratio: 2.00  # calibrated: Rusal median CapEx/DA = 2.17x (2021-2025), conservative 2.0x
       expansion_capex_pct_of_rev_growth: 0.05  # growth capex = 5% of rev growth (Taishet complete, minimal expansion)
     debt:
       mode: optimizer

@@ -280,6 +280,7 @@ class ModelInputLoader:
             } or None,
             dep_rate=_safe_float(mode_cfg.get("ppe", {}).get("depreciation_rate")),
             min_capex_da_ratio=float(mode_cfg.get("ppe", {}).get("min_capex_da_ratio", 0.90)),
+            sustaining_capex_da_ratio=float(mode_cfg.get("ppe", {}).get("sustaining_capex_da_ratio", 0)),
             additional_capex_schedule={
                 int(yr): float(amt) * 1e6
                 for yr, amt in mode_cfg.get("ppe", {}).get("additional_capex", {}).items()
