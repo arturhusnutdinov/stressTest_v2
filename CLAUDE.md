@@ -200,12 +200,12 @@ Payment: US Steel=next_year, Rusal=current_year
 | Tax rate | 0.25 | РФ законодательство 2025+ | project.yaml |
 | Al capacity | 4100 kt | Nameplate (Bratsk+Kras+Sayan+Novok+Taishet) | project.yaml |
 | Volume base | production_kt | Avoids inventory spike (sales 4490 vs prod 3918) | project.yaml |
-| CapEx model | sustaining 110% DA + growth 5% | Industry norm | project.yaml + core.py |
+| CapEx model | sustaining 2.0× DA + growth 5% | Median 2021-2025 (2.17×) | project.yaml + core.py |
 | Alumina price | ewa | OLS broken (β=-0.72, R²=0.13) | project.yaml |
 | GDP World | IMF +2.8% CAGR | Excluded from VECM/fallback | runner.py |
 | Revenue elasticity | 0.8 × GDP | Al demand/GDP consensus | segment_revenue.py |
 
-**AR(1) analysis** (TODO — future improvement):
+**AR(1)** — реализовано в preprocessor _summary():
 - SGA/Rev: AR(1) improves MAE by 31% vs EWA
 - Interest/Rev: +49%
 - EBITDA margin: +34%
@@ -214,22 +214,25 @@ Payment: US Steel=next_year, Rusal=current_year
 
 Генератор: `UnionMethodology/generate_credit_report.py`
 Отчёт: `UnionMethodology/reports/credit_report_rusal_Q3_2026.html`
+Руководство: `UnionMethodology/docs/REPORT_GUIDE.md`
 
 **Структура:** 9 разделов, 24 SVG, 21 таблица, 190KB
-**Источники:** stressTest_v2 (IS/BS/CF/stress/rating/covenants), impliedPD (PD/spread),
-stressTest_complete (sector heatmap/attribution), modelMacro (7 CSV + scenarios)
+**Источники:** stressTest_v2 (DB), impliedPD (PD/spread), stressTest_complete (sector heatmap),
+modelMacro (8 CSV + scenarios + sector)
 
-**Ключевые фичи:**
-- Все данные из БД (нет hardcoded значений)
-- SVG: donut, stacked bars, waterfall, grouped bars, line charts, combo
-- PD→Rating mapping (S&P default study)
-- National rating scale (intl → RU через суверенный BBB+)
-- Market systematic decomposition (β, %)
-- Debt service capacity (sustaining CapEx, maintenance DSCR, WC levers)
-- Stress cash gap (base vs severe)
-- Capacity utilization tracking
-- Factor analysis (revenue decomposition waterfall)
-- Dynamic verdict (НЕГАТИВНЫЙ/WATCH/СТАБИЛЬНЫЙ)
+**Ключевые правила:**
+- ВСЕ числа динамические — нет hardcoded в аналитических комментариях
+- Debt service: ST debt (maturing), не debt_repayments (optimizer refi)
+- Covenant: n_breaches / n_covenants_total (не /10)
+- CAGR: из forecast[-1] / rev_h (не текстовая константа)
+- Sector heatmap: OilGas + Real_Estate обязательно (высокий PD)
+- Quarterly labels: "24Q3" (не "2024Q3" — перекрытие)
+- GVA→ВДС, PPI→ИЦП (русские аббревиатуры)
+- SVG x-axis: skip every other label при >8 точках
+
+**Фичи:** donut, waterfall, heatmap, sparklines, PD→Rating, national scale,
+debt service capacity, stress cash gap, capacity utilization, factor analysis,
+dynamic verdict, 9 stress scenarios with ratings
 
 ## Статус доработок (3 фазы завершены)
 
