@@ -165,9 +165,11 @@ model:
       segment_modeling: true
       segments:
         primary_al:
-          # Volume in kt (sales), Price in USD/kt (= USD/t × 1000)
-          # 2025 actual: sales 4,490 kt @ 2,652 USD/t (AR2025 MDA)
-          volume_history: {2017: 3735, 2018: 4176, 2019: 4176, 2020: 3926, 2021: 3904, 2022: 3896, 2023: 4153, 2024: 3859, 2025: 4490}
+          # Volume in kt (production, not sales — to avoid inventory drawdown spikes)
+          # 2025: prod=3,918kt, sales=4,490kt (inventory drawdown, non-recurring)
+          # Capacity: ~4,100kt (Bratsk+Krasnoyarsk+Sayanogorsk+Novokuznetsk+Taishet)
+          max_volume_kt: 4100  # nameplate capacity cap
+          volume_history: {2017: 3757, 2018: 3757, 2019: 3757, 2020: 3755, 2021: 3764, 2022: 3835, 2023: 3848, 2024: 3992, 2025: 3918}
           price_history:  {2017: 1966000, 2018: 2110000, 2019: 1920000, 2020: 1805000, 2021: 2553000, 2022: 2976000, 2023: 2439000, 2024: 2520000, 2025: 2652000}
           volume_method: ewa
           price_method: macro

@@ -55,6 +55,8 @@ class SegmentConfig:
     volume_growth:  Optional[float] = None  # фиксированный рост объёма (%/год)
     price_growth:   Optional[float] = None  # фиксированный рост цены (%/год)
     ewa_halflife:   float = 3.0
+    max_volume_kt:  Optional[float] = None  # capacity cap (nameplate), kt
+    use_production_for_volume: bool = False  # True = use production_kt, not sales_kt
 
     @classmethod
     def from_dict(cls, name: str, cfg: dict) -> "SegmentConfig":
@@ -69,6 +71,8 @@ class SegmentConfig:
             volume_growth =cfg.get("volume_growth"),
             price_growth  =cfg.get("price_growth"),
             ewa_halflife  =float(cfg.get("ewa_halflife", 3.0)),
+            max_volume_kt =float(cfg["max_volume_kt"]) if cfg.get("max_volume_kt") else None,
+            use_production_for_volume=bool(cfg.get("use_production_for_volume", False)),
         )
 
 
@@ -135,6 +139,12 @@ class SegmentRevenueModel:
                 fixed_growth=seg.volume_growth,
                 halflife=seg.ewa_halflife,
             )
+            # Capacity cap: volume cannot exceed nameplate capacity
+            if seg.max_volume_kt is not None:
+                for yr in vol_fc:
+                    if vol_fc[yr] > seg.max_volume_kt:
+                        logger.info(f"  {seg.name} {yr}: volume {vol_fc[yr]:.0f}kt capped at {seg.max_volume_kt:.0f}kt")
+                        vol_fc[yr] = seg.max_volume_kt
             price_fc = self._forecast_series(
                 seg.price_history, forecast_years,
                 method=seg.price_method,
