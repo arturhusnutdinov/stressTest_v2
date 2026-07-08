@@ -1302,12 +1302,25 @@ class ThreeStatementModel:
             else:
                 kind = infer_kind(inst.instrument_name, inst.db_type)
 
-            # Parse maturity_date "YYYY-MM-DD" / "YYYY-MM" → int year
+            # Parse maturity_date → int year
+            # Supports: "YYYY", "YYYY-MM-DD", "DD.MM.YYYY", "DD/MM/YYYY", "YYYY-MM"
             maturity: Optional[int] = None
             if inst.maturity_date:
+                md = str(inst.maturity_date).strip()
                 try:
-                    maturity = int(str(inst.maturity_date)[:4])
-                except (ValueError, TypeError):
+                    # Try "YYYY" or "YYYY-..." first
+                    if len(md) >= 4 and md[:4].isdigit() and int(md[:4]) > 1900:
+                        maturity = int(md[:4])
+                    # Try "DD.MM.YYYY" or "DD/MM/YYYY"
+                    elif len(md) >= 10 and (md[2] == '.' or md[2] == '/'):
+                        maturity = int(md[6:10])
+                    # Try parsing any other format
+                    else:
+                        import re
+                        yr_match = re.search(r'(20\d{2})', md)
+                        if yr_match:
+                            maturity = int(yr_match.group(1))
+                except (ValueError, TypeError, IndexError):
                     maturity = None
 
             # Build amort_schedule
