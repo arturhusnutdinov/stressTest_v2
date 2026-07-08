@@ -24,18 +24,24 @@ build_model('rusal', run_preprocessor=False, run_model=True,
 Показывать: BS diff, stress (все сценарии), rating по годам, covenant breaches,
 forecast таблица (Rev/EBITDA/Margin/NI/ND-EBITDA/ICR/Rating), debt schedule.
 
-## Архитектура (v2.2)
+## Архитектура (v2.3)
 
 ### Pipeline
 ```
-Preprocessor → Macro (VECM/MR/EWA) → ThreeStatementModel → Stress → Rating → Covenants
+External ECM (modelMacro, 19 factors) →
+Preprocessor (14 groups + production_kpi) →
+Macro (VECM/MR/EWA + sanity validation + gap-fill fallback) →
+ThreeStatementModel (8+1 corkscrews, calibrated) →
+Stress (segment rebuild, full 3-statement, 110 metrics/scenario) →
+Rating (S&P + national RU scale via sovereign BBB+ mapping) →
+Covenants (via Repository)
 ```
 
 ### Структура engine/
 ```
 engine/
 ├── orchestrator.py              # Точка входа build_model()
-├── constants.py                 # 72 именованных константы (все модули импортируют)
+├── constants.py                 # 90+ именованных констант (calibrated from Rusal OLS 2011-2025)
 ├── database/
 │   ├── schema.py                # DDL 39 таблиц + миграции
 │   └── repository.py            # 46 методов CRUD
@@ -158,7 +164,7 @@ Payment: US Steel=next_year, Rusal=current_year
 |------|-----------|
 | `engine/orchestrator.py` | Точка входа `build_model()` |
 | `engine/model/core.py` | 3-statement solver |
-| `engine/constants.py` | 72 именованных константы |
+| `engine/constants.py` | 90+ констант (calibrated from OLS) |
 | `engine/database/schema.py` | DDL 39 таблиц |
 | `engine/database/repository.py` | 46 CRUD методов |
 | `tools/load_unified_excel.py` | Единый загрузчик Excel → DB |
@@ -169,3 +175,62 @@ Payment: US Steel=next_year, Rusal=current_year
 | `data_mart_v2.db` | Единственная БД |
 | `docs/Financial-Modeling-Guidelines.pdf` | CFI benchmark (94 стр.) |
 | `companies/nornickel/PROJECT_DIARY.md` | Дневник Норникеля |
+
+## Калибровка моделей (v2.3, July 2026)
+
+Все параметры откалиброваны из исторических данных Rusal 2011-2025:
+
+| Параметр | Значение | Метод | Файл |
+|----------|----------|-------|------|
+| COGS dampening | 0.80 | OLS Δln(COGS/Rev) ~ β×Δln(PPI), R²=0.76 | project.yaml |
+| COGS clamp | 0.09 | 1.5 × σ(COGS/Rev), σ=0.059 | project.yaml |
+| MR kappa | 0.12 | OU MLE на LME Al 40yr, φ=0.88, HL=5.6yr | vecm_bridge.py |
+| WC DSO elast | 0.87 | OLS Δdays/days ~ β×Δrev/rev, n=14 | constants.py |
+| WC DIH elast | 0.36 | OLS, n=14 | constants.py |
+| WC DPO elast | 0.64 | OLS, n=12 | constants.py |
+| WC other_ca | 7% rev | Rusal median 2021-2025 | constants.py |
+| WC other_cl | 4% rev | Rusal median 2021-2025 | constants.py |
+| Tax rate | 0.25 | РФ законодательство 2025+ | project.yaml |
+| Al capacity | 4100 kt | Nameplate (Bratsk+Kras+Sayan+Novok+Taishet) | project.yaml |
+| Volume base | production_kt | Avoids inventory spike (sales 4490 vs prod 3918) | project.yaml |
+| CapEx model | sustaining 110% DA + growth 5% | Industry norm | project.yaml + core.py |
+| Alumina price | ewa | OLS broken (β=-0.72, R²=0.13) | project.yaml |
+| GDP World | IMF +2.8% CAGR | Excluded from VECM/fallback | runner.py |
+| Revenue elasticity | 0.8 × GDP | Al demand/GDP consensus | segment_revenue.py |
+
+**AR(1) analysis** (TODO — future improvement):
+- SGA/Rev: AR(1) improves MAE by 31% vs EWA
+- Interest/Rev: +49%
+- EBITDA margin: +34%
+
+## Кредитный отчёт
+
+Генератор: `UnionMethodology/generate_credit_report.py`
+Отчёт: `UnionMethodology/reports/credit_report_rusal_Q3_2026.html`
+
+**Структура:** 9 разделов, 24 SVG, 21 таблица, 190KB
+**Источники:** stressTest_v2 (IS/BS/CF/stress/rating/covenants), impliedPD (PD/spread),
+stressTest_complete (sector heatmap/attribution), modelMacro (7 CSV + scenarios)
+
+**Ключевые фичи:**
+- Все данные из БД (нет hardcoded значений)
+- SVG: donut, stacked bars, waterfall, grouped bars, line charts, combo
+- PD→Rating mapping (S&P default study)
+- National rating scale (intl → RU через суверенный BBB+)
+- Market systematic decomposition (β, %)
+- Debt service capacity (sustaining CapEx, maintenance DSCR, WC levers)
+- Stress cash gap (base vs severe)
+- Capacity utilization tracking
+- Factor analysis (revenue decomposition waterfall)
+- Dynamic verdict (НЕГАТИВНЫЙ/WATCH/СТАБИЛЬНЫЙ)
+
+## План доработок (Фаза 3)
+
+| # | Доработка | Приоритет |
+|---|-----------|-----------|
+| 6 | LME price reconciliation (VECM vs realized) | Средний |
+| 8 | CapEx project-based pipeline (Taishet+) | Средний |
+| 9 | AR(1) для SGA/Interest/EBITDA ratios | Низкий |
+| 10 | Demand shock stress scenario | Средний |
+| — | Capacity expansion trigger (if demand > capacity) | Низкий |
+| — | Preprocessor: per-company WC constants pipeline | Низкий |
