@@ -152,6 +152,7 @@ class ModelPreprocessor:
             ("unmodeled_items_adjustment",  self._process_unmodeled_items),
             ("lease",                        self._process_lease),
             ("cogs_macro",                   self._process_cogs_macro),
+            ("production_kpi",               self._process_production_kpi),
         ]
 
         for group_name, method in blocks:
@@ -1119,6 +1120,131 @@ class ModelPreprocessor:
             adj[yr] = total - modeled
         if adj:
             out["unmodeled_assets"] = _summary(adj, self._ewa_halflife)
+        return out
+
+
+    def _process_production_kpi(self) -> Dict[str, Dict]:
+        """
+        Production KPI из segment_data + расчёт segment_cost_usd_t если отсутствует.
+
+        Метод расчёта cash cost per tonne (если нет в segment_data):
+          segment_cost = (total_segment_revenue - segment_EBITDA - segment_DA) / production_kt
+          Adjustment factor калибруется по последнему году с Databook значением.
+        """
+        out: Dict[str, Dict] = {}
+
+        # Загружаем segment_data
+        seg_rows = self._repo.query(
+            "SELECT p.year, s.segment_name, s.metric, s.value "
+            "FROM segment_data s JOIN periods p ON s.period_id=p.period_id "
+            "WHERE s.company_id=? AND p.is_forecast=0 "
+            "ORDER BY p.year, s.segment_name",
+            (self.company_id,),
+        )
+        if not seg_rows:
+            return out
+
+        # Структурируем: {year: {segment: {metric: value}}}
+        seg: Dict[int, Dict[str, Dict[str, float]]] = {}
+        for row in seg_rows:
+            yr, sn, m, v = row["year"], row["segment_name"], row["metric"], row["value"]
+            seg.setdefault(yr, {}).setdefault(sn, {})[m] = v
+
+        # Находим Al segment (Primary Aluminium / Primary Al и т.д.)
+        al_seg_name = None
+        for yr_data in seg.values():
+            for sn in yr_data:
+                if 'primary' in sn.lower() or ('aluminium' in sn.lower() and 'alumina' not in sn.lower()):
+                    al_seg_name = sn
+                    break
+            if al_seg_name:
+                break
+
+        if not al_seg_name:
+            return out
+
+        # Собираем KPI метрики
+        for metric_key in ['production_kt', 'sales_kt', 'avg_price_usd_t', 'segment_cost_usd_t',
+                           'revenue', 'al_revenue']:
+            series: Dict[int, float] = {}
+            for yr, yr_data in sorted(seg.items()):
+                al = yr_data.get(al_seg_name, {})
+                val = al.get(metric_key)
+                if val is not None and val != 0:
+                    series[yr] = val
+            if series:
+                canonical = {
+                    'production_kt': 'production_al_kt',
+                    'sales_kt': 'sales_al_kt',
+                    'avg_price_usd_t': 'avg_al_price_usd_t',
+                    'segment_cost_usd_t': 'al_segment_cost_usd_t',
+                    'revenue': 'al_revenue',
+                }.get(metric_key, metric_key)
+                out[canonical] = series
+
+        # Расчёт segment_cost_usd_t для годов без Databook данных
+        cost_series = out.get('al_segment_cost_usd_t', {})
+        prod_series = out.get('production_al_kt', {})
+        years_with_cost = set(cost_series.keys())
+        years_with_prod = set(prod_series.keys())
+        missing_years = years_with_prod - years_with_cost
+
+        if missing_years and years_with_cost:
+            # Калибровочный коэффициент: Databook_cost / IFRS_calc_cost
+            # IFRS calc = (total_segment_rev - EBITDA - DA) / production_kt
+            # Используем segment_data + history_is для EBITDA proxy
+            adj_factors = []
+            for yr in sorted(years_with_cost):
+                al_data = seg.get(yr, {}).get(al_seg_name, {})
+                rev_seg = al_data.get('revenue', 0)
+                prod = prod_series.get(yr, 0)
+                cogs_is = abs(self._is_val(yr, 'cogs') or 0)
+                ebitda_is = self._is_val(yr, 'ebitda') or 0
+                da_is = abs(self._is_val(yr, 'total_da') or 0)
+                if prod > 0 and cogs_is > 0:
+                    # Proxy: total_COGS / production (грубо)
+                    calc_cost = cogs_is / prod / 1000
+                    databook_cost = cost_series[yr]
+                    if calc_cost > 0:
+                        adj_factors.append(databook_cost / calc_cost)
+
+            if adj_factors:
+                # Используем среднее за последние 3 года
+                adj = sum(adj_factors[-3:]) / len(adj_factors[-3:])
+
+                for yr in sorted(missing_years):
+                    prod = prod_series.get(yr, 0)
+                    cogs_is = abs(self._is_val(yr, 'cogs') or 0)
+                    if prod > 0 and cogs_is > 0:
+                        calc = cogs_is / prod / 1000
+                        est = round(calc * adj)
+                        cost_series[yr] = est
+                        # Сохраняем в segment_data
+                        pid_row = self._repo.query_one(
+                            "SELECT period_id FROM periods WHERE company_id=? AND year=? AND is_forecast=0",
+                            (self.company_id, yr),
+                        )
+                        if pid_row:
+                            self._repo.execute(
+                                "INSERT OR REPLACE INTO segment_data "
+                                "(company_id, period_id, segment_id, segment_name, metric, value, source) "
+                                "VALUES (?, ?, 'primary_al', ?, 'segment_cost_usd_t', ?, 'preprocessor_calc')",
+                                (self.company_id, pid_row["period_id"], al_seg_name, est),
+                            )
+                            logger.info(f"  segment_cost_usd_t {yr}: ${est}/t (calc, adj={adj:.3f})")
+
+                out['al_segment_cost_usd_t'] = cost_series
+
+        # Alumina KPIs
+        for al_name in seg.get(max(seg.keys()), {}):
+            if 'alumina' in al_name.lower():
+                for mk in ['revenue', 'sales_kt', 'avg_price_usd_t', 'production_kt']:
+                    series = {yr: seg[yr].get(al_name, {}).get(mk, 0)
+                              for yr in seg if seg[yr].get(al_name, {}).get(mk)}
+                    if series:
+                        out[f'alumina_{mk}' if mk != 'revenue' else 'alumina_revenue'] = series
+                break
+
         return out
 
 
