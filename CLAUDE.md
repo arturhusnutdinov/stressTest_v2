@@ -108,19 +108,26 @@ Provisions:   open + charge - utilization + accretion = close (3 categories)
 
 ### Rusal
 - IFRS, 2011-2025 → 2026-2030
-- 69 instruments, 9 CBR floaters (KeyRate: 2026=14%→2030=7%)
-- Revenue: segment_modeling (primary_al + alumina + other)
-- COGS: component-based (configurable factors: commodity, energy, FX, CPI, PPI)
-- 8 стресс-сценариев
+- 31 debt instruments (9 CBR floaters, 1 EUR Euribor), base_rate_factor populated
+- Revenue: segment_modeling (primary_al capacity=4100kt + alumina + other)
+  - Volume: production_kt based, capacity cap, demand linkage GDP×0.8
+  - Price: OLS chain-link from realized $2,652/t (VECM growth rate)
+  - Alumina: EWA (OLS broken β=-0.72)
+- COGS: component-based (commodity_factor=none — vertically integrated)
+  - dampening=0.80 (OLS calibrated R²=0.76), clamp=0.09 (1.5σ)
+- CapEx: sustaining 110% D&A + growth 5% rev_growth
+- Tax: tax_rate_statutory=0.25 (Russian 2025+)
+- Interest: payment_timing=current_year
+- 9 стресс-сценариев (включая demand_shock)
 - Covenants: ND/EBITDA ≤ 4.5, ICR ≥ 2.0
-- Features: use_ppe/wc_days/tax/intangibles/interest_payable corkscrew (все true)
+- Rating: B+→B- intl / BBB+(RU)→BBB(RU) national
+- External ECM: enabled (19 факторов из modelMacro)
+- Features: use_ppe/wc_days/tax/intangibles/interest_payable/provisions corkscrew (все true)
 - **Optional features** (disabled, config ready):
   - `sga_split_enabled: true` → distribution/admin/ECL/other_opex
-  - `provisions_corkscrew_enabled: true` → pension/site_restoration/legal
   - `deferred_tax_categories.enabled: true` → PPE/Inv/AR/AP rates
-  - `tax_rate_statutory: 0.25` → uncomment когда данные 2025+ загружены
 - PDFs: `/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/`
-- **Excel:** `companies/rusal/data/excel/rusal_unified.xlsx` (31 лист, полный export из DB)
+- **Кредитный отчёт:** `UnionMethodology/reports/credit_report_rusal_Q3_2026.html` (9 разделов, 24 SVG, 190KB)
 
 ### Nornickel
 - IFRS, USD, `is_income_sign=natural`
@@ -224,13 +231,27 @@ stressTest_complete (sector heatmap/attribution), modelMacro (7 CSV + scenarios)
 - Factor analysis (revenue decomposition waterfall)
 - Dynamic verdict (НЕГАТИВНЫЙ/WATCH/СТАБИЛЬНЫЙ)
 
-## План доработок (Фаза 3)
+## Статус доработок (3 фазы завершены)
+
+| # | Доработка | Статус |
+|---|-----------|--------|
+| 1 | GDP World fix (VECM→IMF +2.8%) | ✅ Phase 1 |
+| 2 | Volume: production_kt + capacity cap 4100kt | ✅ Phase 1 |
+| 3 | Demand linkage GDP×0.8 elasticity | ✅ Phase 2 |
+| 4 | CapEx: sustaining 110%DA + growth 5% | ✅ Phase 2 |
+| 5 | External ECM enabled (19 factors) | ✅ Phase 2 |
+| 6 | LME reconciliation (analyzed — chain-link correct) | ✅ Phase 3 |
+| 7 | AR(1) in preprocessor _summary() | ✅ Phase 3 |
+| 8 | Demand shock scenario (9th) | ✅ Phase 3 |
+| 9 | ForecastDispatcher beta from preprocessor | ✅ Phase 3 |
+| 10 | Capacity utilization in report | ✅ Phase 3 |
+
+## Будущие доработки
 
 | # | Доработка | Приоритет |
 |---|-----------|-----------|
-| 6 | LME price reconciliation (VECM vs realized) | Средний |
-| 8 | CapEx project-based pipeline (Taishet+) | Средний |
-| 9 | AR(1) для SGA/Interest/EBITDA ratios | Низкий |
-| 10 | Demand shock stress scenario | Средний |
+| — | CapEx project-based pipeline (Taishet+) | Средний |
 | — | Capacity expansion trigger (if demand > capacity) | Низкий |
 | — | Preprocessor: per-company WC constants pipeline | Низкий |
+| — | Tolling revenue model (demand > capacity) | Низкий |
+| — | Volume shock in stress (direct production cut) | Низкий |
