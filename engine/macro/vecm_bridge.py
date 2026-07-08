@@ -247,7 +247,7 @@ _MACRO_FACTORS = {
 }
 
 # Нестабильные FX/currency факторы — исключаем из VECM
-_EXCLUDE_FROM_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy"}
+_EXCLUDE_FROM_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy", "gdp_world"}
 
 
 def auto_group_factors(

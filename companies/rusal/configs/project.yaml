@@ -17,14 +17,13 @@ macro_forecast:
   - lme_alumina
   - usd_rub
   - brent
-  - gdp_world
+  # gdp_world: removed from VECM — pre-loaded as IMF consensus +2.8% CAGR
   - cpi_ru
   - ppi_ru
   - russian_power_price
   policy:
     factors:
     - lme_aluminium
-    - gdp_world
     - usd_rub
   search_paths:
   - companies/rusal/drivers
@@ -35,7 +34,7 @@ macro_forecast:
   # Overrides built-in VECM/MR for covered factors (brent, usd_rub, cpi_ru, cbr_key_rate, gdp_ru)
   # Remaining factors (lme_aluminium, lme_alumina, gdp_world, russian_power_price) → VECM/MR/EWA as before
   external:
-    enabled: false   # set to true to load from modelMacro scenario_results.csv
+    enabled: true    # load macro from modelMacro ECM scenario_results.csv
     source_path: /Users/arturhusnutdinov/Documents/IT Development/modelMacro
     mode: override
     macro:
@@ -206,8 +205,8 @@ model:
       # Set to "none" to disable LME alumina indexation of the cost component.
       commodity_factor: none
     ppe:
-      min_capex_da_ratio: 0.9
-      expansion_capex_pct_of_rev_growth: 0.1
+      sustaining_capex_da_ratio: 1.10  # sustaining CapEx = 110% of D&A (industry norm)
+      expansion_capex_pct_of_rev_growth: 0.05  # growth capex = 5% of rev growth (Taishet complete, minimal expansion)
     debt:
       mode: optimizer
       target_net_debt_ebitda: 3.5

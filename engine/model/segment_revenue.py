@@ -145,6 +145,28 @@ class SegmentRevenueModel:
                     if vol_fc[yr] > seg.max_volume_kt:
                         logger.info(f"  {seg.name} {yr}: volume {vol_fc[yr]:.0f}kt capped at {seg.max_volume_kt:.0f}kt")
                         vol_fc[yr] = seg.max_volume_kt
+
+            # GDP demand linkage: volume growth ≤ GDP_world growth × elasticity
+            # Al demand elasticity to global GDP ≈ 0.8 (industry consensus)
+            gdp_series = self.macro_forecasts.get('gdp_world', {})
+            if gdp_series and len(gdp_series) >= 2 and seg.volume_history:
+                gdp_sorted = sorted(gdp_series.items())
+                last_hist_yr = max(seg.volume_history.keys())
+                last_hist_vol = seg.volume_history[last_hist_yr]
+                gdp_elasticity = 0.8  # Al demand / GDP elasticity
+                for yr in sorted(vol_fc.keys()):
+                    # Find GDP growth for this year
+                    gdp_cur = gdp_series.get(yr)
+                    gdp_prev = gdp_series.get(yr - 1)
+                    if gdp_cur and gdp_prev and gdp_prev > 0:
+                        gdp_growth = gdp_cur / gdp_prev - 1
+                        max_vol_growth = max(0, gdp_growth * gdp_elasticity)
+                        # Volume can't grow faster than demand allows
+                        prev_vol = vol_fc.get(yr - 1, last_hist_vol)
+                        demand_cap = prev_vol * (1 + max_vol_growth)
+                        if vol_fc[yr] > demand_cap and demand_cap > 0:
+                            logger.info(f"  {seg.name} {yr}: volume {vol_fc[yr]:.0f}kt → demand cap {demand_cap:.0f}kt (GDP {gdp_growth*100:+.1f}%)")
+                            vol_fc[yr] = demand_cap
             price_fc = self._forecast_series(
                 seg.price_history, forecast_years,
                 method=seg.price_method,

@@ -335,7 +335,9 @@ def _run_fallback(
     rows = repo.query(
         "SELECT DISTINCT factor_name FROM macro_factors WHERE scope='global' ORDER BY factor_name"
     )
-    factors = [r["factor_name"] for r in rows]
+    # Exclude factors that are pre-loaded with external consensus data (e.g. GDP World = IMF)
+    _SKIP_FALLBACK = {"gdp_world", "gdp_us", "gdp_china"}
+    factors = [r["factor_name"] for r in rows if r["factor_name"] not in _SKIP_FALLBACK]
 
     if not factors:
         result.errors.append("Нет макро-факторов в БД")

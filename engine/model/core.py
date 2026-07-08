@@ -541,16 +541,24 @@ class ThreeStatementModel:
                 _rec = _pp_cap.get('dep_to_rev_recommended')
                 if isinstance(_rec, dict): _rec = _rec.get(-1)
             capex_pct = float(_rec) if _rec else CAPEX_PCT_DEFAULT
-        raw_capex = abs(state.revenue * capex_pct)
-        # Economic floor: CapEx >= min_capex_da_ratio × DA (maintenance of asset base)
+        # CapEx = Sustaining + Growth (best practice for commodity producers)
+        # Sustaining: maintenance of existing asset base ≈ D&A × sustaining_ratio
+        # Growth: expansion capex, project-based or % of revenue growth
         _prev_da = prev.dep_ppe or 0.0
-        _min_ratio = getattr(self._c, 'min_capex_da_ratio', 0.90)
-        capex = max(raw_capex, _prev_da * _min_ratio)
-        # Growth capex: при росте выручки нужен expansion capex
+        _sustaining_ratio = getattr(self._c, 'sustaining_capex_da_ratio',
+                                    getattr(self._c, 'min_capex_da_ratio', 1.10))
+        sustaining_capex = _prev_da * _sustaining_ratio
+
+        # Growth capex: % of revenue growth (if company is expanding)
         _expansion_pct = getattr(self._c, 'expansion_capex_pct_of_rev_growth', 0.0) or 0.0
+        growth_capex = 0.0
         if _expansion_pct > 0:
             _rev_growth = max(0.0, state.revenue - prev.revenue)
-            capex += _rev_growth * _expansion_pct
+            growth_capex = _rev_growth * _expansion_pct
+
+        # Total: sustaining + growth, floored by revenue-based minimum
+        raw_capex = abs(state.revenue * capex_pct)
+        capex = max(sustaining_capex + growth_capex, raw_capex * 0.5)  # floor: at least 50% of revenue-based
         # Additive project capex: one-off or scheduled investments on top of base model
         _add_capex_sched = getattr(self._c, 'additional_capex_schedule', {}) or {}
         capex += _add_capex_sched.get(state.year, 0.0)
