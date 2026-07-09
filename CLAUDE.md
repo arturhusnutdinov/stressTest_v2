@@ -258,3 +258,9 @@ dynamic verdict, 9 stress scenarios with ratings
 | — | Preprocessor: per-company WC constants pipeline | Низкий |
 | — | Tolling revenue model (demand > capacity) | Низкий |
 | — | Volume shock in stress (direct production cut) | Низкий |
+
+## Связанные модели (v6.0)
+
+- **stressTest_complete v6.0**: Satellite Ridge(8 macro) + Market(impliedPD) → sector EL/EAD heatmap
+- **impliedPD v2.5**: 52 эмитента, Wavelet+Kalman, clean_pd_1y → используется как market signal
+- **modelMacro v2.6**: ECM 13 уравнений, external enabled → 19 факторов в stressTest_v2
