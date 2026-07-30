@@ -834,8 +834,8 @@ def run_vecm_all(root: str|Path, company: str, cfg_path: str|Path):
                 "horizon": horizon,
                 "deterministic": det
             })
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"ECM logger setup failed: {e}")
     periods_cfg = (
         proj.get('model', {})
         .get('standard', {})

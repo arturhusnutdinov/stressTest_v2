@@ -35,7 +35,7 @@ macro_forecast:
   # Remaining factors (lme_aluminium, lme_alumina, gdp_world, russian_power_price) → VECM/MR/EWA as before
   external:
     enabled: true    # load macro from modelMacro ECM scenario_results.csv
-    source_path: /Users/arturhusnutdinov/Documents/IT Development/modelMacro
+    source_path: ../modelMacro
     mode: override
     macro:
       scenario_map:

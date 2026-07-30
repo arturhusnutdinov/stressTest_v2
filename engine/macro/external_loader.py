@@ -523,6 +523,9 @@ def load_all_external(
         return {}, combined_result
 
     source = Path(config.source_path)
+    if not source.is_absolute():
+        from engine import ROOT
+        source = (ROOT / source).resolve()
     if not source.exists():
         combined_result.errors.append(f"Путь modelMacro не найден: {source}")
         return {}, combined_result
