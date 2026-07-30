@@ -205,6 +205,8 @@ class YearState:
     ppe_disposal_gain: float = 0.0      # gain on PPE disposal → flows through EBT to balance BS
     ebt: float = 0.0
     tax_expense: float = 0.0
+    current_tax: float = 0.0        # IS: current tax expense (TaxBlock breakdown)
+    deferred_tax: float = 0.0       # IS: deferred tax expense/benefit (TaxBlock breakdown)
     net_income: float = 0.0
     eps_basic: float = 0.0
     eps_diluted: float = 0.0
@@ -286,12 +288,16 @@ class YearState:
     cfo_interest_paid: float = 0.0
     cfo_taxes_paid: float = 0.0
     cfo_lease_payments_operating: float = 0.0
+    cfo_impairment_addback: float = 0.0     # CFO display: +impairment (non-cash addback)
+    cfo_associates_reversal: float = 0.0    # CFO display: -equity income reversal (non-cash)
+    cfo_fx_noncash: float = 0.0             # CFO display: FX non-cash (forecast≈0)
     cfo_total: float = 0.0
 
     # CF — CFI
     cfi_capex: float = 0.0
     cfi_disposal_proceeds: float = 0.0
     cfi_acquisitions: float = 0.0
+    cfi_associates_disposal: float = 0.0   # CFI: proceeds from associate stake sale
     cfi_other: float = 0.0
     cfi_total: float = 0.0
 
@@ -433,6 +439,9 @@ class ModelConfig:
     buyback_pct_fcf: float = 0.0      # pct of prior-year FCF used for share buybacks
     buyback_leverage_max: float = 2.0  # buybacks only when ND/EBITDA < this threshold
     equity_additional_events: Dict[int, Dict[str, float]] = field(default_factory=dict)  # {year: {issuance/buyback/dividends: $}}
+    associates_disposal_schedule: Dict[int, Dict[str, float]] = field(default_factory=dict)
+    # {year: {proceeds: float, book_value: float}}
+    # proceeds → CFI; book_value → reduces BS investments_lt; gain=proceeds-book_value → IS other_losses_gains
     min_cash: float = 0.0
     # Debt floor — компания не гасит долг ниже этого уровня
     target_net_debt_ebitda: float = 0.0     # 0 = no floor; e.g. 1.5 = keep ND >= 1.5×EBITDA

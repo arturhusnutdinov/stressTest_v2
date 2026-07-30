@@ -118,6 +118,8 @@ class ThreeStatementModel:
         # Fixed year-opening NOL (set once per year, before iteration loop); used by _solve_tax_block
         # to avoid depleting the NOL pool across iterations of the same year.
         self._nol_year_open: float = self._nol_carryforward
+        # Associates disposal gain for current year (set in _apply_associates_disposal, used in _solve_cf)
+        self._associates_disposal_gain_year: float = 0.0
         # Covenant acceleration: callable instruments in breach → reclassified ST
         # Reset at start of each year; populated mid-iteration after BS totals are known
         self._covenant_breach_instruments: set = set()
@@ -268,6 +270,7 @@ class ThreeStatementModel:
         state = self._solve_wc(state, prev)
         state = self._solve_lease(state, prev)
         state = self._solve_bs_other(state, prev)
+        state = self._apply_associates_disposal(state, year)  # gain → other_losses_gains, proceeds → cfi
 
         # ── Итерационный цикл ─────────────────────────────────────
         # Reset covenant breach set: re-evaluated every iteration based on current state
@@ -680,6 +683,8 @@ class ThreeStatementModel:
             eff_rate = max(0.05, min(0.45, float(eff_rate)))
 
             state.tax_expense      = -max(0.0, state.ebt * eff_rate) if state.ebt > 0 else 0.0
+            state.current_tax      = state.tax_expense   # no deferred split in simple mode
+            state.deferred_tax     = 0.0
             state.net_income       = state.ebt + state.tax_expense
             state.dta              = prev.dta    # carry
             state.dtl              = prev.dtl    # carry
@@ -743,8 +748,10 @@ class ThreeStatementModel:
         if not ok:
             logger.warning(f"  {state.year} Tax: {issues}")
 
-        # IS routing: current tax only (statutory × taxable_income)
+        # IS routing: total + breakdown
         state.tax_expense   = block.total_tax_expense or 0.0
+        state.current_tax   = block.current_tax_expense or 0.0
+        state.deferred_tax  = block.deferred_tax_expense or 0.0
         state.net_income    = state.ebt + state.tax_expense
         # BS routing: positive magnitudes
         state.dta           = block.dta_close or 0.0
@@ -1606,6 +1613,41 @@ class ThreeStatementModel:
         from .blocks.bs_other import solve_bs_other
         return solve_bs_other(state, prev, config=self._c)
 
+    def _apply_associates_disposal(self, state: YearState, year: int) -> YearState:
+        """
+        Обрабатывает продажу пакета акций ассоциированных компаний.
+        Вызывается один раз ДО итерационного цикла.
+
+        Config (ModelConfig.associates_disposal_schedule):
+            {year: {proceeds: float, book_value: float}}
+
+        Эффект:
+            BS: investments_lt -= book_value
+            IS: other_losses_gains += gain (gain = proceeds - book_value)
+            CF: cfi_associates_disposal = proceeds (добавляется в cfi_total)
+        Gain течёт через EBT → Tax → NI → RE в итерационном цикле.
+        """
+        schedule = getattr(self._c, 'associates_disposal_schedule', {}) or {}
+        self._associates_disposal_gain_year = 0.0  # reset each year
+        event = schedule.get(year)
+        if not event:
+            return state
+        proceeds   = float(event.get('proceeds', 0.0))
+        book_value = float(event.get('book_value', 0.0))
+        gain = proceeds - book_value
+        # BS: reduce investment
+        state.investments_lt = max(0.0, (state.investments_lt or 0.0) - book_value)
+        # IS: gain flows through EBT
+        state.other_losses_gains = (state.other_losses_gains or 0.0) + gain
+        # CF: proceeds to CFI (gain stored for _solve_cf adjustment to CFO)
+        state.cfi_associates_disposal = proceeds
+        self._associates_disposal_gain_year = gain
+        logger.info(
+            f"  {year} associates disposal: proceeds={proceeds/1e6:.1f}M "
+            f"book={book_value/1e6:.1f}M gain={gain/1e6:.1f}M"
+        )
+        return state
+
     def _solve_cash_from_cf(self, state: YearState, prev: YearState) -> YearState:
         from .blocks.cash import solve_cash_from_cf
         return solve_cash_from_cf(state, prev, self._c)
@@ -1708,16 +1750,29 @@ class ThreeStatementModel:
             other_cfo_hist = other_cfo_hist.get(-1, 0.0)
         state.cfo_other = float(other_cfo_hist or 0.0)
 
-        # 7. CFO Total (indirect method)
+        # 7. Non-cash display items (add-back impairment, reverse equity income, FX)
+        # asset_impairment is negative on IS → positive add-back in CFO
+        state.cfo_impairment_addback = -(state.asset_impairment or 0.0)
+        # earnings_from_investees is positive on IS but not cash → subtract from CFO
+        state.cfo_associates_reversal = -(state.earnings_from_investees or 0.0)
+        state.cfo_fx_noncash = 0.0  # FX non-cash; forecast = 0
+
+        # 8. CFO Total (indirect method)
         # Disposal gains in NI are investing-activity cash flows → subtract from CFO.
         # Full proceeds remain in CFI; gain × (1-t) is in NI (RE); tax on gain is in WC via taxes_payable.
         disposal_gain_adj = -(state.ppe_disposal_gain or 0.0)
+        # Associates disposal gain also flows through NI → subtract here (proceeds go to CFI)
+        assoc_gain_adj = -getattr(self, '_associates_disposal_gain_year', 0.0)
+        # NOTE: cfo_impairment_addback / cfo_associates_reversal are DISPLAY-ONLY (presentation);
+        # they are NOT included here because the NI → cash link is already balanced via BS corkscrew.
+        # Adding them would double-count relative to the PPE/investments_lt corkscrew values.
         state.cfo_total = (
             state.cfo_net_income +
             state.cfo_total_da +
             state.cfo_deferred_tax +
             state.cfo_wc_delta +
             disposal_gain_adj +
+            assoc_gain_adj +
             op_lease_pmt +
             state.cfo_other
         )
@@ -1736,6 +1791,7 @@ class ThreeStatementModel:
             (state.cfi_capex or 0.0) +
             (state.cfi_disposal_proceeds or 0.0) +
             state.cfi_acquisitions +
+            (state.cfi_associates_disposal or 0.0) +
             (state.cfi_other or 0.0)
         )
 

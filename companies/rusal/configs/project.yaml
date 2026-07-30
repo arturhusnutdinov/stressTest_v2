@@ -156,6 +156,16 @@ model:
       dividend_payout_ratio: 0.0
       buyback_pct_fcf: 0.0
       buyback_leverage_max: 4.0
+    associates:
+      # Associates stake disposal schedule
+      # Rusal held ~28% of Norilsk Nickel (sold in 2022 for ~$2.8B)
+      # Uncomment and fill to model the disposal impact on IS/BS/CF
+      disposal_events: {}
+      # Example (amounts in mUSD):
+      # disposal_events:
+      #   2022:
+      #     proceeds: 2800.0   # mUSD → multiplied by 1e6 in loader
+      #     book_value: 1200.0 # carrying value on BS
     train_test:
       train_end_year: 2022
   custom:

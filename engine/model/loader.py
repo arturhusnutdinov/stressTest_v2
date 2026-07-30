@@ -268,6 +268,10 @@ class ModelInputLoader:
                 int(yr): {k: float(v) * 1e6 for k, v in events.items()}
                 for yr, events in mode_cfg.get("equity", {}).get("additional_events", {}).items()
             },
+            associates_disposal_schedule={
+                int(yr): {k: float(v) * 1e6 for k, v in ev.items()}
+                for yr, ev in mode_cfg.get("associates", {}).get("disposal_events", {}).items()
+            },
             # WC days
             dso_days=_safe_float(mode_cfg.get("wc", {}).get("dso_days")),
             dih_days=_safe_float(mode_cfg.get("wc", {}).get("dio_days")),

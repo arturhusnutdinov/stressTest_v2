@@ -104,6 +104,9 @@ BS_METRICS = {
 CF_METRICS = {
     "cfo_net_income":             "net_income",
     "cfo_total_da":               "total_da",
+    "cfo_impairment_addback":     "impairment_noncash",
+    "cfo_associates_reversal":    "associates_noncash",
+    "cfo_fx_noncash":             "fx_noncash",
     "cfo_deferred_tax":           "deferred_income_taxes",
     "cfo_change_ar":              "wc_accounts_receivable_change",
     "cfo_change_inv":             "wc_inventory_change",
@@ -116,6 +119,7 @@ CF_METRICS = {
     "cfi_capex":                  "capex",
     "cfi_disposal_proceeds":      "disposal_proceeds",
     "cfi_acquisitions":           "acquisitions",
+    "cfi_associates_disposal":    "associates_disposal_proceeds",
     "cfi_other":                  "cfi_other",
     "cfi_total":                  "cfi_total",
     "cff_debt_issuance":          "debt_issuance",
