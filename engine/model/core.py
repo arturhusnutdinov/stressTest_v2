@@ -182,20 +182,13 @@ class ThreeStatementModel:
                         base_production_kt=float(_base_prod or 0),
                         cogs_ratio_anchor=float(_cogs_anchor),
                     )
-                    # macro_history: base year values from DB (never stressed)
+                    # macro_history: extract base year values from macro_forecasts
+                    # (loader already prepends historical observations for each factor)
+                    _base_yr = config.history_end_year
                     _macro_hist = {}
-                    try:
-                        import sqlite3
-                        from engine import DB_PATH as _db_path
-                        _conn = sqlite3.connect(str(_db_path))
-                        for _r in _conn.execute(
-                            "SELECT factor_name, year, value FROM macro_factors WHERE year=?",
-                            (config.history_end_year,)
-                        ).fetchall():
-                            _macro_hist.setdefault(_r[0], {})[_r[1]] = _r[2]
-                        _conn.close()
-                    except Exception as _e2:
-                        logger.warning(f"CogsBlock macro_hist query failed: {_e2}")
+                    for _fname, _fseries in historic.macro_forecasts.items():
+                        if _base_yr in _fseries:
+                            _macro_hist.setdefault(_fname, {})[_base_yr] = _fseries[_base_yr]
                     self._cogs_block = CogsBlock(cb_cfg, historic.macro_forecasts, _macro_hist)
                     logger.info(f"CogsBlock: base_cogs=${_base_cogs/1e9:.2f}B prod={cb_cfg.base_production_kt:.0f}kt")
         except Exception as _e:

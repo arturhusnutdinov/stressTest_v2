@@ -339,41 +339,27 @@ class RatingEngine:
         # EBITDA coverage — основной (S&P metals/mining)
         if m.ebitda_coverage is not None:
             ec = m.ebitda_coverage
-            if ec > 10:     s = 88
-            elif ec > 7:    s = 74
-            elif ec > 5:    s = 62   # BBB zone
-            elif ec > 3.5:  s = 52   # BB+/BB zone
-            elif ec > 2.5:  s = 42   # BB zone
-            elif ec > 1.5:  s = 28   # B+ zone
-            elif ec > 1.0:  s = 16
-            else:            s = 5
-            scores.append(ec)  # placeholder — replaced below
+            if ec > 10:     ec_score = 88
+            elif ec > 7:    ec_score = 74
+            elif ec > 5:    ec_score = 62   # BBB zone
+            elif ec > 3.5:  ec_score = 52   # BB+/BB zone
+            elif ec > 2.5:  ec_score = 42   # BB zone
+            elif ec > 1.5:  ec_score = 28   # B+ zone
+            elif ec > 1.0:  ec_score = 16
+            else:            ec_score = 5
+            scores.append(ec_score)
 
         # EBIT coverage — вторичный (более консервативный)
         if m.interest_coverage is not None:
             icr = m.interest_coverage
-            if icr > 8:     s = 82
-            elif icr > 5:   s = 65
-            elif icr > 3.5: s = 52
-            elif icr > 2.5: s = 42
-            elif icr > 1.5: s = 28
-            elif icr > 1.0: s = 15
-            else:            s = 4
-            scores.append(s)
-
-        # Переводим EBITDA coverage в скор (заменяем placeholder)
-        if m.ebitda_coverage is not None:
-            ec = m.ebitda_coverage
-            if ec > 10:     ec_score = 88
-            elif ec > 7:    ec_score = 74
-            elif ec > 5:    ec_score = 62
-            elif ec > 3.5:  ec_score = 52
-            elif ec > 2.5:  ec_score = 42
-            elif ec > 1.5:  ec_score = 28
-            elif ec > 1.0:  ec_score = 16
-            else:            ec_score = 5
-            # Заменяем placeholder значение EBITDA coverage на реальный скор
-            scores[0] = ec_score if scores else ec_score
+            if icr > 8:     icr_score = 82
+            elif icr > 5:   icr_score = 65
+            elif icr > 3.5: icr_score = 52
+            elif icr > 2.5: icr_score = 42
+            elif icr > 1.5: icr_score = 28
+            elif icr > 1.0: icr_score = 15
+            else:            icr_score = 4
+            scores.append(icr_score)
 
         return sum(scores) / len(scores) if scores else 50.0
 

@@ -15,10 +15,12 @@ def solve_bs_totals(state):
     state.total_ca = (
         (state.cash or 0) + (state.restricted_cash or 0) +
         (state.accounts_receivable or 0) + (state.inventory or 0) +
+        (state.receivables_related_parties or 0) +
         (state.other_ca or 0)
     )
     state.total_nca = (
         (state.ppe_net or 0) + (state.rou_asset or 0) +
+        (state.finance_lease_asset or 0) +
         (state.intangibles or 0) + (state.goodwill or 0) +
         (state.dta or 0) + (state.investments_lt or 0) +
         (state.other_nca or 0)
@@ -27,13 +29,16 @@ def solve_bs_totals(state):
 
     state.total_cl = (
         (state.short_term_debt or 0) + abs(state.accounts_payable or 0) +
+        abs(state.accounts_payable_rp or 0) +
         abs(state.taxes_payable or 0) + abs(state.interest_payable or 0) +
         abs(state.payroll_payable or 0) + abs(state.lease_liab_current or 0) +
+        abs(state.finance_lease_liab_current or 0) +
         abs(state.other_cl or 0)
     )
     state.total_ncl = (
         (state.long_term_debt or 0) + abs(state.dtl or 0) +
         abs(state.employee_benefits or 0) + abs(state.lease_liab_noncurrent or 0) +
+        abs(state.finance_lease_liab_noncurrent or 0) +
         abs(state.other_ncl or 0)
     )
     state.total_liabilities = state.total_cl + state.total_ncl

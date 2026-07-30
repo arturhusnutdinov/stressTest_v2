@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Dict, Optional
 
+from ..constants import BS_DIFF_LOG_THRESHOLD, MODEL_VERSION
 from ..database.repository import Repository
 from .inputs import ModelConfig, YearState
 from .core import ModelResult
@@ -175,6 +176,16 @@ class ModelSaver:
         forecast_start = self._config.forecast_start_year
         self._cleanup_stale_forecasts(scenario_id, forecast_start)
 
+        # BS balance validation before saving
+        if result.bs_diffs:
+            max_diff = max(abs(v) for v in result.bs_diffs.values())
+            if max_diff > BS_DIFF_LOG_THRESHOLD:
+                worst_year = max(result.bs_diffs, key=lambda y: abs(result.bs_diffs[y]))
+                logger.warning(
+                    f"BS imbalance detected before save: year={worst_year} "
+                    f"diff={result.bs_diffs[worst_year]/1e6:.2f}M"
+                )
+
         total = 0
         for year, state in sorted(result.years.items()):
             total += self._save_year(year, state, scenario_id, version_id)
@@ -331,9 +342,10 @@ class ModelSaver:
         При смене history_end_year (напр. 2024→2025) старые прогнозы за 2025
         остаются в БД и конфликтуют с актуальными данными.
         """
-        tables = ["forecast_is", "forecast_bs", "forecast_cf"]
-        for table in tables:
+        _ALLOWED_TABLES = {"forecast_is", "forecast_bs", "forecast_cf"}
+        for table in _ALLOWED_TABLES:
             try:
+                assert table in _ALLOWED_TABLES, f"Invalid table: {table}"
                 self._repo.execute(
                     f"DELETE FROM {table} "
                     f"WHERE company_id = ? AND scenario_id = ? "
@@ -353,11 +365,11 @@ class ModelSaver:
                 "INSERT INTO model_versions (company_id, version, status, description) "
                 "VALUES (?, ?, 'published', ?) "
                 "ON CONFLICT(company_id, version) DO UPDATE SET status='published'",
-                (self.company_id, "v2.1", f"Прогноз {self._config.forecast_start_year}–{self._config.forecast_end_year}"),
+                (self.company_id, MODEL_VERSION, f"Прогноз {self._config.forecast_start_year}–{self._config.forecast_end_year}"),
             )
             row = self._repo.query_one(
                 "SELECT version_id FROM model_versions WHERE company_id=? AND version=?",
-                (self.company_id, "v2.1"),
+                (self.company_id, MODEL_VERSION),
             )
             return row["version_id"] if row else None
         except Exception as e:

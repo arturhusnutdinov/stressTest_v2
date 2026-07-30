@@ -5,6 +5,9 @@ All "magic numbers" that were previously hardcoded in core.py,
 loader.py, and blocks are centralized here with documentation.
 """
 
+# ── Engine version ───────────────────────────────────────────────────
+MODEL_VERSION = "v2.3"               # written to model_versions table on save
+
 # ── Revenue fallback ─────────────────────────────────────────────────
 REVENUE_FALLBACK_GROWTH = 1.02       # 2% nominal growth when no forecast method works
 
