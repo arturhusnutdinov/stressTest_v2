@@ -133,8 +133,8 @@ class ThreeStatementModel:
                 self._covenant_checker = CovenantsChecker.from_project_yaml(
                     config.company_id, None, company_dir
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"CovenantsChecker init failed: {e}")
 
         # CogsBlock: component-based COGS (if configured in YAML)
         self._cogs_block = None
@@ -194,12 +194,12 @@ class ThreeStatementModel:
                         ).fetchall():
                             _macro_hist.setdefault(_r[0], {})[_r[1]] = _r[2]
                         _conn.close()
-                    except Exception:
-                        pass
+                    except Exception as _e2:
+                        logger.warning(f"CogsBlock macro_hist query failed: {_e2}")
                     self._cogs_block = CogsBlock(cb_cfg, historic.macro_forecasts, _macro_hist)
                     logger.info(f"CogsBlock: base_cogs=${_base_cogs/1e9:.2f}B prod={cb_cfg.base_production_kt:.0f}kt")
         except Exception as _e:
-            logger.debug(f"CogsBlock init failed: {_e}")
+            logger.warning(f"CogsBlock init failed: {_e}")
 
     # ── публичный API ──────────────────────────────────────────────────────────
 

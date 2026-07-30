@@ -446,8 +446,6 @@ class ModelConfig:
     # Debt floor — компания не гасит долг ниже этого уровня
     target_net_debt_ebitda: float = 0.0     # 0 = no floor; e.g. 1.5 = keep ND >= 1.5×EBITDA
     max_voluntary_prepay_pct_fcf: float = 1.0  # cap on voluntary prepay as fraction of FCF (1.0 = no cap)
-    # Growth capex: при росте Revenue компания инвестирует в capacity
-    expansion_capex_pct_of_rev_growth: float = 0.0  # $ capex на $1 роста Revenue
 
     # Методы прогнозирования (из forecast_methods в project.yaml)
     forecast_methods: Dict[str, Dict[str, ForecastMethodConfig]] = \
