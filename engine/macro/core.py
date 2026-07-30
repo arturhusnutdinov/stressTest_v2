@@ -211,7 +211,7 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
     )
 
     if Y_all.empty:
-        print("⚠️ SVAR: Нет данных для моделирования, используем fallback")
+        logger.warning("SVAR: Нет данных для моделирования, используем fallback")
         ensure_outputs_even_if_insufficient_history_2005(root, company)
         return
 
@@ -234,7 +234,7 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
         # Фильтруем данные по факторам блока
         block_cols = [f'ln_{f}' for f in block_factors if f'ln_{f}' in Y_all.columns]
         if len(block_cols) < 2:
-            print(f"⚠️ SVAR блок {block_name}: недостаточно факторов ({len(block_cols)})")
+            logger.warning(f"SVAR блок {block_name}: недостаточно факторов ({len(block_cols)})")
             continue
 
         Y_block = Y_all[block_cols].copy()
@@ -251,7 +251,7 @@ def run_svar_all(root: Path, company: str, cfg_path: Path):
             block_name=block_name
         )
 
-        print(f"✅ SVAR блок {block_name}: прогноз сгенерирован для {len(results.get('forecasts', {}))} факторов")
+        logger.info(f"SVAR блок {block_name}: прогноз сгенерирован для {len(results.get('forecasts', {}))} факторов")
 
     if db:
         db.close()
