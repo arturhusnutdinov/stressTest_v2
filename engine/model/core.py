@@ -136,63 +136,53 @@ class ThreeStatementModel:
             except Exception as e:
                 logger.warning(f"CovenantsChecker init failed: {e}")
 
-        # CogsBlock: component-based COGS (if configured in YAML)
+        # CogsBlock: component-based COGS (loaded from ModelConfig, not YAML)
         self._cogs_block = None
-        try:
-            import yaml as _yaml
-            from pathlib import Path as _Path
-            _cfg_path = _Path("companies") / config.company_id / "configs" / "project.yaml"
-            if _cfg_path.exists():
-                with open(_cfg_path) as _fh:
-                    _raw = _yaml.safe_load(_fh) or {}
-                _mode = _raw.get('model', {}).get('mode', 'standard')
-                _cogs_cfg = _raw.get('model', {}).get(_mode, {}).get('cogs', {})
-                if _cogs_cfg.get('mode') == 'component':
-                    from .cogs_block import CogsBlock, CogsBlockConfig
-                    _base = historic.base_year_state
-                    _base_cogs = abs(_base.cogs or 0) if _base else 0
-                    _pp_kpi = historic.preprocess.get('production_kpi', {})
-                    _base_prod = _pp_kpi.get('production_al_kt', {})
-                    if isinstance(_base_prod, dict):
-                        _base_prod = _base_prod.get(config.history_end_year) or \
-                                     _base_prod.get(max(k for k in _base_prod if isinstance(k, int) and k > 0), 0)
-                    # Get preprocessor cogs_ratio (EWA, stable anchor)
-                    _pp_mr = historic.preprocess.get('margin_ratios', {})
-                    _cogs_anchor = _pp_mr.get('cogs_ratio_ex_da_recommended') or \
-                                   _pp_mr.get('cogs_ratio_recommended') or 0.0
-                    if isinstance(_cogs_anchor, dict):
-                        _cogs_anchor = _cogs_anchor.get(-1, 0.0)
-                    cb_cfg = CogsBlockConfig(
-                        alumina_share=float(_cogs_cfg.get('alumina_share', 0.37)),
-                        energy_share=float(_cogs_cfg.get('energy_share', 0.27)),
-                        labour_share=float(_cogs_cfg.get('labour_share', 0.12)),
-                        other_share=float(_cogs_cfg.get('other_share', 0.24)),
-                        alumina_intensity=float(_cogs_cfg.get('alumina_intensity', 1.93)),
-                        energy_kwh_per_t=float(_cogs_cfg.get('energy_kwh_per_t', 15500.0)),
-                        mean_reversion_dampening=float(_cogs_cfg.get('mean_reversion_dampening', 0.30)),
-                        clamp_sigma=float(_cogs_cfg.get('clamp_sigma', 0.06)),
-                        commodity_factor=str(_cogs_cfg.get('commodity_factor', 'lme_alumina')),
-                        energy_factor=str(_cogs_cfg.get('energy_factor', 'russian_power_price')),
-                        fx_factor=str(_cogs_cfg.get('fx_factor', 'usd_rub')),
-                        inflation_factor=str(_cogs_cfg.get('inflation_factor', 'cpi_ru')),
-                        ppi_factor=str(_cogs_cfg.get('ppi_factor', 'ppi_ru')),
-                        base_year=config.history_end_year,
-                        base_cogs=_base_cogs,
-                        base_revenue=abs(_base.revenue or 0),
-                        base_production_kt=float(_base_prod or 0),
-                        cogs_ratio_anchor=float(_cogs_anchor),
-                    )
-                    # macro_history: extract base year values from macro_forecasts
-                    # (loader already prepends historical observations for each factor)
-                    _base_yr = config.history_end_year
-                    _macro_hist = {}
-                    for _fname, _fseries in historic.macro_forecasts.items():
-                        if _base_yr in _fseries:
-                            _macro_hist.setdefault(_fname, {})[_base_yr] = _fseries[_base_yr]
-                    self._cogs_block = CogsBlock(cb_cfg, historic.macro_forecasts, _macro_hist)
-                    logger.info(f"CogsBlock: base_cogs=${_base_cogs/1e9:.2f}B prod={cb_cfg.base_production_kt:.0f}kt")
-        except Exception as _e:
-            logger.warning(f"CogsBlock init failed: {_e}")
+        _cogs_cfg = config.cogs_component_config
+        if _cogs_cfg:
+            try:
+                from .cogs_block import CogsBlock, CogsBlockConfig
+                _base = historic.base_year_state
+                _base_cogs = abs(_base.cogs or 0) if _base else 0
+                _pp_kpi = historic.preprocess.get('production_kpi', {})
+                _base_prod = _pp_kpi.get('production_al_kt', {})
+                if isinstance(_base_prod, dict):
+                    _base_prod = _base_prod.get(config.history_end_year) or \
+                                 _base_prod.get(max(k for k in _base_prod if isinstance(k, int) and k > 0), 0)
+                _pp_mr = historic.preprocess.get('margin_ratios', {})
+                _cogs_anchor = _pp_mr.get('cogs_ratio_ex_da_recommended') or \
+                               _pp_mr.get('cogs_ratio_recommended') or 0.0
+                if isinstance(_cogs_anchor, dict):
+                    _cogs_anchor = _cogs_anchor.get(-1, 0.0)
+                cb_cfg = CogsBlockConfig(
+                    alumina_share=float(_cogs_cfg.get('alumina_share', 0.37)),
+                    energy_share=float(_cogs_cfg.get('energy_share', 0.27)),
+                    labour_share=float(_cogs_cfg.get('labour_share', 0.12)),
+                    other_share=float(_cogs_cfg.get('other_share', 0.24)),
+                    alumina_intensity=float(_cogs_cfg.get('alumina_intensity', 1.93)),
+                    energy_kwh_per_t=float(_cogs_cfg.get('energy_kwh_per_t', 15500.0)),
+                    mean_reversion_dampening=float(_cogs_cfg.get('mean_reversion_dampening', 0.30)),
+                    clamp_sigma=float(_cogs_cfg.get('clamp_sigma', 0.06)),
+                    commodity_factor=str(_cogs_cfg.get('commodity_factor', 'lme_alumina')),
+                    energy_factor=str(_cogs_cfg.get('energy_factor', 'russian_power_price')),
+                    fx_factor=str(_cogs_cfg.get('fx_factor', 'usd_rub')),
+                    inflation_factor=str(_cogs_cfg.get('inflation_factor', 'cpi_ru')),
+                    ppi_factor=str(_cogs_cfg.get('ppi_factor', 'ppi_ru')),
+                    base_year=config.history_end_year,
+                    base_cogs=_base_cogs,
+                    base_revenue=abs(_base.revenue or 0),
+                    base_production_kt=float(_base_prod or 0),
+                    cogs_ratio_anchor=float(_cogs_anchor),
+                )
+                _base_yr = config.history_end_year
+                _macro_hist = {}
+                for _fname, _fseries in historic.macro_forecasts.items():
+                    if _base_yr in _fseries:
+                        _macro_hist.setdefault(_fname, {})[_base_yr] = _fseries[_base_yr]
+                self._cogs_block = CogsBlock(cb_cfg, historic.macro_forecasts, _macro_hist)
+                logger.info(f"CogsBlock: base_cogs=${_base_cogs/1e9:.2f}B prod={cb_cfg.base_production_kt:.0f}kt")
+            except Exception as _e:
+                logger.warning(f"CogsBlock init failed: {_e}")
 
     # ── публичный API ──────────────────────────────────────────────────────────
 

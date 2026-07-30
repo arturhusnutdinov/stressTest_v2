@@ -24,6 +24,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from engine.constants import (
+    STRESS_METALS_HRC_SHOCK, STRESS_METALS_PPI_SHOCK,
+    STRESS_METALS_BRENT_SHOCK, STRESS_METALS_CAPEX_SHOCK,
+    STRESS_RECESSION_GDP_SHOCK, STRESS_RECESSION_CPI_SHOCK,
+    STRESS_RECESSION_BRENT_SHOCK,
+    STRESS_LIQUIDITY_DSO_SHOCK, STRESS_LIQUIDITY_DIH_SHOCK,
+    STRESS_LIQUIDITY_DPO_SHOCK, STRESS_LIQUIDITY_RATE_SHOCK,
+)
+
 logger = logging.getLogger(__name__)
 
 # ── Sector Packs — готовые наборы шоков ────────────────────────────────────────
@@ -32,34 +41,34 @@ SECTOR_PACKS: Dict[str, Dict] = {
     "metals_mining": {
         "description": "Steel/Metals downturn",
         "macro_shocks": {
-            "steel_price_hrc":      {"type": "percentage", "value": -25.0},
-            "steel_ppi_iron_steel": {"type": "percentage", "value": -15.0},
-            "brent":                {"type": "percentage", "value": -20.0},
+            "steel_price_hrc":      {"type": "percentage", "value": STRESS_METALS_HRC_SHOCK},
+            "steel_ppi_iron_steel": {"type": "percentage", "value": STRESS_METALS_PPI_SHOCK},
+            "brent":                {"type": "percentage", "value": STRESS_METALS_BRENT_SHOCK},
         },
         "driver_shocks": {
-            "capex_pct": {"type": "percentage", "value": -30.0},
+            "capex_pct": {"type": "percentage", "value": STRESS_METALS_CAPEX_SHOCK},
         },
     },
     "recession": {
         "description": "General economic recession",
         "macro_shocks": {
-            "gdp_us":   {"type": "percentage", "value": -3.0},
-            "cpi_us":   {"type": "percentage", "value": -1.0},
-            "brent":    {"type": "percentage", "value": -30.0},
+            "gdp_us":   {"type": "percentage", "value": STRESS_RECESSION_GDP_SHOCK},
+            "cpi_us":   {"type": "percentage", "value": STRESS_RECESSION_CPI_SHOCK},
+            "brent":    {"type": "percentage", "value": STRESS_RECESSION_BRENT_SHOCK},
         },
         "driver_shocks": {
-            "dso_days": {"type": "percentage", "value": +20.0},
-            "dih_days": {"type": "percentage", "value": +15.0},
+            "dso_days": {"type": "percentage", "value": STRESS_LIQUIDITY_DIH_SHOCK},
+            "dih_days": {"type": "percentage", "value": 15.0},
         },
     },
     "liquidity_crisis": {
         "description": "Liquidity crunch — WC stress + rate spike",
         "macro_shocks": {},
         "driver_shocks": {
-            "dso_days":  {"type": "percentage", "value": +30.0},
-            "dih_days":  {"type": "percentage", "value": +20.0},
-            "dpo_days":  {"type": "percentage", "value": -15.0},
-            "avg_rate":  {"type": "pp",         "value": +2.0},  # +2pp = +200bp
+            "dso_days":  {"type": "percentage", "value": STRESS_LIQUIDITY_DSO_SHOCK},
+            "dih_days":  {"type": "percentage", "value": STRESS_LIQUIDITY_DIH_SHOCK},
+            "dpo_days":  {"type": "percentage", "value": STRESS_LIQUIDITY_DPO_SHOCK},
+            "avg_rate":  {"type": "pp",         "value": STRESS_LIQUIDITY_RATE_SHOCK},
         },
     },
 }

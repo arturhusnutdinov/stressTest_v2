@@ -379,6 +379,9 @@ class ModelInputLoader:
             ),
             cogs_revenue_factor=mode_cfg.get("cogs", {}).get("revenue_factor"),
             cogs_cost_factor=mode_cfg.get("cogs", {}).get("cost_factor"),
+            cogs_component_config=(
+                mode_cfg.get("cogs") if mode_cfg.get("cogs", {}).get("mode") == "component" else None
+            ),
             # Solver параметры
             max_iter=int(cfg.get("solver", {}).get("max_iter", 10)),
             tol=float(cfg.get("solver", {}).get("tol", 1000.0)),

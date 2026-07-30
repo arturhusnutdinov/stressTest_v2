@@ -24,7 +24,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from engine.constants import RATING_MARGIN_NORM_CAP, RATING_CYCLE_AVG_MARGIN_DEFAULT
+from engine.constants import (
+    RATING_MARGIN_NORM_CAP, RATING_CYCLE_AVG_MARGIN_DEFAULT,
+    RATING_INDUSTRY_ADJ_DEFAULT, RATING_SIZE_ADJ_DEFAULT,
+    RATING_SOVEREIGN_DEFAULT, RATING_DEFAULT_SCORE, RATING_FCF_WEIGHT_DISCOUNT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -231,13 +235,12 @@ class RatingConfig:
     methodology: str = "sp"
     # Отраслевой дисконт: сталь = высокая цикличность, commodity exposure
     # BB+ компании имеют типичный ND/EBITDA 2.5-4x, ICR 3-5x
-    industry_adjustment: float = -12.0   # баллов дисконта для цикличных отраслей (steel: -12)
-    # Корректировка за размер/рыночную позицию (крупный интегрированный производитель)
-    size_adjustment: float = 2.0
+    industry_adjustment: float = RATING_INDUSTRY_ADJ_DEFAULT
+    size_adjustment: float = RATING_SIZE_ADJ_DEFAULT
     # Through-the-cycle (through_the_cycle): нормализованная EBITDA маржа (историческое среднее 2018-2024)
     cycle_avg_ebitda_margin: float = RATING_CYCLE_AVG_MARGIN_DEFAULT   # 10% for US Steel
     # Суверенный рейтинг для маппинга international → national шкала
-    sovereign_rating: str = "BBB+"  # РФ по международной шкале
+    sovereign_rating: str = RATING_SOVEREIGN_DEFAULT
 
     @property
     def cycle_avg_margin(self) -> float:
@@ -318,7 +321,7 @@ class RatingEngine:
             else:            s = 10
             scores.append(s)
 
-        return sum(scores) / len(scores) if scores else 50.0
+        return sum(scores) / len(scores) if scores else RATING_DEFAULT_SCORE
 
     def score_coverage(self, m: CreditMetrics) -> float:
         """
@@ -361,7 +364,7 @@ class RatingEngine:
             else:            icr_score = 4
             scores.append(icr_score)
 
-        return sum(scores) / len(scores) if scores else 50.0
+        return sum(scores) / len(scores) if scores else RATING_DEFAULT_SCORE
 
     def score_profitability(self, m: CreditMetrics) -> float:
         """
@@ -404,7 +407,7 @@ class RatingEngine:
             else:             s = 6
             scores.append(s)
 
-        return sum(scores) / len(scores) if scores else 50.0
+        return sum(scores) / len(scores) if scores else RATING_DEFAULT_SCORE
 
     def score_liquidity(self, m: CreditMetrics) -> float:
         """Скор ликвидности 0-100."""
@@ -436,9 +439,9 @@ class RatingEngine:
             elif fcd > 0.04: s = 48
             elif fcd > 0:    s = 26
             else:             s = 6
-            scores.append(s * 0.8)  # FCF менее вес чем balance sheet metrics
+            scores.append(s * RATING_FCF_WEIGHT_DISCOUNT)
 
-        return sum(scores) / len(scores) if scores else 50.0
+        return sum(scores) / len(scores) if scores else RATING_DEFAULT_SCORE
 
     def calculate(self, metrics: CreditMetrics) -> Dict:
         """
@@ -463,7 +466,7 @@ class RatingEngine:
 
         total_weight = sum(w.get(k, 0) for k in sub_scores)
         if total_weight <= 0:
-            return {"score": 50.0, "rating": "B+", "error": "zero weights"}
+            return {"score": RATING_DEFAULT_SCORE, "rating": "B+", "error": "zero weights"}
 
         base_score = sum(
             sub_scores[k] * w.get(k, 0) / total_weight

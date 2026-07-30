@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # ─── forecast methods ─────────────────────────────────────────────────────────
@@ -514,6 +514,10 @@ class ModelConfig:
     revenue_macro_factor: Optional[str] = None
     cogs_revenue_factor: Optional[str] = None
     cogs_cost_factor: Optional[str] = None
+
+    # Component COGS config (from YAML custom.cogs, loaded by ModelInputLoader)
+    cogs_component_config: Optional[Dict[str, Any]] = None
+    # Structure: {mode: "component", alumina_share: 0.37, energy_share: 0.27, ...}
 
     # Internal: populated by ModelInputLoader
     _segment_model: Optional[Dict[int, float]] = None

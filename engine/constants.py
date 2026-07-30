@@ -113,3 +113,21 @@ REVENUE_CLAMP_PERCENTILE_HIGH = 0.95 # 95th percentile
 # ── Rating ───────────────────────────────────────────────────────────
 RATING_CYCLE_AVG_MARGIN_DEFAULT = 0.10  # Through-the-cycle EBITDA margin
 RATING_MARGIN_NORM_CAP = 1.5            # Cap margin at cycle_avg × this factor
+RATING_INDUSTRY_ADJ_DEFAULT = -12.0     # Cyclicality discount (metals/mining)
+RATING_SIZE_ADJ_DEFAULT = 2.0           # Large integrated producer bonus
+RATING_SOVEREIGN_DEFAULT = "BBB+"       # Sovereign rating for national scale mapping
+RATING_DEFAULT_SCORE = 50.0             # Default score when no data available
+RATING_FCF_WEIGHT_DISCOUNT = 0.8        # FCF-to-debt weight relative to BS metrics
+
+# ── Stress sector packs ─────────────────────────────────────────────
+STRESS_METALS_HRC_SHOCK = -25.0         # Steel/metals HRC shock %
+STRESS_METALS_PPI_SHOCK = -15.0         # Metals PPI shock %
+STRESS_METALS_BRENT_SHOCK = -20.0       # Brent shock %
+STRESS_METALS_CAPEX_SHOCK = -30.0       # CapEx reduction %
+STRESS_RECESSION_GDP_SHOCK = -3.0       # GDP shock %
+STRESS_RECESSION_CPI_SHOCK = -1.0       # CPI shock %
+STRESS_RECESSION_BRENT_SHOCK = -30.0    # Brent shock %
+STRESS_LIQUIDITY_DSO_SHOCK = 30.0       # DSO increase %
+STRESS_LIQUIDITY_DIH_SHOCK = 20.0       # DIH increase %
+STRESS_LIQUIDITY_DPO_SHOCK = -15.0      # DPO decrease %
+STRESS_LIQUIDITY_RATE_SHOCK = 2.0       # Rate spike pp
