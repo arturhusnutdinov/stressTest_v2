@@ -1,10 +1,13 @@
 from __future__ import annotations
 import json
+import logging
 import warnings
 from itertools import combinations
 import numpy as np, pandas as pd, yaml
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 from statsmodels.tsa.vector_ar.vecm import select_coint_rank, VECM
 from statsmodels.tsa.api import VAR
 from statsmodels.tsa.arima.model import ARIMA
@@ -14,6 +17,7 @@ from statsmodels.stats.diagnostic import acorr_ljungbox
 from .io import read_one_row_annual
 from .cointegration_test import select_forecast_method, check_forecast_stability, test_cointegration_with_dummies
 from .preprocess import preprocess_macro_history, FactorAnomaly, FactorMetrics
+from engine.constants import VECM_TREND_THRESHOLD, VECM_SLOPE_CONSISTENCY
 
 try:
     from pmdarima import auto_arima as _auto_arima_model
@@ -38,8 +42,8 @@ def _save_forecast(db, company: str, factor_name: str, data: Dict[int, float], m
         return
     try:
         target.save_macro_forecast(factor_name, data, method=method)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"save_macro_forecast failed for {factor_name}: {e}")
 
 
 def _save_diagnostics(db, company: str, factor_name: str, method: str, block_name: str,
@@ -50,8 +54,8 @@ def _save_diagnostics(db, company: str, factor_name: str, method: str, block_nam
         return
     try:
         target.save_ecm_diagnostics(company, factor_name, method, block_name, p, rank, span_start, span_end, lb_pvalue, note, cv_smape)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"save_ecm_diagnostics failed for {factor_name}: {e}")
 
 
 def _save_actual_vs_fitted(db, company: str, factor_name: str, actual: Dict[int, float], fitted: Dict[int, float]) -> None:
@@ -60,8 +64,8 @@ def _save_actual_vs_fitted(db, company: str, factor_name: str, actual: Dict[int,
         return
     try:
         target.save_actual_vs_fitted(company, factor_name, actual, fitted)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"save_actual_vs_fitted failed for {factor_name}: {e}")
 
 
 def _save_forecast_diag(db, company: str, factor_name: str, slope: float, flat_flag: bool) -> None:
@@ -70,8 +74,8 @@ def _save_forecast_diag(db, company: str, factor_name: str, slope: float, flat_f
         return
     try:
         target.save_ecm_forecast_diag(company, factor_name, slope, flat_flag)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"save_ecm_forecast_diag failed for {factor_name}: {e}")
 DEFAULT_FALLBACK_ORDER = ["arima011", "rw_drift"]
 def _read_yaml(p: Path) -> dict:
     try:
@@ -1459,10 +1463,9 @@ def run_vecm_all(root: str|Path, company: str, cfg_path: str|Path):
                     slopes.append(slope)
             if slopes:
                 avg_slope = np.mean(slopes)
-                if abs(avg_slope) > 0.03:  # Сильный совокупный тренд
-                    # Все факторы идут в одном направлении - возможна проблема с коинтеграцией
+                if abs(avg_slope) > VECM_TREND_THRESHOLD:
                     sign_consistency = all(np.sign(s) == np.sign(slopes[0]) for s in slopes)
-                    if sign_consistency and all(abs(s) > 0.02 for s in slopes):
+                    if sign_consistency and all(abs(s) > VECM_SLOPE_CONSISTENCY for s in slopes):
                         use_univariate = True
                         unstable_factors = [f"block_{block_name}"]
                         report_lines.append(f"  - block avg slope: {avg_slope:.4f}, all factors declining/growing (cointegration issue)")

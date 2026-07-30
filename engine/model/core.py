@@ -29,6 +29,13 @@ from engine.constants import (
     DEBT_MANDATORY_ST_MULTIPLIER, DEBT_ST_RATIO_MIN, DEBT_ST_RATIO_MAX,
     DEBT_ST_RATIO_DEFAULT, DEBT_AVG_RATE_DEFAULT,
     CAPEX_INTEREST_DECAY_RATE, CAPEX_PCT_DEFAULT,
+    COGS_PCT_MIN, COGS_PCT_MAX,
+    COGS_P10_BUFFER, COGS_P90_BUFFER,
+    COGS_MIN_HIST_BUFFER, COGS_MAX_HIST_BUFFER,
+    WC_NWC_RATIO_DEFAULT, WC_NWC_RATIO_MIN, WC_NWC_RATIO_MAX,
+    WC_AR_PCT_OF_NWC, WC_INV_PCT_OF_NWC, WC_OTHER_CA_PCT_OF_NWC,
+    WC_AP_PCT_OF_NWC, WC_OTHER_CL_PCT_OF_NWC,
+    OTHER_IS_DECAY, DEBT_MAX_ANNUAL_CHANGE,
 )
 
 logger = logging.getLogger(__name__)
@@ -370,8 +377,8 @@ class ThreeStatementModel:
                 mode = raw.get('model', {}).get('mode', 'standard')
                 mode_cfg = raw.get('model', {}).get(mode, {}).get('cogs', {})
                 da_in_cogs = raw.get('accounting_conventions', {}).get('da_in_cogs', True)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"COGS config parse failed: {e}")
 
         revenue_factor = mode_cfg.get('revenue_factor', 'steel_price_hrc')
         cost_factor    = mode_cfg.get('cost_factor', 'steel_ppi_iron_steel')
@@ -466,11 +473,11 @@ class ThreeStatementModel:
                 n = len(hist_sorted)
                 p10 = hist_sorted[max(0, int(n * 0.10))]
                 p90 = hist_sorted[min(n-1, int(n * 0.90))]
-                cogs_pct = max(p10 * 0.95, min(p90 * 1.05, cogs_pct))
+                cogs_pct = max(p10 * COGS_P10_BUFFER, min(p90 * COGS_P90_BUFFER, cogs_pct))
             elif hist_vals:
-                cogs_pct = max(min(hist_vals) * 0.90, min(max(hist_vals) * 1.10, cogs_pct))
+                cogs_pct = max(min(hist_vals) * COGS_MIN_HIST_BUFFER, min(max(hist_vals) * COGS_MAX_HIST_BUFFER, cogs_pct))
         else:
-            cogs_pct = max(0.40, min(1.05, cogs_pct))
+            cogs_pct = max(COGS_PCT_MIN, min(COGS_PCT_MAX, cogs_pct))
 
         state.cogs = -abs(state.revenue * cogs_pct)
         state.gross_profit = state.revenue + state.cogs
@@ -638,7 +645,7 @@ class ThreeStatementModel:
                 setattr(state, attr, abs(float(rec)))
             else:
                 prev_val = getattr(prev, attr, 0.0)
-                setattr(state, attr, prev_val * 0.95)
+                setattr(state, attr, prev_val * OTHER_IS_DECAY)
 
         return state
 
@@ -794,8 +801,8 @@ class ThreeStatementModel:
             nwc_ratio = pp_wc.get('nwc_to_revenue_recommended')
             if isinstance(nwc_ratio, dict):
                 nwc_ratio = nwc_ratio.get(-1)
-            nwc_ratio = float(nwc_ratio) if nwc_ratio else 0.08
-            nwc_ratio = max(0.02, min(0.25, nwc_ratio))
+            nwc_ratio = float(nwc_ratio) if nwc_ratio else WC_NWC_RATIO_DEFAULT
+            nwc_ratio = max(WC_NWC_RATIO_MIN, min(WC_NWC_RATIO_MAX, nwc_ratio))
 
             target_nwc = state.revenue * nwc_ratio
             prev_nwc   = (prev.accounts_receivable + prev.inventory
@@ -805,11 +812,11 @@ class ThreeStatementModel:
             delta_nwc  = target_nwc - prev_nwc
 
             # Простое разбиение NWC
-            state.accounts_receivable = target_nwc * 0.45
-            state.inventory           = target_nwc * 0.40
-            state.other_ca            = target_nwc * 0.15
-            state.accounts_payable    = -target_nwc * 0.35
-            state.other_cl            = -target_nwc * 0.10
+            state.accounts_receivable = target_nwc * WC_AR_PCT_OF_NWC
+            state.inventory           = target_nwc * WC_INV_PCT_OF_NWC
+            state.other_ca            = target_nwc * WC_OTHER_CA_PCT_OF_NWC
+            state.accounts_payable    = -target_nwc * WC_AP_PCT_OF_NWC
+            state.other_cl            = -target_nwc * WC_OTHER_CL_PCT_OF_NWC
             state.cfo_change_ar       = -(state.accounts_receivable - prev.accounts_receivable)
             state.cfo_change_inv      = -(state.inventory - prev.inventory)
             state.cfo_change_ap       = -(state.accounts_payable - prev.accounts_payable)
@@ -1057,7 +1064,7 @@ class ThreeStatementModel:
                 target_total = prev_total  # carry forward
 
         # Ограничиваем изменение: не более 20% total debt в год (реализм)
-        max_change = prev_total * 0.20 if prev_total > 0 else abs(target_total) * 0.20
+        max_change = prev_total * DEBT_MAX_ANNUAL_CHANGE if prev_total > 0 else abs(target_total) * DEBT_MAX_ANNUAL_CHANGE
         if abs(target_total - prev_total) > max_change:
             target_total = prev_total + max_change * (1 if target_total > prev_total else -1)
 

@@ -12,6 +12,18 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+from engine.constants import (
+    VECM_MIN_COMMON_YEARS,
+    VECM_COMMODITY_KAPPA_BASE, VECM_COMMODITY_KAPPA_BEAR,
+    MACRO_FALLBACK_HALFLIFE, MACRO_COMMODITY_HALFLIFE,
+    VECM_FC_MAX_GROWTH, VECM_FC_MIN_DECLINE,
+    VECM_SANITY_MIN_RATIO, VECM_SANITY_MAX_RATIO,
+    UNIVARIATE_FC_MIN_RATIO, UNIVARIATE_FC_MAX_RATIO,
+    UNIVARIATE_EWA_ALPHA, UNIVARIATE_DRIFT_MAX,
+    PRICE_INDEX_MIN_INFLATION,
+    BEAR_SCENARIO_KEYWORDS, BULL_SCENARIO_KEYWORDS,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -111,7 +123,7 @@ def run_vecm_for_factors(
     for s in factor_series.values():
         yrs = set(s.index)
         common_years = yrs if common_years is None else common_years & yrs
-    if not common_years or len(common_years) < 8:
+    if not common_years or len(common_years) < VECM_MIN_COMMON_YEARS:
         logger.warning(f"Недостаточно общих лет: {len(common_years or set())}")
         return {}
 
@@ -157,14 +169,14 @@ def _try_vecm(
         ln_data = {}
         for name, s in factor_series.items():
             s_common = s.loc[common_years].replace(0, np.nan).dropna()
-            if len(s_common) >= 8:
+            if len(s_common) >= VECM_MIN_COMMON_YEARS:
                 ln_data[name] = np.log(s_common)
 
         if len(ln_data) < 2:
             return {}
 
         Y = pd.DataFrame(ln_data).dropna()
-        if len(Y) < 8:
+        if len(Y) < VECM_MIN_COMMON_YEARS:
             return {}
 
         logger.info(f"  VECM: матрица {Y.shape} ({Y.index[0]}–{Y.index[-1]})")
@@ -212,8 +224,8 @@ def _try_vecm(
                 try:
                     val = float(np.exp(fc_ln[j, i]))
                     # Sanity check: не более 2x роста или 50% падения за горизонт
-                    max_growth = last_val * (1.5 ** (j / max(steps, 1) + 1))
-                    min_val    = last_val * (0.3 ** (j / max(steps, 1) + 1))
+                    max_growth = last_val * (VECM_FC_MAX_GROWTH ** (j / max(steps, 1) + 1))
+                    min_val    = last_val * (VECM_FC_MIN_DECLINE ** (j / max(steps, 1) + 1))
                     if min_val < val < max_growth:
                         fc_vals[yr] = val
                 except (IndexError, ValueError):
@@ -343,15 +355,15 @@ def run_full_macro_forecast(
 
     # Определяем kappa и метод для commodity по сценарию
     scenario_lower = (scenario_name or "base").lower()
-    if any(k in scenario_lower for k in ["bear", "stress", "severe", "down"]):
+    if any(k in scenario_lower for k in BEAR_SCENARIO_KEYWORDS):
         commodity_method = "mean_reversion"
-        commodity_kappa  = 0.5
-    elif any(k in scenario_lower for k in ["bull", "up", "optimistic"]):
+        commodity_kappa  = VECM_COMMODITY_KAPPA_BEAR
+    elif any(k in scenario_lower for k in BULL_SCENARIO_KEYWORDS):
         commodity_method = "rw_drift"
         commodity_kappa  = None
     else:
         commodity_method = "mean_reversion"
-        commodity_kappa  = 0.12  # OU MLE on LME Al 1990-2029: phi=0.88, kappa=0.124, HL=5.6yr
+        commodity_kappa  = VECM_COMMODITY_KAPPA_BASE
 
     # Автоматическое разделение на потоки
     vecm_groups, commodity_factors, ewa_factors = auto_group_factors(
@@ -387,7 +399,7 @@ def run_full_macro_forecast(
                 fc = mean_reversion_forecast(history, forecast_years, kappa=commodity_kappa)
             else:
                 fc = rw_drift_clamped(history, forecast_years,
-                                      ewa_halflife=8.0, percentile_lo=0.5, percentile_hi=0.95)
+                                      ewa_halflife=MACRO_COMMODITY_HALFLIFE, percentile_lo=0.5, percentile_hi=0.95)
             if fc:
                 all_forecasts[factor_name] = fc
                 vals = [round(v) for v in list(fc.values())[:3]]
@@ -402,7 +414,7 @@ def run_full_macro_forecast(
             if len(history) < 3:
                 continue
             fc = select_best_forecast(history, method="ewa",
-                                      forecast_years=forecast_years, halflife=5.0)
+                                      forecast_years=forecast_years, halflife=MACRO_FALLBACK_HALFLIFE)
             if fc:
                 all_forecasts[factor_name] = fc
 
@@ -506,7 +518,7 @@ def _univariate_forecast(
                 result = {}
                 for i, yr in enumerate(forecast_index):
                     val = float(fc_series.iloc[i])
-                    if 0.05 * last_val < val < 20 * last_val:
+                    if UNIVARIATE_FC_MIN_RATIO * last_val < val < UNIVARIATE_FC_MAX_RATIO * last_val:
                         result[yr] = val
                 if len(result) == steps:
                     logger.debug(f"    {method_name}: OK")
@@ -525,11 +537,11 @@ def _univariate_forecast(
         if len(vals) < 3:
             return {}
         growth_rates = [math.log(vals[i] / vals[i - 1]) for i in range(1, len(vals))]
-        alpha = 0.3
+        alpha = UNIVARIATE_EWA_ALPHA
         drift = growth_rates[0]
         for g in growth_rates[1:]:
             drift = alpha * g + (1 - alpha) * drift
-        drift = max(-0.15, min(0.15, drift))
+        drift = max(-UNIVARIATE_DRIFT_MAX, min(UNIVARIATE_DRIFT_MAX, drift))
         result = {}
         val = vals[-1]
         for yr in forecast_index:
@@ -619,10 +631,10 @@ def _validate_macro_forecasts(
                     )
                     break
         else:
-            # Generic check: forecast should stay within 0.01x–100x of last value
+            # Generic check: forecast should stay within bounds of last value
             for yr, val in fc_data.items():
                 ratio = val / last_val if last_val != 0 else 0
-                if ratio < 0.01 or ratio > 100:
+                if ratio < VECM_SANITY_MIN_RATIO or ratio > VECM_SANITY_MAX_RATIO:
                     failed = True
                     fail_reason = (
                         f"{name}: yr={yr} val={val:.2f} "
@@ -695,7 +707,7 @@ def _repair_with_ewa(
                 # Floor: at least flat (0% inflation), better: use long-run avg growth
                 values = [history[y] for y in sorted_years]
                 avg_growth = (values[-1] / values[max(0, len(values) - 6)]) ** (1.0 / min(5, len(values) - 1)) - 1
-                avg_growth = max(avg_growth, 0.005)  # min 0.5% inflation
+                avg_growth = max(avg_growth, PRICE_INDEX_MIN_INFLATION)
                 val = prev_val * (1 + avg_growth)
             repaired[yr] = val
             prev_val = val

@@ -1,9 +1,12 @@
 
+import logging
 import numpy as np, pandas as pd, yaml, os, re
 from pathlib import Path
 from .vecm import run_vecm_all as _run_vecm_all
 from .svar import run_svar_block
 from typing import Dict
+
+logger = logging.getLogger(__name__)
 
 
 def _read_yaml(p: Path):
@@ -300,7 +303,7 @@ def run_ecm_all(root: Path, company: str):
                 _run_vecm_all(root, company, cfg_path)
             return
     except Exception as e:
-        print(f"⚠️ ECM/VECM/SVAR не удалось запустить: {e}, используем fallback")
+        logger.warning(f"ECM/VECM/SVAR не удалось запустить: {e}, используем fallback")
 
     # Fallback на базовый метод
     ensure_outputs_even_if_insufficient_history_2005(root, company)

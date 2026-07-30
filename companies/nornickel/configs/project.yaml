@@ -5,7 +5,7 @@
 # Replace nornickel, Norilsk Nickel (PJSC MMC Norilsk Nickel), metals, USD, IFRS
 #
 # Reference implementations:
-#   Norilsk Nickel (PJSC MMC Norilsk Nickel):  companies/nornickel/configs/project.yaml (US GAAP, steel)
+#   US Steel:  companies/us_steel/configs/project.yaml (US GAAP, steel)
 #   Rusal:     companies/rusal/configs/project.yaml (IFRS, metals/mining)
 
 # ── Company Metadata ─────────────────────────────────────────

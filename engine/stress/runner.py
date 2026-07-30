@@ -300,7 +300,8 @@ class StressRunner:
                     beta = float(best) if best else 1.0
                 else:
                     beta = float(beta)
-            except Exception:
+            except Exception as e:
+                logger.warning(f"  Beta lookup failed ({e}), defaulting to 1.0")
                 beta = 1.0
 
             hrc_shock_factor = 1.0 + hrc_shock.value / 100.0

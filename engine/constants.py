@@ -131,3 +131,49 @@ STRESS_LIQUIDITY_DSO_SHOCK = 30.0       # DSO increase %
 STRESS_LIQUIDITY_DIH_SHOCK = 20.0       # DIH increase %
 STRESS_LIQUIDITY_DPO_SHOCK = -15.0      # DPO decrease %
 STRESS_LIQUIDITY_RATE_SHOCK = 2.0       # Rate spike pp
+
+# ── Macro / VECM defaults ─────────────────────────────────────────
+VECM_MIN_COMMON_YEARS = 8              # Min overlapping years for VECM estimation
+VECM_COMMODITY_KAPPA_BASE = 0.12       # OU MLE on LME Al 1990-2029: phi=0.88, HL=5.6yr
+VECM_COMMODITY_KAPPA_BEAR = 0.50       # Fast mean reversion for bear/stress scenarios
+MACRO_FALLBACK_KAPPA_BASE = 0.15       # Slow normalization for base scenario gap-fill
+MACRO_FALLBACK_HALFLIFE = 5.0          # EWA halflife for macro/EWA fallback (years)
+MACRO_COMMODITY_HALFLIFE = 8.0         # EWA halflife for commodity RW-drift (years)
+VECM_FC_MAX_GROWTH = 1.5              # Max growth ceiling factor per forecast step
+VECM_FC_MIN_DECLINE = 0.3             # Min decline floor factor per forecast step
+VECM_SANITY_MIN_RATIO = 0.01          # Min forecast/last_hist ratio (generic)
+VECM_SANITY_MAX_RATIO = 100.0         # Max forecast/last_hist ratio (generic)
+MACRO_GAPFILL_SANITY_MIN = 0.1        # Min ratio for gap-fill sanity check
+MACRO_GAPFILL_SANITY_MAX = 10.0       # Max ratio for gap-fill sanity check
+UNIVARIATE_FC_MIN_RATIO = 0.05        # Univariate forecast min/last bound
+UNIVARIATE_FC_MAX_RATIO = 20.0        # Univariate forecast max/last bound
+UNIVARIATE_EWA_ALPHA = 0.3            # EWA alpha for pure-Python fallback
+UNIVARIATE_DRIFT_MAX = 0.15           # Max abs drift in EWA fallback
+PRICE_INDEX_MIN_INFLATION = 0.005     # Min 0.5% inflation for price indices
+VECM_TREND_THRESHOLD = 0.03           # Strong aggregate trend threshold
+VECM_SLOPE_CONSISTENCY = 0.02         # Per-factor slope consistency threshold
+
+# ── COGS clamp ─────────────────────────────────────────────────────
+COGS_P10_BUFFER = 0.95                # P10 boundary multiplier
+COGS_P90_BUFFER = 1.05                # P90 boundary multiplier
+COGS_MIN_HIST_BUFFER = 0.90           # Min historical boundary multiplier
+COGS_MAX_HIST_BUFFER = 1.10           # Max historical boundary multiplier
+
+# ── WC composition (standard mode) ────────────────────────────────
+WC_AR_PCT_OF_NWC = 0.45              # AR share in NWC
+WC_INV_PCT_OF_NWC = 0.40             # Inventory share in NWC
+WC_OTHER_CA_PCT_OF_NWC = 0.15        # Other CA share in NWC
+WC_AP_PCT_OF_NWC = 0.35              # AP share in NWC
+WC_OTHER_CL_PCT_OF_NWC = 0.10        # Other CL share in NWC
+
+# ── Commodity / Macro keyword sets ─────────────────────────────────
+COMMODITY_KEYWORDS = frozenset([
+    "steel", "brent", "coal", "iron", "aluminum",
+    "copper", "gas", "hrc", "ppi_iron", "lme",
+])
+MACRO_KEYWORDS = frozenset([
+    "gdp", "cpi", "ppi", "production", "pmi", "dxy",
+])
+BEAR_SCENARIO_KEYWORDS = frozenset(["bear", "stress", "severe", "down"])
+BULL_SCENARIO_KEYWORDS = frozenset(["bull", "up", "optimistic"])
+SKIP_FALLBACK_FACTORS = frozenset(["gdp_world", "gdp_us", "gdp_china"])

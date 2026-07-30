@@ -9,6 +9,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from engine.constants import (
+    COMMODITY_KEYWORDS, MACRO_KEYWORDS,
+    BEAR_SCENARIO_KEYWORDS, BULL_SCENARIO_KEYWORDS,
+    SKIP_FALLBACK_FACTORS,
+    MACRO_FALLBACK_KAPPA_BASE, VECM_COMMODITY_KAPPA_BEAR,
+    MACRO_FALLBACK_HALFLIFE, MACRO_COMMODITY_HALFLIFE,
+    MACRO_GAPFILL_SANITY_MIN, MACRO_GAPFILL_SANITY_MAX,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -244,9 +253,8 @@ def _run_with_adapter(
                 cfg=cfg.get("vecm", {}),
             )
 
-            _COMMODITY_KW = ["steel", "brent", "coal", "iron", "aluminum", "lme", "hrc", "ppi_iron"]
             for factor_name, fc_data in forecasts.items():
-                is_commodity = any(kw in factor_name.lower() for kw in _COMMODITY_KW)
+                is_commodity = any(kw in factor_name.lower() for kw in COMMODITY_KEYWORDS)
                 method = (f"mean_reversion(scenario={scenario_name})" if is_commodity
                           else "vecm_groups")
                 adapter.save_macro_forecast(factor_name, fc_data, method=method)
@@ -286,17 +294,15 @@ def _fill_missing_with_fallback(
         history = adapter.get_macro_factor(factor_name)
         if len(history) < 3:
             continue
-        is_commodity = any(kw in factor_name.lower()
-                           for kw in ["steel", "brent", "coal", "iron", "aluminum",
-                                      "copper", "gas", "hrc", "ppi_iron"])
+        is_commodity = any(kw in factor_name.lower() for kw in COMMODITY_KEYWORDS)
         if is_commodity:
             fc = select_best_forecast(history, method="mean_reversion",
-                                      forecast_years=forecast_years, kappa=0.15)
-            method = "mean_reversion(kappa=0.15)"
+                                      forecast_years=forecast_years, kappa=MACRO_FALLBACK_KAPPA_BASE)
+            method = f"mean_reversion(kappa={MACRO_FALLBACK_KAPPA_BASE})"
         else:
             fc = select_best_forecast(history, method="ewa",
-                                      forecast_years=forecast_years, halflife=5.0)
-            method = "ewa(halflife=5)"
+                                      forecast_years=forecast_years, halflife=MACRO_FALLBACK_HALFLIFE)
+            method = f"ewa(halflife={MACRO_FALLBACK_HALFLIFE})"
         if fc:
             # Sanity check: forecast should stay within 0.5x–2.0x of last historical value
             last_val = history[max(history.keys())]
@@ -304,7 +310,7 @@ def _fill_missing_with_fallback(
             if last_val and abs(last_val) > 1e-6:
                 for yr, val in fc.items():
                     ratio = val / last_val
-                    if ratio < 0.1 or ratio > 10:
+                    if ratio < MACRO_GAPFILL_SANITY_MIN or ratio > MACRO_GAPFILL_SANITY_MAX:
                         sane = False
                         logger.warning(
                             f"  Gap-fill {factor_name}: yr={yr} val={val:.2f} "
@@ -336,7 +342,7 @@ def _run_fallback(
         "SELECT DISTINCT factor_name FROM macro_factors WHERE scope='global' ORDER BY factor_name"
     )
     # Exclude factors that are pre-loaded with external consensus data (e.g. GDP World = IMF)
-    _SKIP_FALLBACK = {"gdp_world", "gdp_us", "gdp_china"}
+    _SKIP_FALLBACK = SKIP_FALLBACK_FACTORS
     factors = [r["factor_name"] for r in rows if r["factor_name"] not in _SKIP_FALLBACK]
 
     if not factors:
@@ -352,24 +358,21 @@ def _run_fallback(
         if len(history) < 3:
             continue
 
-        is_commodity = any(kw in factor_name.lower()
-                           for kw in ["steel", "brent", "coal", "iron", "aluminum",
-                                      "copper", "gas", "hrc", "ppi_iron", "lme"])
-        is_macro = any(kw in factor_name.lower()
-                       for kw in ["gdp", "cpi", "ppi", "production", "pmi", "dxy"])
+        is_commodity = any(kw in factor_name.lower() for kw in COMMODITY_KEYWORDS)
+        is_macro = any(kw in factor_name.lower() for kw in MACRO_KEYWORDS)
 
         if is_commodity:
             # kappa зависит от сценария:
             # base → κ=0.15 (медленная нормализация, нейтральный)
             # bear/stress → κ=0.5 (быстрый возврат к медиане)
             # bull → rw_drift (удержание на высоком уровне)
-            if any(k in scenario_lower for k in ["bear", "stress", "severe", "down"]):
-                kappa = 0.5
-            elif any(k in scenario_lower for k in ["bull", "up", "optimistic"]):
+            if any(k in scenario_lower for k in BEAR_SCENARIO_KEYWORDS):
+                kappa = VECM_COMMODITY_KAPPA_BEAR
+            elif any(k in scenario_lower for k in BULL_SCENARIO_KEYWORDS):
                 forecast = select_best_forecast(
                     history, method="rw_drift",
                     forecast_years=forecast_years,
-                    ewa_halflife=8.0,
+                    ewa_halflife=MACRO_COMMODITY_HALFLIFE,
                     percentile_lo=0.50,
                     percentile_hi=0.95,
                 )
@@ -380,7 +383,7 @@ def _run_fallback(
                     result.methods_used[factor_name] = used_method
                 continue
             else:
-                kappa = 0.15  # base — медленная нормализация
+                kappa = MACRO_FALLBACK_KAPPA_BASE
 
             forecast = select_best_forecast(
                 history, method="mean_reversion",
