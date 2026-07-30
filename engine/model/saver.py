@@ -364,7 +364,8 @@ class ModelSaver:
             cur = self._repo.execute(
                 "INSERT INTO model_versions (company_id, version, status, description) "
                 "VALUES (?, ?, 'published', ?) "
-                "ON CONFLICT(company_id, version) DO UPDATE SET status='published'",
+                "ON CONFLICT(company_id, version) DO UPDATE SET "
+                "status='published', description=excluded.description",
                 (self.company_id, MODEL_VERSION, f"Прогноз {self._config.forecast_start_year}–{self._config.forecast_end_year}"),
             )
             row = self._repo.query_one(
