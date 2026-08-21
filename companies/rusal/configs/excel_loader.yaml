@@ -65,24 +65,43 @@ history:
       - total_assets
       - total_equity
     key_optional:
+      # Current Assets
+      - restricted_cash
+      - other_ca                    # → alias: other_current_assets
+      - other_ca_tax                # → merge into other_current_assets
+      - total_current_assets        # subtotal (computed if missing)
+      # Non-Current Assets
       - ppe_gross
       - ppe_accum_dep
-      - investments_lt
+      - investments_lt              # → alias: investments_and_long_term_receivables
       - investments_in_associates
       - intangibles
       - goodwill
       - rou_asset
       - dta
+      - other_nca                   # → alias: other_non_current_assets
+      - total_non_current_assets    # subtotal (computed if missing)
+      # Current Liabilities
+      - taxes_payable               # sign: if negative → tax receivable → move to other_current_assets
+      - interest_payable
+      - payroll_payable             # → alias: payroll_and_benefits_payable
+      - lease_liab_current
+      - dividends_payable
+      - other_cl                    # → alias: other_current_liabilities
+      - total_current_liabilities   # subtotal (computed if missing)
+      # Non-Current Liabilities
       - dtl
+      - employee_benefits           # sign: always positive (abs)
+      - lease_liab_noncurrent
+      - other_ncl                   # → alias: other_non_current_liabilities
+      - total_non_current_liabilities  # subtotal (computed if missing)
+      - total_liabilities           # subtotal (computed if missing)
+      # Equity
       - share_capital
       - apic
-      - aoci
-      - nci
-      - other_ca
-      - other_cl
-      - other_nca
-      - other_ncl
-      - total_liabilities
+      - aoci                        # sign: can be negative (FX translation)
+      - nci                         # sign: can be negative (subsidiary losses)
+      - treasury_stock
 
   CF:
     sheet: history_cf
