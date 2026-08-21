@@ -338,15 +338,12 @@ forecast_methods:
       method: ewa
       ewa_halflife_years: 5
     other_nca:
-      method: ewa
-      ewa_halflife_years: 5
+      method: last        # stable, carry forward
     other_ncl:
-      method: ewa
-      ewa_halflife_years: 5
+      method: last        # stable, carry forward
     # Taxes payable: if negative in history → tax receivable (asset)
     # Model sets to 0 when tax_paid_timing=current_year
-    taxes_payable:
-      method: model       # handled by TaxBlock
+    # taxes_payable: handled by TaxBlock (not configurable here)
 covenants:
   enabled: true
   methodology: default
