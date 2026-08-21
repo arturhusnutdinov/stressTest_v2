@@ -312,13 +312,41 @@ forecast_methods:
       method: ewa
       ewa_halflife_years: 3
   bs:
+    # Carry forward (last historical value)
     goodwill:
       method: last
     restricted_cash:
       method: last
+    investments_lt:
+      method: last        # Nornickel stake — stable strategic asset
+    aoci:
+      method: last        # accumulated OCI — FX translation, stable
+    nci:
+      method: last        # minority interest — stable
+    share_capital:
+      method: last
+    apic:
+      method: last
+    treasury_stock:
+      method: last
+    dta:
+      method: last        # deferred tax asset — modeled by TaxBlock if enabled
+    dtl:
+      method: last        # deferred tax liability — modeled by TaxBlock if enabled
+    # EWA (exponentially weighted average)
     employee_benefits:
       method: ewa
       ewa_halflife_years: 5
+    other_nca:
+      method: ewa
+      ewa_halflife_years: 5
+    other_ncl:
+      method: ewa
+      ewa_halflife_years: 5
+    # Taxes payable: if negative in history → tax receivable (asset)
+    # Model sets to 0 when tax_paid_timing=current_year
+    taxes_payable:
+      method: model       # handled by TaxBlock
 covenants:
   enabled: true
   methodology: default
