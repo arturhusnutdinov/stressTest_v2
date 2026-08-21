@@ -193,7 +193,7 @@ class WCBlock:
 
         # ── AP corkscrew ─────────────────────────────────────────
         # Open → +Purchases (= inv_purchases) → -Payments → Close
-        ap_open     = abs(prev.accounts_payable or 0)
+        ap_open     = prev.accounts_payable or 0  # already positive (liability value)
         ap_payments = ap_open + inv_purchases - ap_target
         ap_payments = max(0.0, ap_payments)
 

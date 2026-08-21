@@ -709,7 +709,7 @@ class ThreeStatementModel:
             # Payables: growth creates DTA (expense recognition timing)
             ap_rate = float((dt_cats.get('payables') or {}).get('rate', 0.0))
             if ap_rate:
-                ap_delta = abs(state.accounts_payable or 0) - abs(prev.accounts_payable or 0)
+                ap_delta = (state.accounts_payable or 0) - (prev.accounts_payable or 0)
                 other_dta_delta += ap_delta * ap_rate
 
         # Use year-opening NOL (frozen before iteration loop) so multi-iteration convergence
@@ -806,20 +806,20 @@ class ThreeStatementModel:
 
             target_nwc = state.revenue * nwc_ratio
             prev_nwc   = (prev.accounts_receivable + prev.inventory
-                         + prev.other_ca - abs(prev.accounts_payable)
-                         - abs(getattr(prev, 'accrued_liabilities', 0))
-                         - abs(prev.other_cl))
+                         + prev.other_ca - (prev.accounts_payable or 0)
+                         - (getattr(prev, 'accrued_liabilities', 0) or 0)
+                         - (prev.other_cl or 0))
             delta_nwc  = target_nwc - prev_nwc
 
             # Простое разбиение NWC
             state.accounts_receivable = target_nwc * WC_AR_PCT_OF_NWC
             state.inventory           = target_nwc * WC_INV_PCT_OF_NWC
             state.other_ca            = target_nwc * WC_OTHER_CA_PCT_OF_NWC
-            state.accounts_payable    = -target_nwc * WC_AP_PCT_OF_NWC
-            state.other_cl            = -target_nwc * WC_OTHER_CL_PCT_OF_NWC
+            state.accounts_payable    = target_nwc * WC_AP_PCT_OF_NWC
+            state.other_cl            = target_nwc * WC_OTHER_CL_PCT_OF_NWC
             state.cfo_change_ar       = -(state.accounts_receivable - prev.accounts_receivable)
             state.cfo_change_inv      = -(state.inventory - prev.inventory)
-            state.cfo_change_ap       = -(state.accounts_payable - prev.accounts_payable)
+            state.cfo_change_ap       = (state.accounts_payable - prev.accounts_payable)  # рост AP = приток
             state.cfo_wc_delta        = -delta_nwc
             return state
 
@@ -858,7 +858,7 @@ class ThreeStatementModel:
 
         state.accounts_receivable = block.ar_close
         state.inventory           = block.inventory_close
-        state.accounts_payable    = -block.ap_close   # знак: liability в BS
+        state.accounts_payable    = block.ap_close   # всегда положительный (liability)
         state.other_ca            = block.other_ca_close
         state.other_cl            = block.other_cl_close + block.accrued_close
 

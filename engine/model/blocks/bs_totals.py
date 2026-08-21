@@ -28,18 +28,18 @@ def solve_bs_totals(state):
     state.total_assets = state.total_ca + state.total_nca
 
     state.total_cl = (
-        (state.short_term_debt or 0) + abs(state.accounts_payable or 0) +
-        abs(state.accounts_payable_rp or 0) +
-        abs(state.taxes_payable or 0) + abs(state.interest_payable or 0) +
-        abs(state.payroll_payable or 0) + abs(state.lease_liab_current or 0) +
-        abs(state.finance_lease_liab_current or 0) +
-        abs(state.other_cl or 0)
+        (state.short_term_debt or 0) + (state.accounts_payable or 0) +
+        (state.accounts_payable_rp or 0) +
+        (state.taxes_payable or 0) + (state.interest_payable or 0) +
+        (state.payroll_payable or 0) + (state.lease_liab_current or 0) +
+        (state.finance_lease_liab_current or 0) +
+        (state.other_cl or 0)
     )
     state.total_ncl = (
-        (state.long_term_debt or 0) + abs(state.dtl or 0) +
-        abs(state.employee_benefits or 0) + abs(state.lease_liab_noncurrent or 0) +
-        abs(state.finance_lease_liab_noncurrent or 0) +
-        abs(state.other_ncl or 0)
+        (state.long_term_debt or 0) + (state.dtl or 0) +
+        (state.employee_benefits or 0) + (state.lease_liab_noncurrent or 0) +
+        (state.finance_lease_liab_noncurrent or 0) +
+        (state.other_ncl or 0)
     )
     state.total_liabilities = state.total_cl + state.total_ncl
 

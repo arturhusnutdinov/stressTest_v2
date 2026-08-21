@@ -835,8 +835,8 @@ class ModelInputLoader:
         # This plug is a one-time correction; forecast years are balanced by corkscrews.
         _ca = (state.cash or 0) + (state.restricted_cash or 0) + (state.accounts_receivable or 0) + (state.inventory or 0) + (state.other_ca or 0)
         _nca = (state.ppe_net or 0) + (state.rou_asset or 0) + (state.intangibles or 0) + (state.goodwill or 0) + (state.dta or 0) + (state.investments_lt or 0) + (state.other_nca or 0)
-        _cl = (state.short_term_debt or 0) + abs(state.accounts_payable or 0) + abs(state.taxes_payable or 0) + abs(state.interest_payable or 0) + abs(state.payroll_payable or 0) + abs(state.lease_liab_current or 0) + abs(state.other_cl or 0)
-        _ncl = (state.long_term_debt or 0) + abs(state.dtl or 0) + abs(state.employee_benefits or 0) + abs(state.lease_liab_noncurrent or 0) + abs(state.other_ncl or 0)
+        _cl = (state.short_term_debt or 0) + (state.accounts_payable or 0) + (state.taxes_payable or 0) + (state.interest_payable or 0) + (state.payroll_payable or 0) + (state.lease_liab_current or 0) + (state.other_cl or 0)
+        _ncl = (state.long_term_debt or 0) + (state.dtl or 0) + (state.employee_benefits or 0) + (state.lease_liab_noncurrent or 0) + (state.other_ncl or 0)
         _eq = (state.share_capital or 0) + (state.apic or 0) + (state.retained_earnings or 0) - abs(state.treasury_stock or 0) + (state.aoci or 0) + (state.nci or 0)
         _assets = _ca + _nca
         _le = _cl + _ncl + _eq

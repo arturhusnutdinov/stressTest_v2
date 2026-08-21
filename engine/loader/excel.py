@@ -336,6 +336,96 @@ class ExcelLoader(BaseLoader):
 
         self._write_history(year_data, statement, result)
 
+    # Aliases: short history names → canonical forecast names (saver convention)
+    _BS_ALIASES: Dict[str, str] = {
+        "other_ca":          "other_current_assets",
+        "other_ca_tax":      "other_current_assets",      # merge into other_current_assets
+        "other_cl":          "other_current_liabilities",
+        "other_nca":         "other_non_current_assets",
+        "other_ncl":         "other_non_current_liabilities",
+        "investments_lt":    "investments_and_long_term_receivables",
+        "payroll_payable":   "payroll_and_benefits_payable",
+    }
+
+    def _normalize_bs_metrics(self, metrics: Dict[str, float]) -> Dict[str, float]:
+        """Normalize BS metric names to canonical (forecast) convention.
+
+        Also handles sign normalization:
+        - taxes_payable < 0 → tax receivable → move to other_current_assets
+        - All liabilities stored as positive magnitudes
+        """
+        normalized: Dict[str, float] = {}
+        for metric, value in metrics.items():
+            canonical = self._BS_ALIASES.get(metric, metric)
+            if canonical in normalized:
+                normalized[canonical] += value  # merge (e.g. other_ca + other_ca_tax)
+            else:
+                normalized[canonical] = value
+
+        # Sign fix: taxes_payable < 0 = tax receivable → move to asset
+        tp = normalized.get("taxes_payable", 0)
+        if tp < 0:
+            # Negative taxes_payable = prepaid tax / VAT receivable → asset
+            normalized["other_current_assets"] = normalized.get("other_current_assets", 0) + abs(tp)
+            normalized["taxes_payable"] = 0
+
+        # All BS liabilities should be positive magnitudes
+        for liability_metric in ("employee_benefits", "lease_liab_current",
+                                 "lease_liab_noncurrent", "accrued_liabilities"):
+            if liability_metric in normalized and normalized[liability_metric] < 0:
+                normalized[liability_metric] = abs(normalized[liability_metric])
+
+        return normalized
+
+    def _compute_bs_totals(self, metrics: Dict[str, float]) -> Dict[str, float]:
+        """Compute BS subtotals if not already present."""
+        m = dict(metrics)  # copy
+
+        if "total_current_assets" not in m or m.get("total_current_assets", 0) == 0:
+            m["total_current_assets"] = (
+                (m.get("cash", 0) or 0) + (m.get("restricted_cash", 0) or 0) +
+                (m.get("accounts_receivable", 0) or 0) + (m.get("inventory", 0) or 0) +
+                (m.get("other_current_assets", 0) or 0)
+            )
+
+        if "total_non_current_assets" not in m or m.get("total_non_current_assets", 0) == 0:
+            m["total_non_current_assets"] = (
+                (m.get("ppe_net", 0) or 0) +
+                (m.get("investments_and_long_term_receivables", 0) or 0) +
+                (m.get("investments_in_associates", 0) or 0) +
+                (m.get("goodwill", 0) or 0) + (m.get("intangibles", 0) or 0) +
+                (m.get("dta", 0) or 0) + (m.get("rou_asset", 0) or 0) +
+                (m.get("other_non_current_assets", 0) or 0)
+            )
+
+        if "total_current_liabilities" not in m or m.get("total_current_liabilities", 0) == 0:
+            m["total_current_liabilities"] = (
+                (m.get("short_term_debt", 0) or 0) +
+                (m.get("accounts_payable", 0) or 0) +
+                (m.get("taxes_payable", 0) or 0) +
+                (m.get("interest_payable", 0) or 0) +
+                (m.get("payroll_and_benefits_payable", 0) or 0) +
+                (m.get("lease_liab_current", 0) or 0) +
+                (m.get("other_current_liabilities", 0) or 0)
+            )
+
+        if "total_non_current_liabilities" not in m or m.get("total_non_current_liabilities", 0) == 0:
+            m["total_non_current_liabilities"] = (
+                (m.get("long_term_debt", 0) or 0) +
+                (m.get("dtl", 0) or 0) +
+                (m.get("employee_benefits", 0) or 0) +
+                (m.get("lease_liab_noncurrent", 0) or 0) +
+                (m.get("other_non_current_liabilities", 0) or 0)
+            )
+
+        if "total_liabilities" not in m or m.get("total_liabilities", 0) == 0:
+            ta = m.get("total_assets", 0) or 0
+            te = m.get("total_equity", 0) or 0
+            if ta and te:
+                m["total_liabilities"] = ta - te
+
+        return m
+
     def _write_history(
         self,
         year_data: Dict[int, Dict[str, float]],
@@ -348,6 +438,12 @@ class ExcelLoader(BaseLoader):
         for year, metrics in sorted(year_data.items()):
             if not metrics:
                 continue
+
+            # BS: normalize names, fix signs, compute totals
+            if statement.upper() == "BS":
+                metrics = self._normalize_bs_metrics(metrics)
+                metrics = self._compute_bs_totals(metrics)
+
             try:
                 n = self._repo.upsert_history(
                     self.company_id, statement, year, metrics,
