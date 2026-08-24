@@ -480,6 +480,11 @@ class LeaseBlock:
             interest_comp  = ll_op_open * config.leases.default_discount_rate
             principal_op   = ll_op_open * lp.op_decay_rate
             rou_op_amort   = principal_op  # must equal principal for BS identity
+            # Cap: dep cannot exceed available RoU asset; principal cannot exceed liab
+            rou_op_amort   = min(rou_op_amort, rou_op_open + lp.op_new_leases)
+            principal_op   = min(principal_op, ll_op_open + lp.op_new_leases)
+            # Keep dep = principal for BS identity (take the smaller)
+            rou_op_amort = principal_op = min(rou_op_amort, principal_op)
             rou_op_close   = max(0.0, rou_op_open - rou_op_amort + lp.op_new_leases)
             ll_op_close    = max(0.0, ll_op_open - principal_op + lp.op_new_leases)
             ll_op_curr_next = min(ll_op_close, principal_op)

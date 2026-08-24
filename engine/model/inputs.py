@@ -291,6 +291,7 @@ class YearState:
     cfo_impairment_addback: float = 0.0     # CFO display: +impairment (non-cash addback)
     cfo_associates_reversal: float = 0.0    # CFO display: -equity income reversal (non-cash)
     cfo_fx_noncash: float = 0.0             # CFO display: FX non-cash (forecast≈0)
+    cfo_non_wc_bs_adj: float = 0.0         # CFO: Δemployee_benefits + Δother_ncl (non-cash provisions)
     cfo_total: float = 0.0
 
     # CF — CFI
@@ -299,6 +300,7 @@ class YearState:
     cfi_acquisitions: float = 0.0
     cfi_associates_disposal: float = 0.0   # CFI: proceeds from associate stake sale
     cfi_other: float = 0.0
+    cfi_non_wc_bs_adj: float = 0.0         # CFI: −Δother_nca − Δrestricted_cash (investing)
     cfi_total: float = 0.0
 
     # CF — CFF
@@ -345,6 +347,22 @@ class YearState:
         """
         expected = self.cf_cash_opening + self.cf_net_change
         return expected, self.cf_cash_ending, abs(expected - self.cf_cash_ending)
+
+    def full_validation(self, prev: "YearState", tol: float = 1000.0) -> Dict[str, float]:
+        """
+        Full 3-statement model validation.
+        Returns dict of check_name → diff (all should be < tol).
+        """
+        checks = {}
+        # 1. BS Identity: TA = TL + TE
+        checks["bs_identity"] = abs(self.total_assets - self.total_liab_equity)
+        # 2. CF Bridge: cash_open + CFO + CFI + CFF = cash_close
+        checks["cf_bridge"] = abs(
+            self.cf_cash_opening + self.cf_net_change - self.cf_cash_ending
+        )
+        # 3. Cash consistency: CF cash_ending = BS cash
+        checks["cash_bs_cf"] = abs((self.cash or 0) - (self.cf_cash_ending or 0))
+        return checks
 
 
 # ─── historic state ───────────────────────────────────────────────────────────

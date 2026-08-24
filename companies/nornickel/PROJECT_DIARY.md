@@ -1,7 +1,7 @@
 # ГМК Норильский Никель — Дневник построения модели
 
 **Начало:** 2026-05-18
-**Статус:** Этап 0 — Инициализация
+**Статус:** Этап 1 — Сбор данных ✅ (Excel заполнен 2011-2025 из Databook)
 
 ---
 
@@ -16,18 +16,7 @@
 - **Отрасль:** metals / mining (никель, палладий, медь, платина)
 - **Валюта отчётности:** USD
 - **Стандарт:** IFRS
-- **Тикер:** MOEX: GMKN, LSE: MNOD (ADR)
-
-### Ожидаемая структура
-```
-companies/nornickel/
-├── configs/project.yaml
-├── configs/stress_scenarios.yaml
-├── configs/forecast/macro_ecm.yaml
-├── data/excel/
-├── notebooks/
-└── outputs/
-```
+- **Тикер:** MOEX: GMKN
 
 ### Результат
 - ✅ `init_company.py` отработал: 13 директорий, 5 YAML конфигов, 10 notebooks, Excel шаблон, README.md
@@ -37,72 +26,85 @@ companies/nornickel/
 - ✅ 10 Jupyter notebooks скопированы с company_id=nornickel
 
 ### Решения
-- ✅ **Источник данных:** ручной ввод в Excel (без парсера)
-- ✅ **Горизонт истории:** с 2011 года (15 лет: 2011-2025)
-- ✅ **Макро-факторы:** определить ПОСЛЕ анализа структуры выручки (→ Этап 2)
-
-### Открытые вопросы (требуют решения)
-- [ ] Сегменты выручки: Nickel, Palladium, Copper, Platinum + Other? → после анализа отчётности
-- [ ] Макро-факторы: LME Ni, LME Pd, LME Cu, LME Pt, USD/RUB + что ещё? → после анализа сегментов
-- [ ] Debt: есть ли детальный Note аналог для debt instruments?
-- [ ] COGS: component-based (как Rusal) или standard PPI?
-- [ ] Дивидендная политика: НорНикель исторически платит высокие дивиденды (50-100% FCF)
-
----
+- ✅ **Источник данных:** Databook Норникеля (2009-2025 IFRS) + XBRL (2023, 2025)
+- ✅ **Горизонт истории:** 2011-2025 (15 лет)
+- ✅ **Макро-факторы:** LME Ni, Pd, Cu, Pt, Brent, USD/RUB, CPI, PPI → после анализа выручки
 
 ---
 
 ## Этап 1: Сбор и ввод данных
 
 **Дата:** 2026-05-18
-**Статус:** В ожидании — ручной ввод пользователем
+**Статус:** ✅ Завершён — Excel заполнен из Databook + XBRL
 
-### План
-- ✅ XBRL парсинг: 2 файла (2023, 2025) → 162 серии, 5 лет данных (2021-2025)
-- ✅ Excel v2 с корками и schedule sheets: `nornickel_unified.xlsx` (14 листов, 500/1545 ячеек = 32%)
-- ✅ IS: 22 метрики (revenue, cogs_metal/other, gross_profit, g&a, ebit, finance, ebt, tax, ni)
-- ✅ BS: 42 метрики (full IFRS structure с NN-specific: social liabilities, provisions)
-- ✅ CF: 38 метрик (indirect method, full WC breakdown, investing, financing)
-- ✅ XBRL данные синим шрифтом, 2011-2020 пустые для ручного ввода
-- Пользователь заполняет 2011-2020 из МСФО отчётности (10 лет)
+### Источники данных
+1. **Databook_12m_25_Final.xlsx** (скачан с nornickel.ru/investors) — основной источник
+   - 17 листов: IS, BS, CF, Costs, CAPEX, Debt, Production, Ore, Recovery Rates, Reserves
+   - Период: 2009-2025 (полугодовые + годовые)
+   - Валюта: USD млн (IFRS)
+   
+2. **XBRL iXBRL** (2023 + 2025 отчёты) — 162 серии, 5 лет (2021-2025)
 
-### Что есть из XBRL, что нет
-**Есть (автозаполнено):**
-- IS/BS/CF face statements: 2021-2025 (из двух iXBRL файлов)
-- Equity Schedule (SOCIE): 2021-2025 по компонентам (SC, SP, RE, AOCI, NCI)
-- Tax DTA/DTL: 2023-2025
-- Lease liabilities: 2021-2025 (current + noncurrent)
-- Provisions: 2023-2025 (current + noncurrent)
-- Dividends paid по компонентам: 2021-2025
+3. **Годовой отчёт 2024** (182 стр.) — выверка, MD&A, сегменты, риски
 
-**Нет в iXBRL (нужен ручной ввод из Notes):**
-- PPE components (Note): gross/accum_dep по категориям — нужен ввод
-- Debt instruments (Note): отдельные инструменты с rates/maturity — нужен ввод
-- Intangibles breakdown (Note) — нужен ввод
-- Segments revenue (Ni/Pd/Cu/Pt) — нужен ввод из Annual Report
-- Данные: IS / BS / CF за 2011-2025 (15 лет)
-- По образцу `companies/rusal/data/rusal_complete_v4.xlsx` (21 лист)
-- Минимум: листы `history_is`, `history_bs`, `history_cf`
-- Желательно: `debt_instruments`, `ppe_components`, `segments`, `operational_drivers`
+4. **Factsheet 2024** (21 стр.) — операционные показатели, производство
 
-### Порядок действий после заполнения Excel
-1. Загрузка через `01_Data_Loading.ipynb` → data_mart_v2.db
-2. Анализ структуры выручки (сегменты, commodity drivers)
-3. Определение макро-факторов на основе сегментов
-4. Настройка project.yaml
+5. **Операционные результаты 2025** (PDF, 3 стр.) — production 2025 + guidance 2026
 
-### Долг: определить макро-факторы после анализа выручки
-Логика: сначала понимаем из чего состоит выручка (Ni/Pd/Cu/Pt/Other), потом определяем какие LME цены нужны как макро-факторы. Это влияет на:
-- revenue.macro_factors в project.yaml
-- cogs.components (если component-based)
-- stress_scenarios.yaml (какие шоки применять)
+### Что заполнено в `nornickel_unified.xlsx`
+
+| Лист | Строк | Источник | Период | Статус |
+|------|-------|----------|--------|--------|
+| `history_is` | 22 метрики | Databook IS + EBITDA Calc | 2011-2025 | ✅ |
+| `history_bs` | 44 метрики | Databook BALANCE | 2011-2025 | ✅ |
+| `history_cf` | 40 метрик | Databook CF | 2011-2025 | ✅ |
+| `segments` | 16 (5 металлов × 3 метрики) | Databook IS + Production | 2011-2025 | ✅ |
+| `macro_factors` | 10 факторов | Calculated realised prices | 2011-2025 | 🟡 цены реализации |
+| `operational_drivers` | 8 драйверов | Databook Production + Ore | 2011-2025 | ✅ |
+| `cost_breakdown` | 12 статей | Databook COST BREAKDOWN | 2011-2025 | ✅ новый лист |
+| `capex_breakdown` | 5 статей | Databook CAPEX + CF | 2011-2025 | ✅ новый лист |
+| `production_data` | 4 металла | Databook PRODUCTION + PDF 2025 | 2011-2025 | ✅ новый лист |
+
+### Валидация (2024 данные vs Годовой отчёт)
+- ✅ Revenue: 12,535 (100%)
+- ✅ Metal sales: 11,848 (100%)
+- ✅ EBITDA: считается из OpProfit + D&A + Impairment
+- ✅ Net Income: 1,815 (100%)
+- ✅ Total Assets: 23,170 (100%)
+- ✅ ST Debt: 2,834 / LT Debt: 7,112 (100%)
+- ✅ Total Equity: 8,097 (100%)
+- ✅ CFO: 4,433 / CAPEX: -2,386 / CFF: -2,042 (100%)
+- ⚠️ COGS: -6,221 vs AR -6,232 (Δ 11M, классиф. разница)
+
+### Загруженные файлы
+```
+data/
+├── excel/nornickel_unified.xlsx          ← заполнен (17 листов)
+├── statements/
+│   ├── Databook_12m_25_Final.xlsx        ← основной источник
+│   ├── nn_ifrs_*.pdf (2014-2025)         ← 9 PDF отчётов
+│   └── EngUSD/xbrl_extracted/             ← iXBRL (2023, 2025)
+├── annual_reports/
+│   ├── 2024_annual_report_*.pdf          ← 182 стр.
+│   └── Nornickel-Factsheet-2024.pdf      ← 21 стр.
+├── operational/
+│   └── nornickel_production_results_2025_rus_full.pdf
+└── analytics/                             ← создана, файлы требуют анкету
+```
+
+### Открытые вопросы → Этап 2
+- [ ] Сегменты выручки: Ni/Pd/Cu/Pt/Other — данные есть, нужно проанализировать доли
+- [ ] Макро-факторы: LME Ni, Pd, Cu, Pt + USD/RUB + Brent — загрузить историю цен
+- [ ] COGS: component-based (энергия, материалы, труд) или PPI-indexed?
+- [ ] Debt instruments: детальный список из Annual Report (10 выпусков)
+- [ ] Дивидендная политика: за 2024 не платили, за 2025 — решение 27.06.2025
 
 ---
 
 ## Методология (по нашему workflow)
 
 1. ✅ **Init** — `init_company.py` → структура + шаблоны (2026-05-18)
-2. 🔄 **Data Collection** — ручной ввод IS/BS/CF 2011-2025 в Excel (ожидание)
+2. ✅ **Data Collection** — Databook + XBRL → Excel 2011-2025 (2026-05-18)
 3. ⬜ **Data Loading** — `01_Data_Loading.ipynb` → data_mart_v2.db
 4. ⬜ **Revenue Analysis** — анализ сегментов → определение макро-факторов
 5. ⬜ **Macro Data** — загрузка LME Ni/Pd/Cu/Pt + USD/RUB + прочие факторы

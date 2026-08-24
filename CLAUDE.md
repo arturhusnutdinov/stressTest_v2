@@ -24,7 +24,7 @@ build_model('rusal', run_preprocessor=False, run_model=True,
 Показывать: BS diff, stress (все сценарии), rating по годам, covenant breaches,
 forecast таблица (Rev/EBITDA/Margin/NI/ND-EBITDA/ICR/Rating), debt schedule.
 
-## Архитектура (v2.3)
+## Архитектура (v2.4)
 
 ### Pipeline
 ```
@@ -77,13 +77,35 @@ engine/
 Excel → DB:
   tools/load_unified_excel.py    # Единый загрузчик: все 31 лист → DB
   tools/load_schedule_sheets.py  # Schedule-листы (18 handlers)
-  engine/loader/excel.py         # ExcelLoader (IS/BS/CF + canonical)
+  engine/loader/excel.py         # ExcelLoader (IS/BS/CF + canonical + BS validation)
+    ├── _validate_bs_balance()   # CA/NCA/CL/NCL component sums vs totals
+    └── _KNOWN_BS_METRICS        # 60+ canonical + alias names
 
 DB → Excel:
   tools/export_to_excel.py       # Полный экспорт DB → 31-sheet Excel
 
 Инициализация:
   tools/init_company.py          # Scaffold: 31-sheet Excel + configs + notebooks
+```
+
+### BS Data Pipeline (v2.2.0, no plugs)
+```
+ExcelLoader._validate_bs_balance()
+  → warns if components ≠ reported totals (specific mUSD diff)
+  → warns if TA ≠ TL + TE
+
+ModelInputLoader._build_base_year()
+  → ppe_gross reconciled: if gross - accum_dep ≠ ppe_net, adjust gross
+  → BS totals = bottom-up from components (no other_nca/other_ncl plug)
+  → warns on BS imbalance with diagnostic breakdown
+
+ThreeStatementModel._solve_bs_totals()
+  → forecast BS = sum of components (same formula as loader)
+
+YearState.full_validation()
+  → bs_identity: TA = TL + TE
+  → cf_bridge: cash_open + CF_net = cash_close
+  → cash_bs_cf: BS cash = CF cash_ending
 ```
 
 ### Schedule corkscrews
@@ -107,8 +129,9 @@ Provisions:   open + charge - utilization + accretion = close (3 categories)
 - TaxBlock: NOL $1B + accel_dep — проверять BS после изменений
 
 ### Rusal
-- IFRS, 2011-2025 → 2026-2030
+- IFRS, 2011-2025 → 2026-2030, **Excel v5** (2025 FS data, BS validated diff=0)
 - 31 debt instruments (9 CBR floaters, 1 EUR Euribor), base_rate_factor populated
+- **BS conventions**: ppe_net excl RoU, intangibles excl goodwill, interest_payable separate from STD
 - Revenue: segment_modeling (primary_al capacity=4100kt + alumina + other)
   - Volume: production_kt based, capacity cap, demand linkage GDP×0.8
   - Price: OLS chain-link from realized $2,652/t (VECM growth rate)
@@ -234,7 +257,7 @@ modelMacro (8 CSV + scenarios + sector)
 debt service capacity, stress cash gap, capacity utilization, factor analysis,
 dynamic verdict, 9 stress scenarios with ratings
 
-## Статус доработок (3 фазы завершены)
+## Статус доработок (4 фазы завершены)
 
 | # | Доработка | Статус |
 |---|-----------|--------|
@@ -248,6 +271,11 @@ dynamic verdict, 9 stress scenarios with ratings
 | 8 | Demand shock scenario (9th) | ✅ Phase 3 |
 | 9 | ForecastDispatcher beta from preprocessor | ✅ Phase 3 |
 | 10 | Capacity utilization in report | ✅ Phase 3 |
+| 11 | BS validation pipeline (no plugs) | ✅ Phase 4 |
+| 12 | PPE gross/RoU reconciliation | ✅ Phase 4 |
+| 13 | Rusal Excel v5 (2025 FS, intangibles fix) | ✅ Phase 4 |
+| 14 | Non-WC BS adjustments in CF | ✅ Phase 4 |
+| 15 | full_validation() on YearState | ✅ Phase 4 |
 
 ## Будущие доработки
 

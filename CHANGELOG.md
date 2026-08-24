@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.2.0] — 2026-08-24
+
+### Added
+- **BS validation in ExcelLoader**: `_validate_bs_balance()` checks CA/NCA/CL/NCL component sums vs reported totals; reports specific gaps in mUSD instead of silently plugging
+- **`_KNOWN_BS_METRICS` set**: 60+ canonical + alias names for unknown-metric detection during Excel loading
+- **PPE gross/accum_dep reconciliation**: auto-adjusts `ppe_gross` when IFRS includes RoU in gross/accum_dep but `ppe_net` excludes it (prevents PPE corkscrew double-counting RoU asset)
+- **Non-WC BS adjustment fields**: `cfo_non_wc_bs_adj` (Δemployee_benefits + Δother_ncl) and `cfi_non_wc_bs_adj` (−Δother_nca − Δrestricted_cash) ensure CF completeness
+- **`full_validation()` on YearState**: BS identity, CF bridge, cash BS↔CF consistency checks
+- **Lease safety caps**: `rou_op_amort` and `principal_op` capped to prevent negative RoU/liability
+- **Rusal Excel v5**: 2025 FS data, intangibles convention fix, interest_payable/restricted_cash added, 2024 other_cl fixed (804→788M)
+
+### Fixed
+- **Eliminated plug approach**: model loader no longer computes `other_nca_plug` or `other_ncl_plug` — uses explicit DB values and warns on imbalance
+- **PPE corkscrew 49M drift**: `ppe_gross(19,620) − ppe_accum_dep(12,589) = 7,031M` included RoU(49M) but `ppe_net = 6,982M` excluded it; reconciliation ensures consistency
+- **BS sign conventions**: all liability BS items use `abs()` in model loader for consistent sign convention
+- **`taxes_payable` sign**: preserved as-is from DB (can be negative = tax receivable); CF delta handles sign transition correctly
+- **`other_ca` merge**: `other_ca + other_ca_tax` merged in model loader (was: only first value)
+
+### Changed
+- **Model loader BS logic**: bottom-up component sums for all subtotals (CA/NCA/CL/NCL/TE), no anchor-based residuals
+- **CF WC deltas**: removed `abs()` wrappers — all BS items now stored as positive magnitudes by convention
+- **excel_loader.yaml**: updated to v5 source, added IFRS convention comments (intangibles excl. goodwill, ppe_net excl. RoU, interest_payable from Note 19, lease_liab from notes)
+- **CF totals**: `cfo_total` and `cfi_total` now include non-WC BS adjustments for complete BS↔CF linkage
+
+### Model Output (Rusal, verified)
+- Base year 2025: BS diff = 0.000000
+- Forecast 2026-2030: BS diff = 0.000000, CF diff = 0.000000
+- Revenue: 13,378M (2026) → 14,651M (2030)
+- Net Income: 832M (2026) → 318M (2030)
+
 ## [2.1.1] — 2026-05-18
 
 ### Added

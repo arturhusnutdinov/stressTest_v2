@@ -140,6 +140,8 @@ CF_METRICS = {
     "cfo_lease_payments_operating": "lease_payments_cfo",
     "cfo_stock_comp":             "cfo_stock_compensation",
     "cff_finance_lease_principal": "fin_lease_principal_cff",
+    "cfo_non_wc_bs_adj":          "cfo_non_wc_bs_adj",
+    "cfi_non_wc_bs_adj":          "cfi_non_wc_bs_adj",
 }
 
 

@@ -73,6 +73,28 @@ Internal metric names follow snake_case IS/BS/CF structure:
 
 Controls sign conventions per metric. Metrics marked as `positive_in_flow: true` are stored as positive in the CF statement (e.g., `cfi_capex` stored as negative, disposals as positive).
 
+### BS Validation (v2.2.0)
+
+ExcelLoader now validates BS balance after loading each year:
+
+1. **Component sums**: CA, NCA, CL, NCL components are summed and compared to reported subtotals
+2. **BS identity**: TA = TL + TE (threshold: 1M USD)
+3. **Warnings**: specific gaps reported in mUSD (e.g., "NCA components ≠ total_non_current_assets, diff=+184M")
+4. **No plugs**: model loader uses explicit DB values — does NOT silently plug gaps into `other_nca`/`other_ncl`
+
+### IFRS BS Conventions
+
+Key conventions for IFRS companies (enforced by ExcelLoader + ModelInputLoader):
+
+| Field | Convention | Reason |
+|-------|-----------|--------|
+| `ppe_net` | Excludes RoU asset | `bs_totals.py` sums `ppe_net + rou_asset` |
+| `ppe_gross`/`ppe_accum_dep` | Auto-reconciled to match `ppe_net` | IFRS Note 13 includes RoU in PPE gross |
+| `intangibles` | Excludes goodwill | `bs_totals.py` sums `intangibles + goodwill` |
+| `short_term_debt` | Excludes interest_payable | Stored separately: `interest_payable` |
+| `accounts_payable` | Excludes lease_liab_current | Stored separately: `lease_liab_current` |
+| All liabilities | Stored as positive (abs) | Model assumes positive magnitudes |
+
 ---
 
 ## Stage 2: Preprocessor

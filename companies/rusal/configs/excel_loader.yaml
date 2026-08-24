@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════
 # UC RUSAL — Excel Loader Configuration
 # ═══════════════════════════════════════════════════════════════
-# Source: companies/rusal/data/rusal_complete_v4.xlsx (parser-enriched)
+# Source: companies/rusal/data/rusal_complete_v5.xlsx (v5: 2025 FS data, intangibles fix, BS validation)
 # Format: Legacy wide (metric × years), unit = mUSD
 #
 # Usage:
@@ -75,24 +75,24 @@ history:
       - ppe_accum_dep
       - investments_lt              # → alias: investments_and_long_term_receivables
       - investments_in_associates
-      - intangibles
-      - goodwill
-      - rou_asset
+      - intangibles                 # CONVENTION: other intangibles only (excl. goodwill)
+      - goodwill                    # separate from intangibles — bs_totals sums both
+      - rou_asset                   # CONVENTION: ppe_net must EXCLUDE rou_asset (bs_totals sums both)
       - dta
       - other_nca                   # → alias: other_non_current_assets
       - total_non_current_assets    # subtotal (computed if missing)
       # Current Liabilities
       - taxes_payable               # sign: if negative → tax receivable → move to other_current_assets
-      - interest_payable
+      - interest_payable            # from Note 19 (within loans line), NOT within trade payables
       - payroll_payable             # → alias: payroll_and_benefits_payable
-      - lease_liab_current
+      - lease_liab_current          # from notes; accounts_payable must EXCLUDE this
       - dividends_payable
       - other_cl                    # → alias: other_current_liabilities
       - total_current_liabilities   # subtotal (computed if missing)
       # Non-Current Liabilities
       - dtl
-      - employee_benefits           # sign: always positive (abs)
-      - lease_liab_noncurrent
+      - employee_benefits           # sign: always positive (abs); from Note 20 provisions
+      - lease_liab_noncurrent       # from notes; other_ncl must EXCLUDE this
       - other_ncl                   # → alias: other_non_current_liabilities
       - total_non_current_liabilities  # subtotal (computed if missing)
       - total_liabilities           # subtotal (computed if missing)

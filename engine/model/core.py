@@ -212,6 +212,11 @@ class ThreeStatementModel:
                     result.warnings.append(f"{year}: BS diff={bs_diff:.0f}")
                 if cf_diff > CF_TOL:
                     result.warnings.append(f"{year}: CF diff={cf_diff:.0f}")
+                # Full 3-statement validation
+                checks = state.full_validation(prev, BS_TOL)
+                for check_name, diff_val in checks.items():
+                    if diff_val > BS_TOL:
+                        result.warnings.append(f"{year}: {check_name}={diff_val:.0f}")
                 result.years[year] = state
                 result.debt_lines[year] = list(self._last_debt_lines)
                 prev = state
@@ -1696,17 +1701,16 @@ class ThreeStatementModel:
             state.cfo_deferred_tax = -delta_dta + delta_dtl
 
         # 4. Δ Working Capital — cfo_change_ar/inv/ap уже заполнены в _solve_wc
-        # Use abs() for liability items: DB stores historical liabilities as negative,
-        # while corkscrews output positive values. abs() normalises the sign convention
-        # so that delta = actual BS change regardless of which year is base vs forecast.
+        # All BS items are stored as positive magnitudes (convention enforced by loader & corkscrews).
+        # Liabilities: ↑ = cash inflow (+). Assets: ↑ = cash outflow (−).
         state.cfo_change_taxes_payable = (
-            abs(state.taxes_payable or 0) - abs(prev.taxes_payable or 0)
+            (state.taxes_payable or 0) - (prev.taxes_payable or 0)
         )
         state.cfo_change_interest_payable = (
-            abs(state.interest_payable or 0) - abs(prev.interest_payable or 0)
+            (state.interest_payable or 0) - (prev.interest_payable or 0)
         )
-        delta_payroll      = abs(state.payroll_payable or 0) - abs(prev.payroll_payable or 0)
-        delta_other_cl     = abs(state.other_cl or 0) - abs(prev.other_cl or 0)
+        delta_payroll      = (state.payroll_payable or 0) - (prev.payroll_payable or 0)
+        delta_other_cl     = (state.other_cl or 0) - (prev.other_cl or 0)
         delta_other_ca     = (state.other_ca or 0) - (prev.other_ca or 0)
         # Lease liability changes (principal repayments) must be in CF to keep BS balanced.
         # dep_rou is in total_da (non-cash add-back); op_lease_pmt captures total cash out;
@@ -1714,8 +1718,8 @@ class ThreeStatementModel:
         # Operating lease cash flows are already embedded in NI via SGA (no separate CFO line);
         # adding ΔOp_LL here would double-count the cash impact.
         delta_lease_lia    = (
-            abs(state.lease_liab_cur_finance or 0) - abs(prev.lease_liab_cur_finance or 0) +
-            abs(state.lease_liab_ncur_finance or 0) - abs(prev.lease_liab_ncur_finance or 0)
+            (state.lease_liab_cur_finance or 0) - (prev.lease_liab_cur_finance or 0) +
+            (state.lease_liab_ncur_finance or 0) - (prev.lease_liab_ncur_finance or 0)
         )
         state.cfo_change_other_wc = -delta_other_ca + delta_other_cl + delta_payroll + delta_lease_lia
 
@@ -1727,6 +1731,21 @@ class ThreeStatementModel:
             state.cfo_change_interest_payable +
             state.cfo_change_other_wc
         )
+
+        # 4b. Non-WC BS items: changes must flow through CF to maintain BS identity.
+        # With method=last these deltas are 0 in forecast, but on history→forecast
+        # transition or if method changes, the linkage ensures TA = TL + TE.
+        # NCL liabilities (employee_benefits, other_ncl): ↑liability = ↑cash (CFO addback)
+        delta_employee_benefits = (state.employee_benefits or 0) - (prev.employee_benefits or 0)
+        # Exclude finance lease NCL adjustment — already in CFF (cff_finance_lease_principal)
+        _fl_adj = getattr(state, '_fl_ncl_adj', 0) or 0
+        delta_other_ncl = (state.other_ncl or 0) - (prev.other_ncl or 0) - _fl_adj
+        # NCA assets (other_nca, restricted_cash): ↑asset = ↓cash (CFI outflow)
+        delta_other_nca = (state.other_nca or 0) - (prev.other_nca or 0)
+        delta_restricted_cash = (state.restricted_cash or 0) - (prev.restricted_cash or 0)
+        # Aggregate non-WC CF adjustment
+        state.cfo_non_wc_bs_adj = delta_employee_benefits + delta_other_ncl
+        state.cfi_non_wc_bs_adj = -(delta_other_nca + delta_restricted_cash)
 
         # 5. Operating Lease Payments: NOT added to cfo_total — full payment already in NI via SGA.
         # rou_amort_operating is NOT in total_da to avoid IS double-count; delta_lease_lia in other_wc
@@ -1764,7 +1783,8 @@ class ThreeStatementModel:
             disposal_gain_adj +
             assoc_gain_adj +
             op_lease_pmt +
-            state.cfo_other
+            state.cfo_other +
+            state.cfo_non_wc_bs_adj  # Δemployee_benefits + Δother_ncl (non-cash)
         )
 
         # Supplemental disclosures (не входят в cfo_total по indirect method)
@@ -1782,7 +1802,8 @@ class ThreeStatementModel:
             (state.cfi_disposal_proceeds or 0.0) +
             state.cfi_acquisitions +
             (state.cfi_associates_disposal or 0.0) +
-            (state.cfi_other or 0.0)
+            (state.cfi_other or 0.0) +
+            state.cfi_non_wc_bs_adj  # Δother_nca + Δrestricted_cash (investing)
         )
 
         # ── CFF ──────────────────────────────────────────────────────

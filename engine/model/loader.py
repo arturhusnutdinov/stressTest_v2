@@ -791,28 +791,46 @@ class ModelInputLoader:
         state.restricted_cash      = _g(bs_y, "restricted_cash")
         state.accounts_receivable  = _g(bs_y, "accounts_receivable")
         state.inventory            = _g(bs_y, "inventory")
-        state.other_ca             = _g(bs_y, "other_ca") or _g(bs_y, "other_current_assets")
-        state.accounts_payable     = _g(bs_y, "accounts_payable")
+        state.other_ca             = (_g(bs_y, "other_ca") or _g(bs_y, "other_current_assets") or 0) + \
+                                     (_g(bs_y, "other_ca_tax") or 0)  # merge tax-related CA
+        state.accounts_payable     = abs(_g(bs_y, "accounts_payable") or 0)
         state.ppe_gross            = _g(bs_y, "ppe_gross")
         state.ppe_accum_dep        = _g(bs_y, "ppe_accum_dep")
         state.ppe_net              = _g(bs_y, "ppe_net")
         state.rou_asset            = _g(bs_y, "rou_asset")
+        # Reconcile: IFRS reports PPE gross/accum_dep including RoU, but ppe_net
+        # excludes RoU (separate field). The PPE corkscrew uses gross-accum_dep to
+        # compute net_close, so they must be consistent with ppe_net.
+        if state.ppe_gross and state.ppe_accum_dep and state.ppe_net:
+            _gross_minus_dep = state.ppe_gross - state.ppe_accum_dep
+            if abs(_gross_minus_dep - state.ppe_net) > 1e3:
+                logger.debug(
+                    f"  {year}: PPE gross-dep={_gross_minus_dep/1e6:.0f}M ≠ "
+                    f"ppe_net={state.ppe_net/1e6:.0f}M (RoU={state.rou_asset/1e6:.0f}M). "
+                    f"Adjusting ppe_gross for corkscrew consistency."
+                )
+                state.ppe_gross = state.ppe_net + state.ppe_accum_dep
         state.intangibles          = _g(bs_y, "intangibles")
         state.goodwill             = _g(bs_y, "goodwill")
         state.investments_lt       = _g(bs_y, "investments_and_long_term_receivables") or _g(bs_y, "investments_lt")
         state.dta                  = _g(bs_y, "dta")
         state.dtl                  = _g(bs_y, "dtl")
         state.other_nca            = _g(bs_y, "other_nca") or _g(bs_y, "other_non_current_assets")
-        state.short_term_debt      = _g(bs_y, "short_term_debt")
-        state.long_term_debt       = _g(bs_y, "long_term_debt")
-        state.lease_liab_current   = _g(bs_y, "lease_liab_current")
-        state.lease_liab_noncurrent = _g(bs_y, "lease_liab_noncurrent")
-        state.employee_benefits    = _g(bs_y, "employee_benefits")
-        state.other_ncl            = _g(bs_y, "other_non_current_liabilities") or _g(bs_y, "other_ncl")
-        state.other_cl             = _g(bs_y, "other_cl") or _g(bs_y, "other_current_liabilities")
-        state.taxes_payable        = _g(bs_y, "taxes_payable") or _g(bs_y, "accrued_taxes")
-        state.interest_payable     = _g(bs_y, "interest_payable") or _g(bs_y, "accrued_interest")
-        state.payroll_payable      = _g(bs_y, "payroll_payable") or _g(bs_y, "payroll_and_benefits_payable")
+        state.short_term_debt      = abs(_g(bs_y, "short_term_debt") or 0)
+        state.long_term_debt       = abs(_g(bs_y, "long_term_debt") or 0)
+        state.lease_liab_current   = abs(_g(bs_y, "lease_liab_current") or 0)
+        state.lease_liab_noncurrent = abs(_g(bs_y, "lease_liab_noncurrent") or 0)
+        state.employee_benefits    = abs(_g(bs_y, "employee_benefits") or 0)
+        state.other_ncl            = abs((_g(bs_y, "other_non_current_liabilities") or _g(bs_y, "other_ncl")) or 0)
+        state.other_cl             = abs((_g(bs_y, "other_cl") or _g(bs_y, "other_current_liabilities")) or 0)
+        # taxes_payable: can be negative in history (= tax receivable).
+        # Keep as-is for base year to preserve DB balance identity.
+        # In forecast, TaxBlock always sets taxes_payable >= 0.
+        # CF delta handles the sign transition correctly:
+        # prev(-222) → current(0) = +222 cfo (tax receivable collected = cash in).
+        state.taxes_payable        = _g(bs_y, "taxes_payable") or _g(bs_y, "accrued_taxes") or 0
+        state.interest_payable     = abs((_g(bs_y, "interest_payable") or _g(bs_y, "accrued_interest")) or 0)
+        state.payroll_payable      = abs((_g(bs_y, "payroll_payable") or _g(bs_y, "payroll_and_benefits_payable")) or 0)
         state.share_capital        = _g(bs_y, "share_capital")
         state.apic                 = _g(bs_y, "apic")
         state.treasury_stock       = _g(bs_y, "treasury_stock")
@@ -830,49 +848,65 @@ class ModelInputLoader:
         state.cff_total            = _g(cf_y, "cff_total")
         state.cf_cash_ending       = _g(cf_y, "cash_ending")
 
-        # Force BS balance in base year.
-        # Use total_assets from DB as anchor (most reliable) instead of computing
-        # from components — avoids plug artifacts from missing component metrics.
-        _ta = state.total_assets or 0
-        if _ta > 0:
-            # Compute CA from components
-            _ca = ((state.cash or 0) + (state.restricted_cash or 0) +
-                   (state.accounts_receivable or 0) + (state.inventory or 0) +
-                   (state.other_ca or 0))
-            # NCA = total_assets - CA (anchor-based, avoids missing component issues)
-            _target_nca = _ta - _ca
-            # Known NCA components
-            _known_nca = ((state.ppe_net or 0) + (state.rou_asset or 0) +
-                          (state.intangibles or 0) + (state.goodwill or 0) +
-                          (state.dta or 0) + (state.investments_lt or 0))
-            # other_nca = residual (always >= 0)
-            _other_nca_plug = _target_nca - _known_nca
-            if _other_nca_plug >= 0:
-                state.other_nca = _other_nca_plug
-            else:
-                # Known NCA > target → don't go negative, keep DB value
-                logger.debug(f"  {state.year}: NCA plug negative ({_other_nca_plug/1e6:.0f}M), keeping DB value")
+        # ── BS balance from components (no plugs) ─────────────────────────
+        # All components should be loaded explicitly from the DB.
+        # If sum-of-parts ≠ reported total, warn with specific breakdown
+        # instead of silently plugging into other_nca/other_ncl.
+        _db_ta = state.total_assets or 0
+        _db_tle = state.total_liab_equity or _db_ta
 
-            # Set totals
-            state.total_ca = _ca
-            state.total_nca = _target_nca
+        # Assets: bottom-up from components
+        _ca = ((state.cash or 0) + (state.restricted_cash or 0) +
+               (state.accounts_receivable or 0) + (state.inventory or 0) +
+               (state.other_ca or 0))
+        _nca = ((state.ppe_net or 0) + (state.rou_asset or 0) +
+                (state.finance_lease_asset or 0) +
+                (state.intangibles or 0) + (state.goodwill or 0) +
+                (state.dta or 0) + (state.investments_lt or 0) +
+                (state.other_nca or 0))
+        state.total_ca = _ca
+        state.total_nca = _nca
+        state.total_assets = _ca + _nca
 
-            # CL/NCL from components
-            _cl = ((state.short_term_debt or 0) + (state.accounts_payable or 0) +
-                   (state.taxes_payable or 0) + (state.interest_payable or 0) +
-                   (state.payroll_payable or 0) + (state.lease_liab_current or 0) +
-                   (state.other_cl or 0))
-            _eq = ((state.share_capital or 0) + (state.apic or 0) +
-                   (state.retained_earnings or 0) - abs(state.treasury_stock or 0) +
-                   (state.aoci or 0) + (state.nci or 0))
-            _target_liab = _ta - _eq
-            _ncl = _target_liab - _cl
-            if _ncl >= 0:
-                state.total_cl = _cl
-                state.total_ncl = _ncl
-                state.total_liabilities = _target_liab
-            state.total_equity = _eq
-            state.total_liab_equity = _ta
+        if _db_ta > 0 and abs(state.total_assets - _db_ta) > 1e6:
+            logger.warning(
+                f"  {state.year}: TA from components ({state.total_assets/1e6:.0f}M) ≠ "
+                f"DB total_assets ({_db_ta/1e6:.0f}M), diff={(_db_ta - state.total_assets)/1e6:+.0f}M. "
+                f"Check: other_nca={state.other_nca/1e6 if state.other_nca else 0:.0f}M, "
+                f"investments_lt={state.investments_lt/1e6 if state.investments_lt else 0:.0f}M"
+            )
+
+        # Equity: bottom-up from components
+        _eq = ((state.share_capital or 0) + (state.apic or 0) +
+               (state.retained_earnings or 0) - abs(state.treasury_stock or 0) +
+               (state.aoci or 0) + (state.nci or 0))
+        state.total_equity = _eq
+
+        # Liabilities: CL and NCL from components (no plug)
+        _cl = ((state.short_term_debt or 0) + (state.accounts_payable or 0) +
+               (state.accounts_payable_rp or 0) +
+               (state.taxes_payable or 0) + (state.interest_payable or 0) +
+               (state.payroll_payable or 0) + (state.lease_liab_current or 0) +
+               (state.finance_lease_liab_current or 0) +
+               (state.other_cl or 0))
+        state.total_cl = _cl
+
+        _ncl = ((state.long_term_debt or 0) + (state.dtl or 0) +
+                (state.employee_benefits or 0) + (state.lease_liab_noncurrent or 0) +
+                (state.finance_lease_liab_noncurrent or 0) +
+                (state.other_ncl or 0))
+        state.total_ncl = _ncl
+        state.total_liabilities = _cl + _ncl
+        state.total_liab_equity = state.total_liabilities + _eq
+
+        _bs_diff = state.total_assets - state.total_liab_equity
+        if abs(_bs_diff) > 1e6:
+            logger.warning(
+                f"  {state.year}: BS imbalance={_bs_diff/1e6:.1f}M "
+                f"(TA={state.total_assets/1e6:.0f}M, TL={state.total_liabilities/1e6:.0f}M, "
+                f"TE={state.total_equity/1e6:.0f}M). "
+                f"Fix data in Excel template — do not rely on plugs."
+            )
 
         return state
 

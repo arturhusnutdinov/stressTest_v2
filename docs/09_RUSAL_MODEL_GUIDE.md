@@ -1,6 +1,6 @@
 # Rusal Model Guide
 
-**Updated:** May 2026 | **Version:** 2.1.0 | **Status:** Production ready, BS=0.000004
+**Updated:** August 2026 | **Version:** 2.2.0 | **Status:** Production ready, BS=0.000000
 
 ## Company Profile
 
@@ -108,16 +108,32 @@ features:
 Total: ~2,500 rows → data_mart_v2.db
 ```
 
-## Excel File: rusal_complete_v4.xlsx
+## Excel File: rusal_complete_v5.xlsx
 
-21 sheets, 58 KB. All data from parser (blue font = verified).
+21 sheets. v5 updates: 2025 FS data, intangibles convention (excl. goodwill),
+PPE convention (excl. RoU), interest_payable from Note 19, lease_liab from notes.
 
-## Model Output
+### BS Data Conventions (IFRS)
+- `ppe_net` = owned PPE only (EXCLUDES RoU asset) — `bs_totals.py` sums `ppe_net + rou_asset`
+- `intangibles` = other intangibles only (EXCLUDES goodwill) — `bs_totals.py` sums `intangibles + goodwill`
+- `short_term_debt` = loans CL − interest_payable (stored separately)
+- `accounts_payable` = pure trade payables (EXCLUDES lease_liab_current, stored separately)
+- `ppe_gross`/`ppe_accum_dep` = auto-reconciled in model loader if inconsistent with `ppe_net` (IFRS includes RoU in gross/accum_dep)
 
-| Year | Revenue | EBITDA | Margin | Net Income | ND/EBITDA | ICR | Rating |
-|------|--------:|-------:|-------:|-----------:|----------:|----:|--------|
-| 2026 | 13,572M | 1,446M | 10.7% | 775M | 4.5x | 1.8x | B |
-| 2027 | 14,366M | 1,413M | 9.8% | 714M | 4.5x | 1.7x | B+ |
-| 2028 | 15,084M | 1,373M | 9.1% | 670M | 4.9x | 1.8x | B |
-| 2029 | 15,543M | 1,345M | 8.7% | 639M | 5.1x | 1.9x | B |
-| 2030 | 16,017M | 1,302M | 8.1% | 567M | 5.5x | 1.8x | B |
+### BS Validation Pipeline
+```
+ExcelLoader._validate_bs_balance()     → CA/NCA/CL/NCL/TA sums vs reported totals
+ModelInputLoader._build_base_year()    → bottom-up BS from components (no plugs)
+ThreeStatementModel._solve_bs_totals() → forecast BS from components
+YearState.full_validation()            → BS identity + CF bridge + cash consistency
+```
+
+## Model Output (v2.2.0, base year 2025)
+
+| Year | Revenue | EBITDA | Net Income | BS diff |
+|------|--------:|-------:|-----------:|--------:|
+| 2026 | 13,378M | 1,464M | 833M | 0.00M |
+| 2027 | 13,912M | 1,302M | 773M | 0.00M |
+| 2028 | 14,348M | 1,207M | 689M | 0.00M |
+| 2029 | 14,520M | 1,096M | 551M | 0.00M |
+| 2030 | 14,651M | 994M | 318M | 0.00M |

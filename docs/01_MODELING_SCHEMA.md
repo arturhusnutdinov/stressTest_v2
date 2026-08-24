@@ -23,15 +23,19 @@
 **Balance Sheet fields:**
 - Current assets: `cash`, `restricted_cash`, `accounts_receivable`, `inventory`, `other_ca`, `total_ca`
 - Non-current assets: `ppe_gross/accum/net`, `rou_asset`, `intangibles`, `goodwill`, `investments_lt`, `dta`, `other_nca`, `total_nca`, `total_assets`
-- Current liabilities: `short_term_debt`, `accounts_payable`, `taxes_payable`, `interest_payable`, `lease_liab_current`, `other_cl`, `total_cl`
+- Current liabilities: `short_term_debt`, `accounts_payable`, `taxes_payable`, `interest_payable`, `payroll_payable`, `lease_liab_current`, `other_cl`, `total_cl`
 - Non-current liabilities: `long_term_debt`, `lease_liab_noncurrent`, `employee_benefits`, `dtl`, `other_ncl`, `total_ncl`, `total_liabilities`
 - Equity: `share_capital`, `apic`, `treasury_stock`, `retained_earnings`, `aoci`, `nci`, `total_equity`, `total_liab_equity`
 
 **Cash Flow fields:**
-- CFO: `cfo_net_income`, `cfo_total_da`, `cfo_deferred_tax`, WC changes, interest paid, taxes paid, `cfo_total`
-- CFI: `cfi_capex`, `cfi_disposal_proceeds`, `cfi_acquisitions`, `cfi_total`
+- CFO: `cfo_net_income`, `cfo_total_da`, `cfo_deferred_tax`, WC changes, interest paid, taxes paid, `cfo_non_wc_bs_adj`, `cfo_total`
+- CFI: `cfi_capex`, `cfi_disposal_proceeds`, `cfi_acquisitions`, `cfi_non_wc_bs_adj`, `cfi_total`
 - CFF: `cff_debt_proceeds`, `cff_debt_repayments`, `cff_rc_draw`, `cff_rc_repay`, `cff_dividends`, `cff_buybacks`, lease payments, `cff_total`
 - `net_change_cash`, `cash_beginning`, `cash_ending`
+
+**Non-WC BS adjustments (v2.2.0):**
+- `cfo_non_wc_bs_adj`: Δemployee_benefits + Δother_ncl (non-cash provisions → CFO addback)
+- `cfi_non_wc_bs_adj`: −Δother_nca − Δrestricted_cash (investing outflows)
 
 ---
 

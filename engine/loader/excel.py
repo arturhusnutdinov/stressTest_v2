@@ -439,10 +439,11 @@ class ExcelLoader(BaseLoader):
             if not metrics:
                 continue
 
-            # BS: normalize names, fix signs, compute totals
+            # BS: normalize names, fix signs, compute totals, validate balance
             if statement.upper() == "BS":
                 metrics = self._normalize_bs_metrics(metrics)
                 metrics = self._compute_bs_totals(metrics)
+                self._validate_bs_balance(year, metrics, result)
 
             try:
                 n = self._repo.upsert_history(
@@ -460,6 +461,136 @@ class ExcelLoader(BaseLoader):
             result.warnings.append(
                 f"{statement}: отсутствуют обязательные метрики: {missing}"
             )
+
+    # ── BS validation ─────────────────────────────────────────────────────────
+
+    # All known BS metrics the model can consume (canonical names).
+    # Used for unknown-metric detection in legacy format.
+    _KNOWN_BS_METRICS: Set[str] = {
+        # Canonical names (used in DB/saver)
+        "cash", "restricted_cash", "accounts_receivable", "inventory",
+        "other_current_assets", "total_current_assets",
+        "ppe_net", "ppe_gross", "ppe_accum_dep", "ppe_net_ex_lease",
+        "rou_asset", "finance_lease_asset", "finance_lease_asset_net",
+        "intangibles", "goodwill",
+        "investments_and_long_term_receivables", "investments_in_associates",
+        "dta", "other_non_current_assets", "total_non_current_assets",
+        "total_assets",
+        "short_term_debt", "accounts_payable", "accounts_payable_related_parties",
+        "taxes_payable", "interest_payable",
+        "payroll_and_benefits_payable", "accrued_liabilities",
+        "lease_liab_current", "finance_lease_liab_current",
+        "deferred_credits", "other_current_liabilities",
+        "total_current_liabilities",
+        "long_term_debt", "dtl", "employee_benefits",
+        "lease_liab_noncurrent", "finance_lease_liab_noncurrent",
+        "other_non_current_liabilities", "total_non_current_liabilities",
+        "total_liabilities",
+        "share_capital", "apic", "treasury_stock",
+        "retained_earnings", "aoci", "nci",
+        "total_equity", "total_liab_equity",
+        # Short aliases (resolved in _normalize_bs_metrics)
+        "other_ca", "other_ca_tax", "other_cl", "other_nca", "other_ncl",
+        "investments_lt", "payroll_payable",
+        # Short subtotals (from Excel templates)
+        "total_ca", "total_nca", "total_cl", "total_ncl",
+    }
+
+    def _validate_bs_balance(
+        self,
+        year: int,
+        m: Dict[str, float],
+        result: LoadResult,
+    ) -> None:
+        """Validate that BS components sum to reported totals.
+
+        Reports specific gaps instead of silently plugging into 'other' categories.
+        Threshold: 1 mUSD (unit-adjusted via db_unit).
+        """
+        _g = lambda key: m.get(key, 0) or 0
+        threshold = 1e6  # 1M USD — adjust if db_unit differs
+
+        # ── Assets ──
+        ca_computed = (
+            _g("cash") + _g("restricted_cash") +
+            _g("accounts_receivable") + _g("inventory") +
+            _g("other_current_assets")
+        )
+        ca_reported = _g("total_current_assets")
+        if ca_reported and abs(ca_computed - ca_reported) > threshold:
+            diff = (ca_computed - ca_reported) / 1e6
+            result.warnings.append(
+                f"BS {year}: CA components ({ca_computed/1e6:.0f}M) ≠ "
+                f"total_current_assets ({ca_reported/1e6:.0f}M), diff={diff:+.0f}M"
+            )
+
+        nca_computed = (
+            _g("ppe_net") + _g("rou_asset") + _g("finance_lease_asset_net") +
+            _g("intangibles") + _g("goodwill") +
+            _g("investments_and_long_term_receivables") +
+            _g("investments_in_associates") +
+            _g("dta") + _g("other_non_current_assets")
+        )
+        nca_reported = _g("total_non_current_assets")
+        if nca_reported and abs(nca_computed - nca_reported) > threshold:
+            diff = (nca_computed - nca_reported) / 1e6
+            result.warnings.append(
+                f"BS {year}: NCA components ({nca_computed/1e6:.0f}M) ≠ "
+                f"total_non_current_assets ({nca_reported/1e6:.0f}M), diff={diff:+.0f}M. "
+                f"Check: ppe_net includes RoU? intangibles excludes goodwill?"
+            )
+
+        ta_reported = _g("total_assets")
+        ta_computed = ca_computed + nca_computed if (ca_computed and nca_computed) else 0
+        if ta_reported and ta_computed and abs(ta_computed - ta_reported) > threshold:
+            diff = (ta_computed - ta_reported) / 1e6
+            result.warnings.append(
+                f"BS {year}: TA computed ({ta_computed/1e6:.0f}M) ≠ "
+                f"total_assets ({ta_reported/1e6:.0f}M), diff={diff:+.0f}M"
+            )
+
+        # ── Liabilities ──
+        cl_computed = (
+            _g("short_term_debt") + _g("accounts_payable") +
+            _g("accounts_payable_related_parties") +
+            _g("taxes_payable") + _g("interest_payable") +
+            _g("payroll_and_benefits_payable") +
+            _g("lease_liab_current") + _g("finance_lease_liab_current") +
+            _g("other_current_liabilities")
+        )
+        cl_reported = _g("total_current_liabilities")
+        if cl_reported and abs(cl_computed - cl_reported) > threshold:
+            diff = (cl_computed - cl_reported) / 1e6
+            result.warnings.append(
+                f"BS {year}: CL components ({cl_computed/1e6:.0f}M) ≠ "
+                f"total_current_liabilities ({cl_reported/1e6:.0f}M), diff={diff:+.0f}M"
+            )
+
+        ncl_computed = (
+            _g("long_term_debt") + _g("dtl") +
+            _g("employee_benefits") + _g("lease_liab_noncurrent") +
+            _g("finance_lease_liab_noncurrent") +
+            _g("other_non_current_liabilities")
+        )
+        ncl_reported = _g("total_non_current_liabilities")
+        if ncl_reported and abs(ncl_computed - ncl_reported) > threshold:
+            diff = (ncl_computed - ncl_reported) / 1e6
+            result.warnings.append(
+                f"BS {year}: NCL components ({ncl_computed/1e6:.0f}M) ≠ "
+                f"total_non_current_liabilities ({ncl_reported/1e6:.0f}M), diff={diff:+.0f}M"
+            )
+
+        # ── BS identity: TA = TL + TE ──
+        te = _g("total_equity")
+        tl = _g("total_liabilities")
+        if ta_reported and te and tl:
+            bs_diff = ta_reported - tl - te
+            if abs(bs_diff) > threshold:
+                result.warnings.append(
+                    f"BS {year}: TA ({ta_reported/1e6:.0f}M) ≠ "
+                    f"TL ({tl/1e6:.0f}M) + TE ({te/1e6:.0f}M), "
+                    f"diff={bs_diff/1e6:+.0f}M"
+                )
 
     # ── canonical sheets ───────────────────────────────────────────────────────
 
@@ -801,17 +932,26 @@ class ExcelLoader(BaseLoader):
     def _resolve_metric(self, raw_name: str, statement: str) -> Optional[str]:
         """
         Разрешить имя метрики через конфиг маппинга.
-        Если конфига нет — возвращает имя как есть (предполагаем что уже канон).
+        Если конфига нет — возвращает имя как есть.
+        Для BS: aliases применяются позже в _normalize_bs_metrics (для корректного merge).
+        Здесь только предупреждаем о неизвестных именах.
         """
-        if not self._mapping:
-            return raw_name
+        if self._mapping:
+            for sm in self._mapping.sheets.values():
+                if sm.statement != statement:
+                    continue
+                for m in sm.mappings:
+                    if m.label.lower() == raw_name.lower():
+                        return m.db_metric
 
-        for sm in self._mapping.sheets.values():
-            if sm.statement != statement:
-                continue
-            for m in sm.mappings:
-                if m.label.lower() == raw_name.lower():
-                    return m.db_metric
+        # BS: warn if metric is unknown (not in schema and not a known alias)
+        if statement.upper() == "BS":
+            canonical = self._BS_ALIASES.get(raw_name, raw_name)
+            if canonical not in self._KNOWN_BS_METRICS and raw_name not in self._BS_ALIASES:
+                logger.warning(
+                    f"BS metric '{raw_name}' is not in the known schema. "
+                    f"Check YAML mapping or add to _KNOWN_BS_METRICS."
+                )
 
         return raw_name
 
