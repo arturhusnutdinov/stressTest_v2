@@ -141,6 +141,10 @@ class LeaseDrivers:
     enabled: bool = False
     default_discount_rate: float = 0.05
     rate_delta_pct: float = 0.0
+    # ROU-in-PPE mode: ROU asset embedded in PPE (IFRS common practice).
+    # When True, lease corkscrew only amortizes liabilities; dep_rou = 0
+    # (depreciation already in PPE D&A). When False, full ROU + liab corkscrew.
+    rou_in_ppe: bool = False
     # Входящие балансы
     finance_rou_opening: float = 0.0
     finance_liab_opening: float = 0.0
@@ -528,6 +532,9 @@ class ModelConfig:
     # Finance lease initial liability (fallback for overlay in core.py)
     finance_lease_liab_initial: float = 0.0
 
+    # Constraints (from project.yaml constraints section, overrides engine.constants)
+    constraints: Dict[str, Any] = field(default_factory=dict)
+
     # Macro factor configuration (from YAML, used by blocks instead of re-reading YAML)
     revenue_macro_factor: Optional[str] = None
     cogs_revenue_factor: Optional[str] = None
@@ -552,9 +559,9 @@ class ModelConfig:
 
     @property
     def statutory_rate(self) -> float:
-        """Statutory tax rate (alias for tax_rate with fallback from constants)."""
+        """Statutory tax rate (alias for tax_rate with fallback from constraints then constants)."""
         from engine.constants import TAX_STATUTORY_RATE_DEFAULT
-        return self.tax_rate or TAX_STATUTORY_RATE_DEFAULT
+        return self.tax_rate or self.get_constraint("tax", "statutory_rate", TAX_STATUTORY_RATE_DEFAULT)
 
     @property
     def dividend_pct_ni(self) -> float:
@@ -573,3 +580,10 @@ class ModelConfig:
         self, statement: str, metric: str
     ) -> Optional[ForecastMethodConfig]:
         return self.forecast_methods.get(statement.upper(), {}).get(metric)
+
+    def get_constraint(self, section: str, key: str, default: float = 0.0) -> float:
+        """Read a constraint value from config with fallback to default (constants.py value).
+
+        Usage: config.get_constraint("cogs", "ratio_min", COGS_PCT_MIN)
+        """
+        return self.constraints.get(section, {}).get(key, default)

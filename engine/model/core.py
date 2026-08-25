@@ -23,8 +23,10 @@ from .schedules import (
     IntangiblesBlock, WCBlock,
 )
 from engine.constants import (
+    # Solver / diagnostic thresholds (not model-affecting, keep as direct imports)
     SOLVER_MAX_ITER, SOLVER_TOL,
     BS_TOLERANCE, CF_TOLERANCE, BS_DIFF_LOG_THRESHOLD,
+    # Default fallbacks — used via config.get_constraint with these as defaults
     INTANG_AMORT_RATE_FALLBACK, DEBT_MIN_RATE,
     DEBT_MANDATORY_ST_MULTIPLIER, DEBT_ST_RATIO_MIN, DEBT_ST_RATIO_MAX,
     DEBT_ST_RATIO_DEFAULT, DEBT_AVG_RATE_DEFAULT,
@@ -180,6 +182,8 @@ class ThreeStatementModel:
                     base_revenue=abs(_base.revenue or 0),
                     base_production_kt=float(_base_prod or 0),
                     cogs_ratio_anchor=float(_cogs_anchor),
+                    abs_clamp_min_factor=config.get_constraint("cogs", "abs_clamp_min_factor", 0.50),
+                    abs_clamp_max_factor=config.get_constraint("cogs", "abs_clamp_max_factor", 1.50),
                 )
                 _base_yr = config.history_end_year
                 _macro_hist = {}
@@ -478,11 +482,17 @@ class ThreeStatementModel:
                 n = len(hist_sorted)
                 p10 = hist_sorted[max(0, int(n * 0.10))]
                 p90 = hist_sorted[min(n-1, int(n * 0.90))]
-                cogs_pct = max(p10 * COGS_P10_BUFFER, min(p90 * COGS_P90_BUFFER, cogs_pct))
+                _p10_buf = self._c.get_constraint("cogs", "p10_buffer", COGS_P10_BUFFER)
+                _p90_buf = self._c.get_constraint("cogs", "p90_buffer", COGS_P90_BUFFER)
+                cogs_pct = max(p10 * _p10_buf, min(p90 * _p90_buf, cogs_pct))
             elif hist_vals:
-                cogs_pct = max(min(hist_vals) * COGS_MIN_HIST_BUFFER, min(max(hist_vals) * COGS_MAX_HIST_BUFFER, cogs_pct))
+                _min_buf = self._c.get_constraint("cogs", "min_hist_buffer", COGS_MIN_HIST_BUFFER)
+                _max_buf = self._c.get_constraint("cogs", "max_hist_buffer", COGS_MAX_HIST_BUFFER)
+                cogs_pct = max(min(hist_vals) * _min_buf, min(max(hist_vals) * _max_buf, cogs_pct))
         else:
-            cogs_pct = max(COGS_PCT_MIN, min(COGS_PCT_MAX, cogs_pct))
+            _cogs_min = self._c.get_constraint("cogs", "ratio_min", COGS_PCT_MIN)
+            _cogs_max = self._c.get_constraint("cogs", "ratio_max", COGS_PCT_MAX)
+            cogs_pct = max(_cogs_min, min(_cogs_max, cogs_pct))
 
         state.cogs = -abs(state.revenue * cogs_pct)
         state.gross_profit = state.revenue + state.cogs
@@ -520,7 +530,8 @@ class ThreeStatementModel:
             # Intangibles: amort rate from preprocessor or last-resort 10%
             _intang_rec = self._h.preprocess.get('capex', {}).get('intang_amort_rate_recommended')
             if isinstance(_intang_rec, dict): _intang_rec = _intang_rec.get(-1)
-            intang_rate = float(_intang_rec) if _intang_rec else INTANG_AMORT_RATE_FALLBACK
+            intang_rate = float(_intang_rec) if _intang_rec else \
+                self._c.get_constraint("ppe", "intang_amort_rate", INTANG_AMORT_RATE_FALLBACK)
             state.intangibles       = max(0.0, prev.intangibles * (1 - intang_rate))
             state.amort_intangibles = prev.intangibles * intang_rate
             state.total_da = dep_charge + state.amort_intangibles
@@ -538,7 +549,8 @@ class ThreeStatementModel:
             if not _rec:
                 _rec = _pp_cap.get('dep_to_rev_recommended')
                 if isinstance(_rec, dict): _rec = _rec.get(-1)
-            capex_pct = float(_rec) if _rec else CAPEX_PCT_DEFAULT
+            capex_pct = float(_rec) if _rec else \
+                self._c.get_constraint("ppe", "capex_pct_default", CAPEX_PCT_DEFAULT)
         # CapEx = Sustaining + Growth (best practice for commodity producers)
         # Sustaining: maintenance of existing asset base ≈ D&A × sustaining_ratio
         # Growth: expansion capex, project-based or % of revenue growth
@@ -596,7 +608,8 @@ class ThreeStatementModel:
             hist_amort = float(
                 self._h.is_data.get(self._h.base_year, {}).get("amortization") or 0.0
             )
-            amort_rate = (hist_amort / max(prev.intangibles, 1.0)) if hist_amort > 0 else INTANG_AMORT_RATE_FALLBACK
+            amort_rate = (hist_amort / max(prev.intangibles, 1.0)) if hist_amort > 0 else \
+                self._c.get_constraint("ppe", "intang_amort_rate", INTANG_AMORT_RATE_FALLBACK)
         intang_block = IntangiblesBlock.from_prev_state(
             prev, amort_rate=amort_rate, revenue=state.revenue,
             additions_pct_revenue=self._c.intang_additions_pct_rev,
@@ -650,7 +663,8 @@ class ThreeStatementModel:
                 setattr(state, attr, abs(float(rec)))
             else:
                 prev_val = getattr(prev, attr, 0.0)
-                setattr(state, attr, prev_val * OTHER_IS_DECAY)
+                _is_decay = self._c.get_constraint("solver", "other_is_decay", OTHER_IS_DECAY)
+                setattr(state, attr, prev_val * _is_decay)
 
         return state
 
@@ -726,10 +740,11 @@ class ThreeStatementModel:
         _pay_lag = 1 if getattr(self._c, 'tax_paid_timing', 'next_year') == 'next_year' else 0
         block = TaxBlock(
             ebt=state.ebt,
-            statutory_rate=self._c.tax_rate or 0.21,
+            statutory_rate=self._c.statutory_rate,
             nol_open=_nol_open,
             nol_enabled=_nol_active,
-            nol_limit_pct=getattr(self._c, 'nol_max_utilization_pct', 0.80) or 0.80,
+            nol_limit_pct=getattr(self._c, 'nol_max_utilization_pct', 0.0) or
+                          self._c.get_constraint("tax", "nol_max_utilization_pct", 0.80),
             dta_open=prev.dta or 0.0,
             dtl_open=prev.dtl or 0.0,
             taxes_payable_open=prev.taxes_payable or 0.0,
@@ -806,8 +821,11 @@ class ThreeStatementModel:
             nwc_ratio = pp_wc.get('nwc_to_revenue_recommended')
             if isinstance(nwc_ratio, dict):
                 nwc_ratio = nwc_ratio.get(-1)
-            nwc_ratio = float(nwc_ratio) if nwc_ratio else WC_NWC_RATIO_DEFAULT
-            nwc_ratio = max(WC_NWC_RATIO_MIN, min(WC_NWC_RATIO_MAX, nwc_ratio))
+            nwc_ratio = float(nwc_ratio) if nwc_ratio else \
+                self._c.get_constraint("wc", "nwc_ratio_default", WC_NWC_RATIO_DEFAULT)
+            _nwc_min = self._c.get_constraint("wc", "nwc_ratio_min", WC_NWC_RATIO_MIN)
+            _nwc_max = self._c.get_constraint("wc", "nwc_ratio_max", WC_NWC_RATIO_MAX)
+            nwc_ratio = max(_nwc_min, min(_nwc_max, nwc_ratio))
 
             target_nwc = state.revenue * nwc_ratio
             prev_nwc   = (prev.accounts_receivable + prev.inventory
@@ -817,11 +835,11 @@ class ThreeStatementModel:
             delta_nwc  = target_nwc - prev_nwc
 
             # Простое разбиение NWC
-            state.accounts_receivable = target_nwc * WC_AR_PCT_OF_NWC
-            state.inventory           = target_nwc * WC_INV_PCT_OF_NWC
-            state.other_ca            = target_nwc * WC_OTHER_CA_PCT_OF_NWC
-            state.accounts_payable    = target_nwc * WC_AP_PCT_OF_NWC
-            state.other_cl            = target_nwc * WC_OTHER_CL_PCT_OF_NWC
+            state.accounts_receivable = target_nwc * self._c.get_constraint("wc", "ar_pct_of_nwc", WC_AR_PCT_OF_NWC)
+            state.inventory           = target_nwc * self._c.get_constraint("wc", "inv_pct_of_nwc", WC_INV_PCT_OF_NWC)
+            state.other_ca            = target_nwc * self._c.get_constraint("wc", "other_ca_pct_of_nwc", WC_OTHER_CA_PCT_OF_NWC)
+            state.accounts_payable    = target_nwc * self._c.get_constraint("wc", "ap_pct_of_nwc", WC_AP_PCT_OF_NWC)
+            state.other_cl            = target_nwc * self._c.get_constraint("wc", "other_cl_pct_of_nwc", WC_OTHER_CL_PCT_OF_NWC)
             state.cfo_change_ar       = -(state.accounts_receivable - prev.accounts_receivable)
             state.cfo_change_inv      = -(state.inventory - prev.inventory)
             state.cfo_change_ap       = (state.accounts_payable - prev.accounts_payable)  # рост AP = приток
@@ -849,6 +867,14 @@ class ThreeStatementModel:
         prev_rev = prev.revenue if (prev.revenue or 0) > 0 else (state.revenue or 1)
         rev_growth = (state.revenue - prev_rev) / prev_rev if prev_rev > 0 else 0.0
 
+        # Pass WC constraint overrides from config
+        _wc_constraints = {
+            'dso_cyclical_elasticity': self._c.get_constraint('wc', 'dso_cyclical_elasticity', 0.87),
+            'dih_cyclical_elasticity': self._c.get_constraint('wc', 'dih_cyclical_elasticity', 0.36),
+            'dpo_cyclical_elasticity': self._c.get_constraint('wc', 'dpo_cyclical_elasticity', 0.64),
+            'cyclical_adj_min': self._c.get_constraint('wc', 'cyclical_adj_min', 0.80),
+            'cyclical_adj_max': self._c.get_constraint('wc', 'cyclical_adj_max', 1.20),
+        }
         block = WCBlock.from_days(
             prev=prev,
             revenue=state.revenue,
@@ -856,6 +882,7 @@ class ThreeStatementModel:
             sga=state.sga,
             revenue_growth_rate=rev_growth,
             **_wc_kwargs,
+            **_wc_constraints,
         )
         ok, issues = block.validate()
         if not ok:
@@ -934,7 +961,66 @@ class ThreeStatementModel:
     def _solve_lease(self, state: YearState, prev: YearState) -> YearState:
         """Lease corkscrew через LeaseBlock (Finance + Operating).
         Uses from_config (EWA-calibrated rates) when preprocessor data is available,
-        falls back to from_prev_state (dep_rate approach) otherwise."""
+        falls back to from_prev_state (dep_rate approach) otherwise.
+
+        ROU-in-PPE detection: If rou_asset=0 but lease liabilities exist,
+        the ROU is embedded in PPE (common under IFRS). In this case skip the
+        lease corkscrew entirely — depreciation is already in PPE D&A, and
+        lease liabilities are carried forward as static BS items via bs_other.
+        """
+        # ── ROU-in-PPE: lease liability corkscrew, dep in PPE D&A ───────
+        # IFRS 16 allows ROU within PPE with note disclosure. PPE corkscrew
+        # already handles ROU depreciation. Here we model the lease LIABILITY
+        # amortization schedule (proper corkscrew):
+        #   liab_open + new_leases - principal = liab_close
+        #   interest → IS, principal → CFF
+        _ll_prev  = (prev.lease_liab_current or 0) + (prev.lease_liab_noncurrent or 0)
+        if self._c.leases.rou_in_ppe and _ll_prev > 1e-6:
+            _lease_pp = self._h.preprocess.get("lease", {})
+
+            # Repayment rate: preprocessor → config fallback
+            _repay_rec = _lease_pp.get("liab_repayment_rate_recommended")
+            if isinstance(_repay_rec, dict):
+                _repay_rec = _repay_rec.get(-1)
+            _repay_rate = float(_repay_rec) if _repay_rec else self._c.lease.op_decay_rate
+
+            # Interest rate: preprocessor → config fallback
+            _int_rec = _lease_pp.get("liab_interest_rate_recommended")
+            if isinstance(_int_rec, dict):
+                _int_rec = _int_rec.get(-1)
+            _disc = float(_int_rec) if _int_rec else self._c.leases.default_discount_rate
+
+            # New lease additions (EWA from preprocessor)
+            _new_rec = _lease_pp.get("op_lease_new_leases_recommended")
+            if isinstance(_new_rec, dict):
+                _new_rec = _new_rec.get(-1)
+            _new_leases = float(_new_rec) if _new_rec else 0.0
+
+            _principal  = _ll_prev * _repay_rate
+            _interest   = _ll_prev * _disc
+            _ll_close   = max(0.0, _ll_prev + _new_leases - _principal)
+            # Split current/noncurrent: current = next year's expected repayment
+            _ll_cur_next = min(_ll_close, _ll_close * _repay_rate)
+            _ll_nc_next  = max(0.0, _ll_close - _ll_cur_next)
+
+            state.rou_asset             = 0.0
+            state.dep_rou               = 0.0
+            state.lease_liab_current    = _ll_cur_next
+            state.lease_liab_noncurrent = _ll_nc_next
+            # IFRS 16 presentation (ROU-in-PPE):
+            #   - D&A: ROU depreciation embedded in PPE D&A (handled by PPE corkscrew)
+            #   - IS: lease interest in finance costs (separate from debt interest)
+            #   - CFF: principal payment (reduces lease liability and cash)
+            state.interest_expense_leases = _interest
+            state.cff_finance_lease_principal = -_principal
+            # New leases create a ROU asset (within PPE) and a matching liability.
+            # The liability increase is already in _ll_close. Add the asset side
+            # to PPE to maintain BS identity: new ROU → ppe_net += new_leases.
+            if _new_leases > 0:
+                state.ppe_net = (state.ppe_net or 0) + _new_leases
+                state.ppe_gross = (state.ppe_gross or 0) + _new_leases
+            return state
+
         _has_lease_params = (
             self._h.preprocess.get("lease", {}).get("op_lease_decay_rate_recommended") is not None
             or self._c.lease.op_cash_payment > 0
@@ -1069,7 +1155,8 @@ class ThreeStatementModel:
                 target_total = prev_total  # carry forward
 
         # Ограничиваем изменение: не более 20% total debt в год (реализм)
-        max_change = prev_total * DEBT_MAX_ANNUAL_CHANGE if prev_total > 0 else abs(target_total) * DEBT_MAX_ANNUAL_CHANGE
+        _debt_max_change = self._c.get_constraint("debt", "max_annual_change", DEBT_MAX_ANNUAL_CHANGE)
+        max_change = prev_total * _debt_max_change if prev_total > 0 else abs(target_total) * _debt_max_change
         if abs(target_total - prev_total) > max_change:
             target_total = prev_total + max_change * (1 if target_total > prev_total else -1)
 
@@ -1084,14 +1171,19 @@ class ThreeStatementModel:
         # Если нет из препроцессора — используем исторический ST/Total
         if not hist_st_ratio:
             prev_hist_total = prev.short_term_debt + prev.long_term_debt
+            _st_default = self._c.get_constraint("debt", "st_ratio_default", DEBT_ST_RATIO_DEFAULT)
             hist_st_ratio = (prev.short_term_debt / prev_hist_total
-                            if prev_hist_total > 0 else DEBT_ST_RATIO_DEFAULT)
+                            if prev_hist_total > 0 else _st_default)
 
         # Clamp: ST ratio 5%-40% (реалистичный диапазон)
-        hist_st_ratio = max(DEBT_ST_RATIO_MIN, min(DEBT_ST_RATIO_MAX, hist_st_ratio or DEBT_ST_RATIO_DEFAULT))
+        _st_min = self._c.get_constraint("debt", "st_ratio_min", DEBT_ST_RATIO_MIN)
+        _st_max = self._c.get_constraint("debt", "st_ratio_max", DEBT_ST_RATIO_MAX)
+        _st_default2 = self._c.get_constraint("debt", "st_ratio_default", DEBT_ST_RATIO_DEFAULT)
+        hist_st_ratio = max(_st_min, min(_st_max, hist_st_ratio or _st_default2))
 
         # Обязательная ST амортизация (текущая порция LT долга)
-        mandatory_st = prev.long_term_debt * hist_st_ratio * DEBT_MANDATORY_ST_MULTIPLIER
+        _st_mult = self._c.get_constraint("debt", "mandatory_st_multiplier", DEBT_MANDATORY_ST_MULTIPLIER)
+        mandatory_st = prev.long_term_debt * hist_st_ratio * _st_mult
 
         # RC остаток — draw/repay в зависимости от cash gap
         min_cash = getattr(cfg.rc, 'min_cash', 0) if hasattr(cfg, 'rc') else 0
@@ -1147,7 +1239,7 @@ class ThreeStatementModel:
             _rate_rec = _debt_pp.get('avg_interest_rate_recommended')
             if isinstance(_rate_rec, dict): _rate_rec = _rate_rec.get(-1)
             avg_rate = float(_rate_rec) if _rate_rec else None
-        avg_rate = avg_rate or DEBT_AVG_RATE_DEFAULT  # last-resort: 5% neutral rate
+        avg_rate = avg_rate or self._c.get_constraint("debt", "avg_rate_default", DEBT_AVG_RATE_DEFAULT)
         avg_debt = (prev_total + new_total) / 2.0
         gross_interest = avg_debt * avg_rate
 
@@ -1162,7 +1254,8 @@ class ThreeStatementModel:
         if isinstance(_cap_series, dict) and state.year in _cap_series:
             cap_pct = float(_cap_series[state.year])          # фактическое значение для года
         else:
-            cap_pct = max(0.0, float(_cap_rec) - CAPEX_INTEREST_DECAY_RATE * years_from_base)
+            _cap_decay = self._c.get_constraint("ppe", "capex_interest_decay_rate", CAPEX_INTEREST_DECAY_RATE)
+            cap_pct = max(0.0, float(_cap_rec) - _cap_decay * years_from_base)
 
         state.interest_expense_debt = gross_interest * (1.0 - cap_pct)
         state.interest_expense      = state.interest_expense_debt + abs(state.interest_expense_leases or 0)
@@ -1229,7 +1322,7 @@ class ThreeStatementModel:
                 gross_rate = max(historical_rate, self._c.debt.avg_rate_pct)
             else:
                 gross_rate = self._c.debt.avg_rate_pct + self._c.debt.general_rate_delta_pct
-            gross_rate = max(DEBT_MIN_RATE, gross_rate)
+            gross_rate = max(self._c.get_constraint("debt", "min_rate", DEBT_MIN_RATE), gross_rate)
             gross_interest = (total_st + total_lt) * gross_rate
             # Применяем cap_pct: year-specific из препроцессора, затем decay
             _capex_pp2  = self._h.preprocess.get("capex", {})
@@ -1241,7 +1334,8 @@ class ThreeStatementModel:
             if isinstance(_cap_series2, dict) and year in _cap_series2:
                 cap_pct = float(_cap_series2[year])
             else:
-                cap_pct = max(0.0, float(_cap_rec2) - CAPEX_INTEREST_DECAY_RATE * years_elapsed)
+                _cap_decay2 = self._c.get_constraint("ppe", "capex_interest_decay_rate", CAPEX_INTEREST_DECAY_RATE)
+                cap_pct = max(0.0, float(_cap_rec2) - _cap_decay2 * years_elapsed)
             capitalized = gross_interest * cap_pct
             total_interest = max(0.0, gross_interest - capitalized)
             logger.debug(
@@ -1503,6 +1597,7 @@ class ThreeStatementModel:
                 state.year, list((cfg.cbr_key_rate_forecast or {}).values())[-1]
                 if cfg.cbr_key_rate_forecast else 0.0
             ),
+            avg_rate_default=self._c.get_constraint("debt", "avg_rate_default", DEBT_AVG_RATE_DEFAULT),
         )
 
         # Bug 1 fix: update opening balances for next year from this year's closings

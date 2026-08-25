@@ -944,7 +944,8 @@ class ModelPreprocessor:
         Группа: lease
         Метрики: op_lease_decay_rate, op_lease_new_leases, op_lease_cash_payment,
                  fin_lease_principal_rate, fin_lease_amort_rate,
-                 fin_lease_interest_rate, fin_lease_new_leases
+                 fin_lease_interest_rate, fin_lease_new_leases,
+                 rou_in_ppe (bool flag), liab_repayment_rate (for ROU-in-PPE)
         """
         out: Dict[str, Dict] = {}
 
@@ -953,6 +954,9 @@ class ModelPreprocessor:
         fin_asset   = self._bs_series("finance_lease_asset_net")
         fin_ll_cur  = self._bs_series("finance_lease_liab_current")
         fin_ll_ncur = self._bs_series("finance_lease_liab_noncurrent")
+        # General IFRS 16 lease liabilities (used when ROU-in-PPE)
+        ll_cur      = self._bs_series("lease_liab_current")
+        ll_ncur     = self._bs_series("lease_liab_noncurrent")
 
         # CF series
         new_op_cf   = self._cf_series("rou_assets_from_op_leases")
@@ -966,6 +970,19 @@ class ModelPreprocessor:
 
         years_sorted = sorted(self._years)
 
+        # ── Detect ROU-in-PPE ─────────────────────────────────────────────
+        # If rou_asset is zero/absent in the LAST year (base year) but lease
+        # liabilities exist, ROU is embedded within PPE (IFRS 16 allows this).
+        # Check last year rather than max — historical data may have legacy entries.
+        _last_yr = years_sorted[-1] if years_sorted else None
+        _rou_last = abs(rou_total.get(_last_yr, 0) or 0) if _last_yr else 0.0
+        _ll_last  = (abs(ll_cur.get(_last_yr, 0) or 0) +
+                     abs(ll_ncur.get(_last_yr, 0) or 0)) if _last_yr else 0.0
+        _rou_in_ppe_detected = (_rou_last < 1e-6 and _ll_last > 1e-6)
+        if _rou_in_ppe_detected:
+            out["rou_in_ppe"] = {-1: 1.0}
+            logger.info("Lease: ROU-in-PPE detected (rou_asset=0, lease_liab>0)")
+
         op_decay_rates:  Dict[int, float] = {}
         op_new_s:        Dict[int, float] = {}
         op_cash_s:       Dict[int, float] = {}
@@ -973,28 +990,74 @@ class ModelPreprocessor:
         fin_amort_rates: Dict[int, float] = {}
         fin_int_rates:   Dict[int, float] = {}
         fin_new_s:       Dict[int, float] = {}
+        liab_repay_rates: Dict[int, float] = {}
+        liab_interest_rates: Dict[int, float] = {}
 
         for i, yr in enumerate(years_sorted):
             prev_yr = years_sorted[i - 1] if i > 0 else None
 
-            # ── Operating lease decay rate ────────────────────────────────
-            # op_rou_open = total_rou(prev) − fin_asset(prev)
-            rou_prev   = rou_total.get(prev_yr) if prev_yr else None
-            rou_curr   = rou_total.get(yr)
-            fin_prev   = fin_asset.get(prev_yr, 0.0) if prev_yr else 0.0
-            fin_curr   = fin_asset.get(yr, 0.0)
-            new_op_v   = abs(new_op_cf.get(yr, 0.0))
+            # ── ROU-in-PPE: derive decay from lease liability changes ─────
+            if _rou_in_ppe_detected and prev_yr is not None:
+                ll_open = (abs(ll_cur.get(prev_yr, 0) or 0) +
+                           abs(ll_ncur.get(prev_yr, 0) or 0))
+                ll_close = (abs(ll_cur.get(yr, 0) or 0) +
+                            abs(ll_ncur.get(yr, 0) or 0))
+                if ll_open > 1e-6:
+                    # BS-derived repayment rate from liability changes
+                    _bs_delta = ll_open - ll_close
+                    # CF cash payments (op + fin combined)
+                    _cash_op = abs(cash_op_cf.get(yr, 0) or 0)
+                    _cash_fin = abs(fin_prin_cf.get(yr, 0) or 0)
+                    _total_cash = _cash_op + _cash_fin
 
-            if rou_prev is not None and rou_curr is not None and rou_prev > 1e-6:
-                op_rou_open  = max(0.0, rou_prev - fin_prev)
-                op_rou_close = max(0.0, rou_curr - fin_curr)
-                if op_rou_open > 1e-6:
-                    op_amort = op_rou_open + new_op_v - op_rou_close
-                    decay = _safe_div(op_amort, op_rou_open)
-                    if 0.0 < decay < 1.5:
-                        op_decay_rates[yr] = decay
+                    # Repayment rate: prefer BS delta when liabilities actually change
+                    if abs(_bs_delta) > 1e-6 and _bs_delta > 0:
+                        repay_rate = _bs_delta / ll_open
+                    elif _total_cash > 1e-6:
+                        # Lease cash > liab → liabilities underreported;
+                        # cap at reasonable level (typical IFRS 16: 5-15yr terms)
+                        repay_rate = min(_total_cash / ll_open, 0.25)
+                    else:
+                        repay_rate = 0.0
+
+                    if 0.0 < repay_rate < 1.0:
+                        liab_repay_rates[yr] = repay_rate
+                        op_decay_rates[yr] = repay_rate
+
+                    # New leases: if liabilities grew, new_leases = growth + repayment
+                    if _total_cash > 1e-6:
+                        _principal_est = ll_open * repay_rate if repay_rate > 0 else _total_cash
+                        _implied_new = max(0.0, ll_close - ll_open + _principal_est)
+                    else:
+                        _implied_new = max(0.0, ll_close - ll_open)
+                    if _implied_new > 1e-6:
+                        op_new_s[yr] = _implied_new
+
+                    # Interest rate from CF or implied
+                    fi_v = fin_int_cf.get(yr)
+                    if fi_v is not None and ll_open > 1e-6:
+                        liab_interest_rates[yr] = abs(fi_v) / ll_open
+
+            # ── Operating lease decay rate (standard: separate ROU) ───────
+            # op_rou_open = total_rou(prev) − fin_asset(prev)
+            if not _rou_in_ppe_detected:
+                rou_prev   = rou_total.get(prev_yr) if prev_yr else None
+                rou_curr   = rou_total.get(yr)
+                fin_prev   = fin_asset.get(prev_yr, 0.0) if prev_yr else 0.0
+                fin_curr   = fin_asset.get(yr, 0.0)
+                new_op_v   = abs(new_op_cf.get(yr, 0.0))
+
+                if rou_prev is not None and rou_curr is not None and rou_prev > 1e-6:
+                    op_rou_open  = max(0.0, rou_prev - fin_prev)
+                    op_rou_close = max(0.0, rou_curr - fin_curr)
+                    if op_rou_open > 1e-6:
+                        op_amort = op_rou_open + new_op_v - op_rou_close
+                        decay = _safe_div(op_amort, op_rou_open)
+                        if 0.0 < decay < 1.5:
+                            op_decay_rates[yr] = decay
 
             # ── Operating lease cash payment & new leases ─────────────────
+            new_op_v = abs(new_op_cf.get(yr, 0.0))
             cash_v = cash_op_cf.get(yr)
             if cash_v is not None:
                 op_cash_s[yr] = abs(cash_v)
@@ -1034,6 +1097,8 @@ class ModelPreprocessor:
             ("fin_lease_amort_rate",     fin_amort_rates),
             ("fin_lease_interest_rate",  fin_int_rates),
             ("fin_lease_new_leases",     fin_new_s),
+            ("liab_repayment_rate",     liab_repay_rates),
+            ("liab_interest_rate",      liab_interest_rates),
         ]:
             if series:
                 out[name] = _summary(series, self._ewa_halflife)

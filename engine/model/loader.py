@@ -94,6 +94,7 @@ class ModelInputLoader:
                         _combined_macro[_fn] = _combined
                 seg_model = SegmentRevenueModel.from_yaml_config(
                     rev_cfg, _combined_macro,
+                    constraints=model_config.constraints,
                 )
                 if seg_model:
                     forecast_years = list(range(
@@ -201,6 +202,7 @@ class ModelInputLoader:
         leases = LeaseDrivers(
             enabled=lease_raw.get("enabled", False),
             default_discount_rate=lease_raw.get("default_discount_rate", 0.05),
+            rou_in_ppe=lease_raw.get("rou_in_ppe", False),
         )
 
         # Lease corkscrew params — YAML overrides only at config-build time.
@@ -385,6 +387,8 @@ class ModelInputLoader:
             # Solver параметры
             max_iter=int(cfg.get("solver", {}).get("max_iter", 10)),
             tol=float(cfg.get("solver", {}).get("tol", 1000.0)),
+            # Constraints (from YAML constraints section)
+            constraints=cfg.get("constraints", {}),
         )
         return mc
 
@@ -823,6 +827,11 @@ class ModelInputLoader:
         state.employee_benefits    = abs(_g(bs_y, "employee_benefits") or 0)
         state.other_ncl            = abs((_g(bs_y, "other_non_current_liabilities") or _g(bs_y, "other_ncl")) or 0)
         state.other_cl             = abs((_g(bs_y, "other_cl") or _g(bs_y, "other_current_liabilities")) or 0)
+        # Fold in CL items stored separately in DB but not modeled as distinct blocks:
+        state.other_cl += abs(_g(bs_y, "accrued_liabilities") or 0)
+        state.other_cl += abs(_g(bs_y, "deferred_credits") or 0)
+        state.other_cl += abs(_g(bs_y, "dividends_payable") or 0)
+        state.other_cl += abs(_g(bs_y, "accounts_payable_related_parties") or 0)
         # taxes_payable: can be negative in history (= tax receivable).
         # Keep as-is for base year to preserve DB balance identity.
         # In forecast, TaxBlock always sets taxes_payable >= 0.
