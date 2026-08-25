@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 import logging
 from typing import TYPE_CHECKING
-from engine.constants import REVENUE_FALLBACK_GROWTH
+from engine.constants import REVENUE_FALLBACK_GROWTH  # default fallback
 
 if TYPE_CHECKING:
     from ..inputs import YearState, HistoricState, ModelConfig
@@ -68,7 +68,9 @@ def solve_revenue(state, prev, historic, config):
             return state
 
     # 5. Fallback
-    state.revenue = prev.revenue * REVENUE_FALLBACK_GROWTH
+    _fallback_growth = config.get_constraint("revenue", "fallback_growth", REVENUE_FALLBACK_GROWTH) \
+        if hasattr(config, 'get_constraint') else REVENUE_FALLBACK_GROWTH
+    state.revenue = prev.revenue * _fallback_growth
     return state
 
 

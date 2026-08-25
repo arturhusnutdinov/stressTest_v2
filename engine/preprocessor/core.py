@@ -135,12 +135,14 @@ class ModelPreprocessor:
         ewa_halflife: float = 3.0,
         wc_halflife: float = 3.0,
         beta_min_years: int = 5,
+        da_in_cogs: bool = True,
     ) -> None:
         self.company_id = company_id
         self._repo = repo
         self._ewa_halflife = ewa_halflife
         self._wc_halflife = wc_halflife
         self._beta_min_years = beta_min_years
+        self._da_in_cogs = da_in_cogs
 
         # Кеши истории — загружаются один раз в run()
         self._is: Dict[int, Dict[str, float]] = {}
@@ -163,7 +165,13 @@ class ModelPreprocessor:
             result.errors.append("Нет исторических данных в БД")
             return result
 
-        logger.info(f"Препроцессор: {self.company_id}, лет={len(self._years)} ({self._years[0]}–{self._years[-1]})")
+        # Auto-detect base year: last year with complete IS+BS data
+        self._detected_base_year = self._detect_base_year()
+        logger.info(
+            f"Препроцессор: {self.company_id}, лет={len(self._years)} "
+            f"({self._years[0]}–{self._years[-1]}), "
+            f"detected_base_year={self._detected_base_year}"
+        )
 
         # Запускаем все блоки
         blocks = [
@@ -200,12 +208,38 @@ class ModelPreprocessor:
                 result.errors.append(msg)
                 logger.warning(f"  ✗ {msg}", exc_info=True)
 
+        # Write detected_base_year as a preprocess metric
+        self._repo.upsert_preprocess(
+            self.company_id, "periods",
+            {"detected_base_year": {-1: float(self._detected_base_year)}},
+            source="preprocessor_v2",
+        )
+
         return result
 
     # ── helpers ────────────────────────────────────────────────────────────────
 
     def _is_val(self, year: int, metric: str) -> Optional[float]:
         return self._is.get(year, {}).get(metric)
+
+    def _detect_base_year(self) -> int:
+        """Auto-detect base year: last year with complete IS+BS key metrics."""
+        required_is = {"revenue", "cogs"}
+        required_bs = {"ppe_net", "total_assets"}
+        for yr in reversed(self._years):
+            is_data = self._is.get(yr, {})
+            bs_data = self._bs.get(yr, {})
+            has_is = all(
+                is_data.get(m) is not None and abs(is_data.get(m, 0)) > 0
+                for m in required_is
+            )
+            has_bs = all(
+                bs_data.get(m) is not None and abs(bs_data.get(m, 0)) > 0
+                for m in required_bs
+            )
+            if has_is and has_bs:
+                return yr
+        return self._years[-1]
 
     def _bs_val(self, year: int, metric: str) -> Optional[float]:
         return self._bs.get(year, {}).get(metric)
@@ -276,7 +310,8 @@ class ModelPreprocessor:
         if opex_ratios:
             out["opex_ratio"] = _summary(opex_ratios, self._ewa_halflife)
 
-        # COGS ratio ex-D&A: (|COGS| - D&A) / Revenue — when D&A is embedded in COGS
+        # COGS ratio ex-D&A: (|COGS| - D&A) / Revenue — only when D&A is embedded in COGS
+        # When da_in_cogs=False, COGS already excludes D&A → ex_da equals cogs_ratio
         da_series = self._is_series("total_da")
         cogs_series = self._is_series("cogs")
         cogs_ex_da_ratios: Dict[int, float] = {}
@@ -285,7 +320,10 @@ class ModelPreprocessor:
             cogs_v = cogs_series.get(yr)
             da_v = da_series.get(yr)
             if rev and cogs_v is not None and abs(rev) > 1e-9:
-                cogs_ex = abs(cogs_v) - abs(da_v or 0)
+                if self._da_in_cogs:
+                    cogs_ex = abs(cogs_v) - abs(da_v or 0)
+                else:
+                    cogs_ex = abs(cogs_v)
                 cogs_ex_da_ratios[yr] = max(0.0, cogs_ex) / abs(rev)
         if cogs_ex_da_ratios:
             out["cogs_ratio_ex_da"] = _summary(cogs_ex_da_ratios, self._ewa_halflife)

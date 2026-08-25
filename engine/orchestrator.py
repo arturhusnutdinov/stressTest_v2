@@ -138,7 +138,9 @@ def build_model(
             if run_preprocessor:
                 t0 = time.time()
                 logger.info("▶ Препроцессор...")
-                pp = ModelPreprocessor(company_id, repo)
+                _ac = _project_cfg.get('accounting_conventions', {})
+                _da_in_cogs = _ac.get('da_in_cogs', True)
+                pp = ModelPreprocessor(company_id, repo, da_in_cogs=_da_in_cogs)
                 pp_result = pp.run()
                 result.preprocess_result = pp_result
                 result.timings["preprocessor"] = time.time() - t0

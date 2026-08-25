@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from engine.constants import DEBT_AVG_RATE_DEFAULT, DEBT_MIN_RATE, REFI_FEES_BPS_DIVISOR, SOLVER_EPSILON
+from engine.constants import DEBT_AVG_RATE_DEFAULT, DEBT_MIN_RATE, REFI_FEES_BPS_DIVISOR, SOLVER_EPSILON  # defaults
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +189,7 @@ class DebtOptimizer:
         covenant_breach_instruments: Optional[set] = None,
         max_voluntary_repay: Optional[float] = None,  # cap on total voluntary repayment
         cbr_key_rate: float = 0.0,  # base rate added to floating instrument spreads
+        avg_rate_default: float = DEBT_AVG_RATE_DEFAULT,  # fallback rate for new money
     ) -> DebtSolveResult:
 
         # ── Инициализация ────────────────────────────────────────────────────
@@ -328,7 +329,7 @@ class DebtOptimizer:
                 if not insts[i].is_revolving and not insts[i].is_lease
                 and insts[i].rate > 0
             ]
-            avg_lt_rate = sum(lt_rates) / len(lt_rates) if lt_rates else DEBT_AVG_RATE_DEFAULT
+            avg_lt_rate = sum(lt_rates) / len(lt_rates) if lt_rates else avg_rate_default
             new_money_inst = DebtInstrumentOpen(
                 instrument_id=f"_newmoney_{year}",
                 name=f"NewMoney_{year}",

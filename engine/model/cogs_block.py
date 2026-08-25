@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional,  Dict, Optional
 
-from engine.constants import COGS_CLAMP_MIN_FACTOR, COGS_CLAMP_MAX_FACTOR
+from engine.constants import COGS_CLAMP_MIN_FACTOR, COGS_CLAMP_MAX_FACTOR  # defaults
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,10 @@ class CogsBlockConfig:
     base_production_kt: float = 0.0
     # Preprocessor-calibrated COGS ratio (EWA, more stable than single-year)
     cogs_ratio_anchor: float = 0.0  # 0 = use base_cogs/base_revenue
+
+    # Absolute clamp factors (from constraints.cogs, defaults from constants.py)
+    abs_clamp_min_factor: float = COGS_CLAMP_MIN_FACTOR
+    abs_clamp_max_factor: float = COGS_CLAMP_MAX_FACTOR
 
 
 class CogsBlock:
@@ -193,7 +197,7 @@ class CogsBlock:
             cogs_ratio = max(anchor - sigma, min(anchor + sigma, cogs_ratio))
             total = revenue * cogs_ratio
         else:
-            total = max(self.cfg.base_cogs * COGS_CLAMP_MIN_FACTOR,
-                       min(self.cfg.base_cogs * COGS_CLAMP_MAX_FACTOR, total))
+            total = max(self.cfg.base_cogs * self.cfg.abs_clamp_min_factor,
+                       min(self.cfg.base_cogs * self.cfg.abs_clamp_max_factor, total))
 
         return total

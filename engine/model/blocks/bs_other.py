@@ -11,7 +11,7 @@ If provisions_corkscrew_enabled: uses ProvisionsBlock for employee_benefits/othe
 from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
-from engine.constants import PAYROLL_PCT_OF_SGA
+from engine.constants import PAYROLL_PCT_OF_SGA  # default fallback
 
 if TYPE_CHECKING:
     from ..inputs import YearState, ModelConfig
@@ -84,7 +84,9 @@ def solve_bs_other(state, prev, config=None):
     state.accounts_payable_rp = prev.accounts_payable_rp or 0
 
     # ── Payroll: % of SGA ──
-    state.payroll_payable = abs(state.sga or 0) * PAYROLL_PCT_OF_SGA
+    _payroll_pct = config.get_constraint("sga", "payroll_pct_of_sga", PAYROLL_PCT_OF_SGA) \
+        if config and hasattr(config, 'get_constraint') else PAYROLL_PCT_OF_SGA
+    state.payroll_payable = abs(state.sga or 0) * _payroll_pct
 
     # ── Provisions corkscrew (optional, enabled via config) ──
     if config and getattr(config, 'provisions_corkscrew_enabled', False):

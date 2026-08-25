@@ -37,7 +37,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Optional,  Dict, List, Optional
 
-from engine.constants import REVENUE_CLAMP_PERCENTILE_LOW, REVENUE_CLAMP_PERCENTILE_HIGH
+from engine.constants import REVENUE_CLAMP_PERCENTILE_LOW, REVENUE_CLAMP_PERCENTILE_HIGH  # defaults
 
 logger = logging.getLogger(__name__)
 
@@ -100,16 +100,21 @@ class SegmentRevenueModel:
         segments: List[SegmentConfig],
         macro_forecasts: Dict[str, Dict[int, float]],
         macro_history: Dict[str, Dict[int, float]] = None,
+        clamp_percentile_low: float = REVENUE_CLAMP_PERCENTILE_LOW,
+        clamp_percentile_high: float = REVENUE_CLAMP_PERCENTILE_HIGH,
     ):
         self.segments = segments
         self.macro_forecasts = macro_forecasts
         self.macro_history = macro_history or {}
+        self.clamp_lo = clamp_percentile_low
+        self.clamp_hi = clamp_percentile_high
 
     @classmethod
     def from_yaml_config(
         cls,
         revenue_cfg: dict,
         macro_forecasts: Dict[str, Dict[int, float]],
+        constraints: dict = None,
     ) -> Optional["SegmentRevenueModel"]:
         """Создаёт модель из секции model.{mode}.revenue YAML."""
         if not revenue_cfg.get("segment_modeling", False):
@@ -126,7 +131,12 @@ class SegmentRevenueModel:
             segments.append(seg)
             logger.info(f"  Сегмент: {seg_name} ({len(seg.volume_history)} лет истории)")
 
-        return cls(segments, macro_forecasts)
+        rev_constraints = (constraints or {}).get("revenue", {})
+        return cls(
+            segments, macro_forecasts,
+            clamp_percentile_low=rev_constraints.get("clamp_percentile_low", REVENUE_CLAMP_PERCENTILE_LOW),
+            clamp_percentile_high=rev_constraints.get("clamp_percentile_high", REVENUE_CLAMP_PERCENTILE_HIGH),
+        )
 
     def forecast(self, forecast_years: List[int]) -> List[SegmentForecast]:
         """Прогнозирует каждый сегмент."""
@@ -264,8 +274,8 @@ class SegmentRevenueModel:
         forecast_growth = ewa_growth
         if len(growth_rates) >= 3:
             import numpy as np
-            g_lo = float(np.percentile(growth_rates, REVENUE_CLAMP_PERCENTILE_LOW * 100))
-            g_hi = float(np.percentile(growth_rates, REVENUE_CLAMP_PERCENTILE_HIGH * 100))
+            g_lo = float(np.percentile(growth_rates, self.clamp_lo * 100))
+            g_hi = float(np.percentile(growth_rates, self.clamp_hi * 100))
             forecast_growth = max(g_lo, min(g_hi, forecast_growth))
 
         result = {}

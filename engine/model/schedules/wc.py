@@ -8,7 +8,7 @@ from engine.constants import (
     WC_CYCLICAL_ADJ_MIN, WC_CYCLICAL_ADJ_MAX,
     WC_DSO_CYCLICAL_ELASTICITY, WC_DIH_CYCLICAL_ELASTICITY,
     WC_DPO_CYCLICAL_ELASTICITY,
-)
+)  # defaults — overridable via config.constraints.wc
 
 
 @dataclass
@@ -134,6 +134,11 @@ class WCBlock:
         accrued_pct_sga:  float = WC_ACCRUED_PCT_SGA,
         other_cl_pct_rev: float = WC_OTHER_CL_PCT_REV,
         revenue_growth_rate: float = 0.0,
+        dso_cyclical_elasticity: float = WC_DSO_CYCLICAL_ELASTICITY,
+        dih_cyclical_elasticity: float = WC_DIH_CYCLICAL_ELASTICITY,
+        dpo_cyclical_elasticity: float = WC_DPO_CYCLICAL_ELASTICITY,
+        cyclical_adj_min: float = WC_CYCLICAL_ADJ_MIN,
+        cyclical_adj_max: float = WC_CYCLICAL_ADJ_MAX,
     ) -> "WCBlock":
         """
         Строит WCBlock через дни оборачиваемости.
@@ -159,9 +164,9 @@ class WCBlock:
         # DIH: rev↑ → DIH↑ (build inventory when demand strong)
         # DPO: rev↑ → DPO↓ (pay suppliers faster when cash available)
         g = revenue_growth_rate
-        adj_factor_dso = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DSO_CYCLICAL_ELASTICITY * g))
-        adj_factor_dih = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 + WC_DIH_CYCLICAL_ELASTICITY * g))
-        adj_factor_dpo = max(WC_CYCLICAL_ADJ_MIN, min(WC_CYCLICAL_ADJ_MAX, 1.0 - WC_DPO_CYCLICAL_ELASTICITY * g))
+        adj_factor_dso = max(cyclical_adj_min, min(cyclical_adj_max, 1.0 - dso_cyclical_elasticity * g))
+        adj_factor_dih = max(cyclical_adj_min, min(cyclical_adj_max, 1.0 + dih_cyclical_elasticity * g))
+        adj_factor_dpo = max(cyclical_adj_min, min(cyclical_adj_max, 1.0 - dpo_cyclical_elasticity * g))
         dso = dso * adj_factor_dso
         dih = dih * adj_factor_dih
         dpo = dpo * adj_factor_dpo

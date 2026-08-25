@@ -7,7 +7,7 @@ This ensures sub-lines always sum to total SGA exactly.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from engine.constants import SGA_PCT_MIN, SGA_PCT_MAX, SGA_CPI_UPLIFT_MAX, SGA_HIST_CLAMP_LOW, SGA_HIST_CLAMP_HIGH
+from engine.constants import SGA_PCT_MIN, SGA_PCT_MAX, SGA_CPI_UPLIFT_MAX, SGA_HIST_CLAMP_LOW, SGA_HIST_CLAMP_HIGH  # defaults
 
 if TYPE_CHECKING:
     from ..inputs import YearState, HistoricState, ModelConfig
@@ -44,14 +44,20 @@ def solve_sga(state, prev, historic, config):
             uplift = max(-SGA_CPI_UPLIFT_MAX, min(SGA_CPI_UPLIFT_MAX, uplift))
             sga_pct = sga_pct * (1.0 + uplift)
 
+    # Read constraint bounds from config (fallback to engine constants)
+    _sga_min = config.get_constraint("sga", "ratio_min", SGA_PCT_MIN)
+    _sga_max = config.get_constraint("sga", "ratio_max", SGA_PCT_MAX)
+    _sga_hist_lo = config.get_constraint("sga", "hist_clamp_low", SGA_HIST_CLAMP_LOW)
+    _sga_hist_hi = config.get_constraint("sga", "hist_clamp_high", SGA_HIST_CLAMP_HIGH)
+
     hist_sga = historic.preprocess.get("margin_ratios", {}).get("opex_ratio") or \
                historic.preprocess.get("margin_ratios", {}).get("sga_ratio", {})
     if isinstance(hist_sga, dict):
         hist_vals = [v for k, v in hist_sga.items() if isinstance(k, int) and k > 0 and v is not None]
         if hist_vals:
-            sga_pct = max(min(hist_vals)*SGA_HIST_CLAMP_LOW, min(max(hist_vals)*SGA_HIST_CLAMP_HIGH, sga_pct))
+            sga_pct = max(min(hist_vals)*_sga_hist_lo, min(max(hist_vals)*_sga_hist_hi, sga_pct))
     else:
-        sga_pct = max(SGA_PCT_MIN, min(SGA_PCT_MAX, sga_pct))
+        sga_pct = max(_sga_min, min(_sga_max, sga_pct))
 
     total_sga = abs(state.revenue * sga_pct)
     state.sga = -total_sga

@@ -18,7 +18,7 @@ import math
 import logging
 from typing import TYPE_CHECKING, Optional, Dict, Any
 
-from engine.constants import EWA_DECAY_FALLBACK
+from engine.constants import EWA_DECAY_FALLBACK  # default fallback
 
 if TYPE_CHECKING:
     from .inputs import YearState, HistoricState, ModelConfig, ForecastMethodConfig
@@ -108,7 +108,9 @@ class ForecastDispatcher:
             # Fallback: carry с decay
             prev_val = self._get_prev_val(metric, prev)
             if prev_val is not None:
-                return prev_val * EWA_DECAY_FALLBACK  # лёгкий decay
+                _decay = self._c.get_constraint("solver", "ewa_decay_fallback", EWA_DECAY_FALLBACK) \
+                    if hasattr(self._c, 'get_constraint') else EWA_DECAY_FALLBACK
+                return prev_val * _decay  # лёгкий decay
             return None
 
         # EWA по истории
