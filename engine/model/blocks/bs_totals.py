@@ -50,6 +50,10 @@ def solve_bs_totals(state):
     )
     state.total_liab_equity = state.total_liabilities + state.total_equity
 
+    # Derived debt aggregates
+    state.total_debt = (state.short_term_debt or 0) + (state.long_term_debt or 0)
+    state.net_debt = state.total_debt - (state.cash or 0)
+
     bs_diff = state.total_assets - state.total_liab_equity
     if abs(bs_diff) > BS_DIFF_LOG_THRESHOLD:
         logger.debug(

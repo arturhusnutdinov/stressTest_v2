@@ -100,6 +100,8 @@ BS_METRICS = {
     "accrued_liabilities":        "accrued_liabilities",
     "accounts_payable_rp":        "accounts_payable_related_parties",
     "deferred_credits":           "deferred_credits",
+    "total_debt":                 "total_debt",
+    "net_debt":                   "net_debt",
 }
 
 CF_METRICS = {

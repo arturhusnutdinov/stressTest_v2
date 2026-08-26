@@ -277,6 +277,10 @@ class YearState:
     total_equity: float = 0.0
     total_liab_equity: float = 0.0
 
+    # BS — Debt aggregates
+    total_debt: float = 0.0
+    net_debt: float = 0.0
+
     # CF — CFO
     cfo_net_income: float = 0.0
     cfo_total_da: float = 0.0
