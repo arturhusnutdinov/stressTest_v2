@@ -129,26 +129,27 @@ Provisions:   open + charge - utilization + accretion = close (3 categories)
 - TaxBlock: NOL $1B + accel_dep — проверять BS после изменений
 
 ### Rusal
-- IFRS, 2011-2025 → 2026-2030, **Excel v5** (2025 FS data, BS validated diff=0)
+- IFRS, 2011-2025 → 2026-2028 (3-year forecast, matching modelMacro horizon)
 - 31 debt instruments (9 CBR floaters, 1 EUR Euribor), base_rate_factor populated
 - **BS conventions**: ppe_net excl RoU, intangibles excl goodwill, interest_payable separate from STD
+- **`da_in_cogs: false`** — COGS already excludes D&A (anchor = cogs_ratio, not cogs_ratio_ex_da)
 - Revenue: segment_modeling (primary_al capacity=4100kt + alumina + other)
   - Volume: production_kt based, capacity cap, demand linkage GDP×0.8
-  - Price: OLS chain-link from realized $2,652/t (VECM growth rate)
+  - Price: OLS chain-link from realized $2,652/t (LME aluminium macro)
   - Alumina: EWA (OLS broken β=-0.72)
 - COGS: component-based (commodity_factor=none — vertically integrated)
   - dampening=0.80 (OLS calibrated R²=0.76), clamp=0.09 (1.5σ)
+  - anchor=0.788 (cogs_ratio_ex_da_recommended = cogs_ratio when da_in_cogs=false)
 - CapEx: sustaining 110% D&A + growth 5% rev_growth
 - Tax: tax_rate_statutory=0.25 (Russian 2025+)
 - Interest: payment_timing=current_year
 - 9 стресс-сценариев (включая demand_shock)
 - Covenants: ND/EBITDA ≤ 4.5, ICR ≥ 2.0
-- Rating: B+→B- intl / BBB+(RU)→BBB(RU) national
+- Rating: CCC+ intl / BBB-(RU) national (score=20)
 - External ECM: enabled (19 факторов из modelMacro)
+- CPI/PPI: modelMacro chain index scale (99-150), NOT Rosstat YoY
 - Features: use_ppe/wc_days/tax/intangibles/interest_payable/provisions corkscrew (все true)
-- **Optional features** (disabled, config ready):
-  - `sga_split_enabled: true` → distribution/admin/ECL/other_opex
-  - `deferred_tax_categories.enabled: true` → PPE/Inv/AR/AP rates
+- **Vertex replication**: sibmetal 0.0% match on Revenue→EBITDA (PG vs SQLite)
 - PDFs: `/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/`
 - **Кредитный отчёт:** `UnionMethodology/reports/credit_report_rusal_Q3_2026.html` (9 разделов, 24 SVG, 190KB)
 
