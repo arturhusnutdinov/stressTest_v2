@@ -190,6 +190,7 @@ class DebtOptimizer:
         max_voluntary_repay: Optional[float] = None,  # cap on total voluntary repayment
         cbr_key_rate: float = 0.0,  # base rate added to floating instrument spreads
         avg_rate_default: float = DEBT_AVG_RATE_DEFAULT,  # fallback rate for new money
+        min_st_debt_pct: float = 0.20,  # minimum ST as % of total debt (WC funding floor)
     ) -> DebtSolveResult:
 
         # ── Инициализация ────────────────────────────────────────────────────
@@ -422,11 +423,12 @@ class DebtOptimizer:
             ))
 
         # ── ШАГ 6: ST/LT split ───────────────────────────────────────────────
-        # Four rules applied in priority order:
+        # Five rules applied in priority order:
         # 1. RC always current
         # 2. Matures next year (within 12 months) → full balance current
         # 3. Amortization due next year → split (next_mandatory → ST, rest → LT)
         # 4. Covenant acceleration (callable_flag + breach) → full balance current
+        # 5. WC funding floor: min_st_debt_pct of total_debt stays ST
         # Default: LT
         _breach = covenant_breach_instruments or set()
         st_total = 0.0
@@ -471,6 +473,18 @@ class DebtOptimizer:
 
             # Default: non-current (LT)
             lt_total += closing
+
+        # Rule 5: WC funding floor — ensure minimum ST debt for working capital
+        # Historically companies maintain ~20-40% of debt as ST for WC funding.
+        # If ST < min_st_pct × total, reclassify portion of LT residual as ST.
+        # min_st_pct passed via solve_year kwarg, default 0.20.
+        total_closing = st_total + lt_total
+        min_st_abs = total_closing * min_st_debt_pct
+        if st_total < min_st_abs and lt_total > 0 and total_closing > 0:
+            shortfall = min_st_abs - st_total
+            reclassify = min(shortfall, lt_total)
+            st_total += reclassify
+            lt_total -= reclassify
 
         # ── ШАГ 7: CFF ───────────────────────────────────────────────────────
         cff_debt = 0.0

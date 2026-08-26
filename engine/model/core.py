@@ -1601,6 +1601,7 @@ class ThreeStatementModel:
                 if cfg.cbr_key_rate_forecast else 0.0
             ),
             avg_rate_default=self._c.get_constraint("debt", "avg_rate_default", DEBT_AVG_RATE_DEFAULT),
+            min_st_debt_pct=self._c.get_constraint("debt", "min_st_debt_pct", 0.20),
         )
 
         # Bug 1 fix: update opening balances for next year from this year's closings
