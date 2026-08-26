@@ -26,6 +26,8 @@ _DEFAULTS = {
     "employee_benefits":   "last",
     "other_nca":           "last",
     "other_ncl":           "last",
+    "other_ca":            "last",
+    "other_cl":            "last",
     "accounts_payable_rp": "last",
     "dta":                 "last",
     "dtl":                 "last",
@@ -57,7 +59,8 @@ def solve_bs_other(state, prev, config=None):
 
     # ── Static carry-forward items ──
     for attr in ("restricted_cash", "goodwill", "investments_lt",
-                 "other_nca", "aoci", "nci", "share_capital", "apic",
+                 "other_nca", "other_ca", "other_cl",
+                 "aoci", "nci", "share_capital", "apic",
                  "treasury_stock", "dta", "dtl"):
         method = _get_method(config, attr)
         if method == "last":
