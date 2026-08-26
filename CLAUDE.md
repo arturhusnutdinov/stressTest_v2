@@ -101,6 +101,8 @@ ModelInputLoader._build_base_year()
 
 ThreeStatementModel._solve_bs_totals()
   → forecast BS = sum of components (same formula as loader)
+  → total_debt = STD + LTD, net_debt = total_debt - cash
+  → other_ca, other_cl: carry forward (method=last)
 
 YearState.full_validation()
   → bs_identity: TA = TL + TE
