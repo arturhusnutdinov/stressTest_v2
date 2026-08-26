@@ -1477,15 +1477,18 @@ class ThreeStatementModel:
                 lt_rates = [i.rate for i in result
                             if i.kind not in (InstrumentKind.LEASE,) and i.rate > 0]
                 avg_r = sum(lt_rates) / len(lt_rates) if lt_rates else cfg.avg_rate_pct
+                # Residual maturity: far beyond forecast horizon so it stays LT
+                # and refinances naturally when maturity approaches.
                 last_yr = max(forecast_years) if forecast_years else self._h.base_year + 5
+                residual_maturity = last_yr + 5  # 5 years beyond forecast end
                 result.append(DebtInstrumentOpen(
                     instrument_id="_debt_residual",
                     name="DebtResidual",
-                    kind=InstrumentKind.BOND_BULLET,
+                    kind=InstrumentKind.TERM_AMORT,
                     opening=gap,
                     rate=avg_r,
-                    maturity=last_yr,
-                    amort_schedule={last_yr: gap},
+                    maturity=residual_maturity,
+                    amort_schedule={},  # no mandatory until maturity
                     priority=2,          # repaid last (after scheduled instruments)
                     classification="LT",
                 ))
