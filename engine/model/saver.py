@@ -139,6 +139,8 @@ CF_METRICS = {
     "cf_cash_opening":            "cash_opening",
     "cf_cash_ending":             "cash_ending",
     "cfo_change_other_wc":        "change_other_wc",
+    "cfo_change_taxes_payable":   "cfo_change_taxes_payable",
+    "cfo_change_interest_payable": "cfo_change_interest_payable",
     "cfo_lease_payments_operating": "lease_payments_cfo",
     "cfo_stock_comp":             "cfo_stock_compensation",
     "cff_finance_lease_principal": "fin_lease_principal_cff",
