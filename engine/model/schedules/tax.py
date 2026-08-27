@@ -106,8 +106,24 @@ class TaxBlock:
         dta_delta_total = dta_delta_temp + nol_dta_delta
 
         # Closing balances (positive magnitudes)
-        self.dta_close = max(0.0, self.dta_open + dta_delta_total)
-        self.dtl_close = max(0.0, self.dtl_open + dtl_delta)
+        dta_raw = self.dta_open + dta_delta_total
+        dtl_raw = self.dtl_open + dtl_delta
+
+        # Valuation allowance: impair DTA if recovery unlikely.
+        # ASC 740 / IAS 12: "more likely than not" test.
+        # Heuristic: if EBT < 0 and DTA growing → cap DTA at historical max.
+        # Full impairment would need multi-year loss history (not available here).
+        # Simple rule: DTA cannot exceed 2× current year's tax benefit.
+        if self.ebt < 0 and dta_raw > 0:
+            max_dta = max(self.dta_open, abs(self.ebt) * rate * 2)
+            if dta_raw > max_dta:
+                _impaired = dta_raw - max_dta
+                dta_raw = max_dta
+                # Impairment flows through deferred tax expense
+                dta_delta_total -= _impaired
+
+        self.dta_close = max(0.0, dta_raw)
+        self.dtl_close = max(0.0, dtl_raw)
 
         # ── 6. Deferred tax expense (IS) ─────────────────────────────────────
         # IAS 12: Deferred tax expense = change in net DTL (DTL − DTA)
