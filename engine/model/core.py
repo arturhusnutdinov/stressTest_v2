@@ -584,11 +584,22 @@ class ThreeStatementModel:
                 0.01
             )
         disposal_ratio = 0.0  # No disposals modeled — avoids unbooked gain/loss complexity
-        block = PPEBlock.from_prev_state(
-            prev, dep_rate=dep_rate, capex=capex,
-            disposal_proceeds=capex * disposal_ratio,
-            disposal_pct_of_capex=disposal_ratio,
-        )
+        # Cohort-based D&A: each year's capex depreciates separately
+        _cohort_mode = getattr(self._c, 'ppe_cohort_mode', False)
+        if _cohort_mode:
+            if not hasattr(self, '_ppe_cohorts'):
+                self._ppe_cohorts = {}
+            _useful_life = getattr(self._c, 'useful_life_years', 15) or 15
+            block = PPEBlock.from_cohorts(
+                prev, capex=capex, useful_life=_useful_life,
+                cohorts=self._ppe_cohorts, year=state.year,
+            )
+        else:
+            block = PPEBlock.from_prev_state(
+                prev, dep_rate=dep_rate, capex=capex,
+                disposal_proceeds=capex * disposal_ratio,
+                disposal_pct_of_capex=disposal_ratio,
+            )
         ok, issues = block.validate()
         if not ok:
             logger.warning(f"  {state.year} PPE: {issues}")

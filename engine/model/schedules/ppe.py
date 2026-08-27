@@ -75,3 +75,45 @@ class PPEBlock:
             disposal_proceeds=disposal_proceeds,
         )
         return block.solve()
+
+    @classmethod
+    def from_cohorts(cls, prev, capex: float, useful_life: float,
+                     cohorts: dict, year: int,
+                     disposal_proceeds: float = 0.0) -> "PPEBlock":
+        """
+        Cohort-based D&A: each year's capex depreciates separately.
+
+        cohorts: {capex_year: {"amount": float, "useful_life": float}}
+        Adds new cohort for current year's capex.
+        D&A = sum of (amount / useful_life) for all active cohorts.
+        """
+        gross_open = prev.ppe_gross or prev.ppe_net
+        accdep_open = prev.ppe_accum_dep or 0
+        net_open = prev.ppe_net or 0
+
+        # Add new cohort for this year
+        if capex > 0:
+            cohorts[year] = {"amount": capex, "useful_life": useful_life}
+
+        # Compute total D&A from all active cohorts
+        dep_charge = 0.0
+        for cy, cohort in list(cohorts.items()):
+            age = year - cy
+            ul = cohort.get("useful_life", useful_life)
+            if age < ul:
+                dep_charge += cohort["amount"] / ul
+            # Remove fully depreciated cohorts (age >= useful_life)
+            if age >= ul:
+                del cohorts[cy]
+
+        # If no cohorts (first year), fallback to rate-based
+        if dep_charge == 0 and net_open > 0:
+            dep_charge = net_open / max(useful_life, 1)
+
+        block = cls(
+            gross_open=gross_open, accdep_open=accdep_open, net_open=net_open,
+            gross_capex=capex, gross_disposals=0.0,
+            dep_charge=dep_charge, dep_on_disposals=0.0,
+            disposal_proceeds=disposal_proceeds,
+        )
+        return block.solve()
