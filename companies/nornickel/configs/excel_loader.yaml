@@ -165,3 +165,42 @@ canonical:
 # ExcelLoader uses INSERT OR REPLACE (upsert) for all tables.
 # Running load() multiple times produces identical DB state.
 # Debt instruments: rates must be NUMERIC in Excel (0.0475, not "4.75%")
+
+# ── Metric Aliases (company-specific → canonical) ──────────────
+# Maps non-standard metric names from Excel to engine canonical names.
+# ExcelLoader applies these AFTER reading raw data:
+#   if raw_metric in aliases → store as aliases[raw_metric]
+# This enables any company to use their own metric names in Excel.
+
+metric_aliases:
+  IS:
+    # Nornickel-specific names → canonical
+    earnings_before_tax: ebt
+    finance_cost_net: interest_expense
+    dep_ppe: depreciation_owned
+    dep_amort: total_da
+    general_and_admin: administrative_expenses
+    selling_distribution: distribution_expenses
+    other_operating: other_operating_expenses
+    investment_income: interest_income
+
+  BS:
+    # Non-standard BS items → fold into canonical
+    social_liabilities_current: other_cl
+    social_taxes_payable: other_cl
+    dividend_payable: other_cl
+    current_provisions: other_cl
+    current_tax_liability: taxes_payable
+    social_liabilities_noncurrent: other_ncl
+    non_current_provisions: other_ncl
+    other_ncl_payables: other_ncl
+    other_tax_receivable: other_ca
+    prepaid_expenses: other_ca
+    current_tax_asset: other_ca
+    other_nca_financial: other_nca
+    other_nca_nonfinancial: other_nca
+
+  CF:
+    # CF aliases
+    dep_amort: total_da
+    cfo_da: total_da
