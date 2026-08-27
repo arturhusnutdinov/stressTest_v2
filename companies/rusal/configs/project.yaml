@@ -17,7 +17,6 @@ macro_forecast:
   - lme_alumina
   - usd_rub
   - brent
-  # gdp_world: removed from VECM — pre-loaded as IMF consensus +2.8% CAGR
   - cpi_ru
   - ppi_ru
   - russian_power_price
@@ -30,11 +29,8 @@ macro_forecast:
   - companies/rusal/data/macro
   - macro/industry/aluminum/drivers
   - macro/global/drivers
-  # External macro: integration with modelMacro (quarterly ECM, 13 equations)
-  # Overrides built-in VECM/MR for covered factors (brent, usd_rub, cpi_ru, cbr_key_rate, gdp_ru)
-  # Remaining factors (lme_aluminium, lme_alumina, gdp_world, russian_power_price) → VECM/MR/EWA as before
   external:
-    enabled: true    # load macro from modelMacro ECM scenario_results.csv
+    enabled: true
     source_path: ../modelMacro
     mode: override
     macro:
@@ -49,12 +45,13 @@ macro_forecast:
         POIL: brent
         RUBUSD: usd_rub
         R: cbr_key_rate
-      # CPI→cpi_ru (level→index) and PY→ppi_ru handled automatically
     sector:
       company_sector_map:
-        rusal: [mining, manuf]
-        nornickel: [mining]
-      # drivers: [gva_growth, ipi, wages, npl, leverage]  # all by default
+        rusal:
+        - mining
+        - manuf
+        nornickel:
+        - mining
 model:
   engine_version: v2
   mode: custom
@@ -95,8 +92,6 @@ model:
       chainlink_anchor: history_last
     margins:
       ebitda_margin_default: 0.12
-      # tax_rate_statutory: loaded from preprocessor EWA (~18.5%)
-      # Override to 0.25 when 2025+ data loaded with new Russian rate
       tax_rate_delta_pct: 0.0
     capex_policy:
       method: ratio_to_revenue
@@ -157,15 +152,7 @@ model:
       buyback_pct_fcf: 0.0
       buyback_leverage_max: 4.0
     associates:
-      # Associates stake disposal schedule
-      # Rusal held ~28% of Norilsk Nickel (sold in 2022 for ~$2.8B)
-      # Uncomment and fill to model the disposal impact on IS/BS/CF
       disposal_events: {}
-      # Example (amounts in mUSD):
-      # disposal_events:
-      #   2022:
-      #     proceeds: 2800.0   # mUSD → multiplied by 1e6 in loader
-      #     book_value: 1200.0 # carrying value on BS
     train_test:
       train_end_year: 2022
   custom:
@@ -174,28 +161,73 @@ model:
       segment_modeling: true
       segments:
         primary_al:
-          # Volume in kt (production, not sales — to avoid inventory drawdown spikes)
-          # 2025: prod=3,918kt, sales=4,490kt (inventory drawdown, non-recurring)
-          # Capacity: ~4,100kt (Bratsk+Krasnoyarsk+Sayanogorsk+Novokuznetsk+Taishet)
-          max_volume_kt: 4100  # nameplate capacity cap
-          volume_history: {2017: 3757, 2018: 3757, 2019: 3757, 2020: 3755, 2021: 3764, 2022: 3835, 2023: 3848, 2024: 3992, 2025: 3918}
-          price_history:  {2017: 1966000, 2018: 2110000, 2019: 1920000, 2020: 1805000, 2021: 2553000, 2022: 2976000, 2023: 2439000, 2024: 2520000, 2025: 2652000}
+          max_volume_kt: 4100
+          volume_history:
+            2017: 3757
+            2018: 3757
+            2019: 3757
+            2020: 3755
+            2021: 3764
+            2022: 3835
+            2023: 3848
+            2024: 3992
+            2025: 3918
+          price_history:
+            2017: 1966000
+            2018: 2110000
+            2019: 1920000
+            2020: 1805000
+            2021: 2553000
+            2022: 2976000
+            2023: 2439000
+            2024: 2520000
+            2025: 2652000
           volume_method: ewa
           price_method: macro
-          price_factors: [lme_aluminium]
+          price_factors:
+          - lme_aluminium
           ewa_halflife: 4.0
         alumina:
-          # 2025 actual: sales 1,204 kt @ 537 USD/t (AR2025 MDA)
-          volume_history: {2017: 1694, 2018: 1753, 2019: 1753, 2020: 1729, 2021: 1677, 2022: 1169, 2023: 759, 2024: 888, 2025: 1204}
-          price_history:  {2017: 406000, 2018: 435000, 2019: 379000, 2020: 308000, 2021: 364000, 2022: 470000, 2023: 676000, 2024: 849000, 2025: 537000}
+          volume_history:
+            2017: 1694
+            2018: 1753
+            2019: 1753
+            2020: 1729
+            2021: 1677
+            2022: 1169
+            2023: 759
+            2024: 888
+            2025: 1204
+          price_history:
+            2017: 406000
+            2018: 435000
+            2019: 379000
+            2020: 308000
+            2021: 364000
+            2022: 470000
+            2023: 676000
+            2024: 849000
+            2025: 537000
           volume_method: ewa
-          price_method: ewa  # was: macro (broken OLS, beta=-0.72, R²=0.13)
+          price_method: ewa
           ewa_halflife: 4.0
         other:
-          # Foil + Other products: volume=1 (unit), price = total segment revenue in USD
-          # 2025 actual: foil 753M + other products 982M = 1,735M (AR2025 MDA)
-          volume_history: {2019: 1, 2020: 1, 2021: 1, 2022: 1, 2023: 1, 2024: 1, 2025: 1}
-          price_history:  {2019: 842000000, 2020: 775000000, 2021: 1418000000, 2022: 1831000000, 2023: 1287000000, 2024: 1339000000, 2025: 1735000000}
+          volume_history:
+            2019: 1
+            2020: 1
+            2021: 1
+            2022: 1
+            2023: 1
+            2024: 1
+            2025: 1
+          price_history:
+            2019: 842000000
+            2020: 775000000
+            2021: 1418000000
+            2022: 1831000000
+            2023: 1287000000
+            2024: 1339000000
+            2025: 1735000000
           volume_method: ewa
           price_method: ewa
           ewa_halflife: 3.0
@@ -205,18 +237,14 @@ model:
       energy_share: 0.27
       labour_share: 0.12
       other_share: 0.24
-      alumina_intensity: 1.93       # tonnes alumina per tonne Al
-      energy_kwh_per_t: 15500.0     # kWh per tonne Al
-      mean_reversion_dampening: 0.80  # calibrated: OLS Δln(COGS/Rev)~β×Δln(PPI), β=1.21, R²=0.76; capped at 0.80
-      clamp_sigma: 0.09             # calibrated: 1.5 × historical σ(COGS/Rev) = 1.5 × 0.059 = 0.089
-      # Rusal is vertically integrated: mines bauxite → refines alumina internally.
-      # Internal alumina transfer cost is production-based, not LME spot.
-      # LME alumina only affects REVENUE (external alumina sales segment).
-      # Set to "none" to disable LME alumina indexation of the cost component.
+      alumina_intensity: 1.93
+      energy_kwh_per_t: 15500.0
+      mean_reversion_dampening: 0.8
+      clamp_sigma: 0.09
       commodity_factor: none
     ppe:
-      sustaining_capex_da_ratio: 2.00  # calibrated: Rusal median CapEx/DA = 2.17x (2021-2025), conservative 2.0x
-      expansion_capex_pct_of_rev_growth: 0.05  # growth capex = 5% of rev growth (Taishet complete, minimal expansion)
+      sustaining_capex_da_ratio: 2.0
+      expansion_capex_pct_of_rev_growth: 0.05
     debt:
       mode: optimizer
       target_net_debt_ebitda: 3.5
@@ -230,46 +258,41 @@ model:
       refinancing:
         fees_pct: 0.001
     taxes:
-      # Inherit from standard: mode, policy, nol_*, tax_paid_timing
-      tax_rate_statutory: 0.25  # Russian corporate rate from 2025 (was 20%)
+      tax_rate_statutory: 0.25
       mode: full
       policy: statutory_with_floor
       nol_opening_balance: 0
       nol_max_utilization_pct: 0.8
-      tax_paid_timing: current_year
-      # Deferred tax temporary difference categories (per Excel prototype)
-      # Enable when historical DTA/DTL reflect these categories
+      tax_paid_timing: next_year
       deferred_tax_categories:
-        enabled: false    # set to true after calibrating opening DTA/DTL
+        enabled: true
         ppe:
-          blended_dep_rate: 0.1462   # Tax depreciation rate on PP&E
+          blended_dep_rate: 0.1462
         inventories:
-          rate: 0.0291               # Inventory valuation temporary differences
+          rate: 0.0291
         receivables:
-          rate: 0.0808               # Trade & other receivables
+          rate: 0.0808
         payables:
-          rate: 0.0717               # Trade & other payables
+          rate: 0.0717
     sga:
-      # SGA split into sub-lines (IFRS: distribution separate from admin)
       split_enabled: true
-      distribution_pct_of_revenue: 0.05    # ~5% historically (2024: 848/12569)
-      admin_pct_of_revenue: 0.04           # ~4% historically (2024: 695/12569)
-      ecl_pct_of_revenue: 0.003            # Expected credit losses ~0.3%
-      other_opex_pct_of_revenue: 0.02      # Other operating expenses ~2%
+      distribution_pct_of_revenue: 0.05
+      admin_pct_of_revenue: 0.04
+      ecl_pct_of_revenue: 0.003
+      other_opex_pct_of_revenue: 0.02
     provisions:
-      # Full corkscrew for provisions (pension, site restoration, legal claims)
       corkscrew_enabled: true
       categories:
         pension:
-          annual_charge_pct: 0.12          # ~12% of opening (7/55 avg)
-          utilization_pct: 0.08            # ~8% annual utilization
+          annual_charge_pct: 0.12
+          utilization_pct: 0.08
         site_restoration:
-          annual_charge_pct: 0.0           # No new provisions historically
-          accretion_rate: 0.02             # Passage of time (discount unwind)
-          fx_sensitivity: 0.15             # FX impact as % of opening
+          annual_charge_pct: 0.0
+          accretion_rate: 0.02
+          fx_sensitivity: 0.15
         legal_claims:
-          annual_charge_pct: 0.30          # ~30% of opening (volatile)
-          utilization_pct: 0.20            # Settlement rate
+          annual_charge_pct: 0.3
+          utilization_pct: 0.2
     covenants:
       enabled: true
       thresholds:
@@ -281,7 +304,7 @@ model:
           warning: 2.0
         ebitda_margin:
           min: 0.08
-          warning: 0.10
+          warning: 0.1
 solver:
   max_iter: 10
   tol: 1000.0
@@ -312,17 +335,16 @@ forecast_methods:
       method: ewa
       ewa_halflife_years: 3
   bs:
-    # Carry forward (last historical value)
     goodwill:
       method: last
     restricted_cash:
       method: last
     investments_lt:
-      method: last        # Nornickel stake — stable strategic asset
+      method: last
     aoci:
-      method: last        # accumulated OCI — FX translation, stable
+      method: last
     nci:
-      method: last        # minority interest — stable
+      method: last
     share_capital:
       method: last
     apic:
@@ -330,20 +352,16 @@ forecast_methods:
     treasury_stock:
       method: last
     dta:
-      method: last        # deferred tax asset — modeled by TaxBlock if enabled
+      method: last
     dtl:
-      method: last        # deferred tax liability — modeled by TaxBlock if enabled
-    # EWA (exponentially weighted average)
+      method: last
     employee_benefits:
       method: ewa
       ewa_halflife_years: 5
     other_nca:
-      method: last        # stable, carry forward
+      method: last
     other_ncl:
-      method: last        # stable, carry forward
-    # Taxes payable: if negative in history → tax receivable (asset)
-    # Model sets to 0 when tax_paid_timing=current_year
-    # taxes_payable: handled by TaxBlock (not configurable here)
+      method: last
 covenants:
   enabled: true
   methodology: default
@@ -362,7 +380,7 @@ rating:
   industry_adjustment: -6.0
   size_adjustment: 2.0
   cycle_avg_ebitda_margin: 0.12
-  sovereign_rating: BBB+  # for intl → national RU scale mapping
+  sovereign_rating: BBB+
   weights:
     leverage: 0.35
     coverage: 0.3
