@@ -200,6 +200,11 @@ class ModelSaver:
         if getattr(result, "debt_lines", None):
             self._save_debt_schedule(result.debt_lines)
 
+        # Сохраняем прогноз по сегментам (Volume/Price/Revenue)
+        seg_fc = getattr(self._config, '_segment_forecasts', None)
+        if seg_fc:
+            self._save_segment_forecasts(seg_fc, version_id)
+
         logger.info(
             f"Сохранено: {self.company_id} сценарий={self._config.scenario_name} "
             f"лет={len(result.years)} строк={total}"
@@ -263,6 +268,30 @@ class ModelSaver:
         )
 
         return n
+
+    def _save_segment_forecasts(self, seg_forecasts, version_id=None) -> None:
+        """Save segment forecast Volume/Price/Revenue to segment_data."""
+        by_year: Dict[int, list] = {}
+        for sf in seg_forecasts:
+            for yr, vol in sf.volume.items():
+                by_year.setdefault(yr, []).append({
+                    "segment_id": sf.name, "segment_name": sf.name,
+                    "metric": "volume_forecast", "value": vol, "source": "model_forecast",
+                })
+            for yr, price in sf.price.items():
+                by_year.setdefault(yr, []).append({
+                    "segment_id": sf.name, "segment_name": sf.name,
+                    "metric": "price_forecast", "value": price, "source": "model_forecast",
+                })
+            for yr, rev in sf.revenue.items():
+                by_year.setdefault(yr, []).append({
+                    "segment_id": sf.name, "segment_name": sf.name,
+                    "metric": "revenue_forecast", "value": rev, "source": "model_forecast",
+                })
+        total = 0
+        for yr, rows in by_year.items():
+            total += self._repo.upsert_segment_data(self.company_id, yr, rows)
+        logger.info(f"  Segment forecasts saved: {len(seg_forecasts)} segments, {total} rows")
 
     def _save_debt_schedule(self, debt_lines_by_year: Dict) -> None:
         """

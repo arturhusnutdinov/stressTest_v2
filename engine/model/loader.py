@@ -103,6 +103,8 @@ class ModelInputLoader:
                     ))
                     seg_forecasts = seg_model.forecast(forecast_years)
                     model_config._segment_model = seg_model.total_revenue(seg_forecasts)
+                    # Store segment forecasts for later saving to DB
+                    model_config._segment_forecasts = seg_forecasts
                     logger.info(
                         f"  Сегментная Revenue модель: {len(seg_model.segments)} сегментов"
                     )
