@@ -104,6 +104,21 @@ ThreeStatementModel._solve_bs_totals()
   → total_debt = STD + LTD, net_debt = total_debt - cash
   → other_ca, other_cl: carry forward (method=last)
 
+Tax:
+  → Method A: Explicit Tax Basis PPE (CFI): tax_basis_ppe config
+  → Method B: accel_dep_excess_pct approximation (legacy)
+  → DTA valuation allowance (ASC 740): cap DTA when EBT < 0
+  → DT categories: PPE/Inv/AR/AP per-asset rates
+
+PPE:
+  → Cohort mode: each year's capex = separate vintage (ppe_cohort_mode)
+  → Rate mode: dep_rate × avg_PPE_net (default)
+
+Base Year:
+  → Auto-detected from preprocessor (detected_base_year metric)
+  → Falls back to YAML history_end_year
+  → other_ca, other_cl: carry forward (method=last)
+
 YearState.full_validation()
   → bs_identity: TA = TL + TE
   → cf_bridge: cash_open + CF_net = cash_close
