@@ -246,13 +246,21 @@ class ModelInputLoader:
             or _safe_float(_std_margins.get("tax_rate_statutory"))
         )
 
+        # Auto-detect base year from preprocessor (if available)
+        _yaml_end_year = periods.get("history_end_year", 2024)
+        _detected_base = self._repo.get_preprocess_scalar(
+            self.company_id, "periods", "detected_base_year"
+        ) if hasattr(self._repo, 'get_preprocess_scalar') else None
+        _history_end = int(_detected_base) if _detected_base and _detected_base > 0 else _yaml_end_year
+        _forecast_start = periods.get("forecast_start_year", _history_end + 1)
+
         mc = ModelConfig(
             company_id=self.company_id,
             scenario_name=self._scenario_name,
             history_start_year=periods.get("history_start_year", 2010),
-            history_end_year=periods.get("history_end_year", 2024),
-            forecast_start_year=periods.get("forecast_start_year", 2025),
-            forecast_end_year=periods.get("forecast_end_year", 2029),
+            history_end_year=_history_end,
+            forecast_start_year=_forecast_start,
+            forecast_end_year=periods.get("forecast_end_year", _history_end + 3),
             accounting_standard=company_cfg.get("accounting_standard", "US_GAAP"),
             db_unit=company_cfg.get("db_unit", "tUSD"),
             # Drivers (могут быть переопределены в YAML)
