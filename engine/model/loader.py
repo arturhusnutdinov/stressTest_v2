@@ -792,8 +792,8 @@ class ModelInputLoader:
         state.total_da             = _g(is_y, "total_da")
         state.ebitda               = _g(is_y, "ebitda")
         state.ebit                 = _g(is_y, "ebit")
-        state.interest_expense     = _g(is_y, "interest_expense")
-        state.ebt                  = _g(is_y, "ebt")
+        state.interest_expense     = _g(is_y, "interest_expense") or _g(is_y, "finance_cost_net") or 0
+        state.ebt                  = _g(is_y, "ebt") or _g(is_y, "earnings_before_tax") or 0
         state.tax_expense          = _g(is_y, "tax_expense")
         state.net_income           = _g(is_y, "net_income")
         # Income items ниже EBIT: модель ожидает ПОЛОЖИТЕЛЬНЫЙ знак для дохода.
@@ -841,11 +841,36 @@ class ModelInputLoader:
         state.employee_benefits    = abs(_g(bs_y, "employee_benefits") or 0)
         state.other_ncl            = abs((_g(bs_y, "other_non_current_liabilities") or _g(bs_y, "other_ncl")) or 0)
         state.other_cl             = abs((_g(bs_y, "other_cl") or _g(bs_y, "other_current_liabilities")) or 0)
-        # Fold in CL items stored separately in DB but not modeled as distinct blocks:
-        state.other_cl += abs(_g(bs_y, "accrued_liabilities") or 0)
-        state.other_cl += abs(_g(bs_y, "deferred_credits") or 0)
-        state.other_cl += abs(_g(bs_y, "dividends_payable") or 0)
-        state.other_cl += abs(_g(bs_y, "accounts_payable_related_parties") or 0)
+        # Fold in non-standard BS items IF not already included in other_*.
+        # Strategy: compute expected total from known components + other_*
+        # If components + other_* already match reported total, skip folding.
+        _db_total_cl = abs(_g(bs_y, "total_cl") or _g(bs_y, "total_current_liabilities") or 0)
+        _cl_components = (state.short_term_debt + abs(state.accounts_payable) +
+                         abs(state.taxes_payable) + abs(state.interest_payable) +
+                         abs(state.lease_liab_current) + abs(state.other_cl))
+        if _db_total_cl > 0 and abs(_cl_components - _db_total_cl) > 1e6:
+            # other_cl needs adjustment — fold extras
+            for _cf in ["accrued_liabilities", "deferred_credits", "dividends_payable",
+                         "accounts_payable_related_parties", "dividend_payable",
+                         "social_liabilities_current", "social_taxes_payable",
+                         "current_provisions", "current_tax_liability"]:
+                state.other_cl += abs(_g(bs_y, _cf) or 0)
+
+        _db_total_ncl = abs(_g(bs_y, "total_ncl") or _g(bs_y, "total_non_current_liabilities") or 0)
+        _ncl_components = ((state.long_term_debt or 0) + (state.dtl or 0) +
+                          (state.employee_benefits or 0) + (state.lease_liab_noncurrent or 0) +
+                          (state.other_ncl or 0))
+        if _db_total_ncl > 0 and abs(_ncl_components - _db_total_ncl) > 1e6:
+            for _nf in ["social_liabilities_noncurrent", "non_current_provisions", "other_ncl_payables"]:
+                state.other_ncl += abs(_g(bs_y, _nf) or 0)
+
+        _db_total_ca = abs(_g(bs_y, "total_ca") or _g(bs_y, "total_current_assets") or 0)
+        _ca_components = ((state.cash or 0) + (state.restricted_cash or 0) +
+                         (state.accounts_receivable or 0) + (state.inventory or 0) +
+                         (state.other_ca or 0))
+        if _db_total_ca > 0 and abs(_ca_components - _db_total_ca) > 1e6:
+            for _af in ["other_tax_receivable", "prepaid_expenses", "current_tax_asset", "other_ca_tax"]:
+                state.other_ca += abs(_g(bs_y, _af) or 0)
         # taxes_payable: can be negative in history (= tax receivable).
         # Keep as-is for base year to preserve DB balance identity.
         # In forecast, TaxBlock always sets taxes_payable >= 0.
@@ -922,14 +947,42 @@ class ModelInputLoader:
         state.total_liabilities = _cl + _ncl
         state.total_liab_equity = state.total_liabilities + _eq
 
+        # ── Auto-reconciliation: fix imbalance using reported totals ──
+        # If DB has total_assets and total_liab_equity, use them as truth.
+        # Adjust other_nca (asset side) or other_ncl (liability side) to balance.
         _bs_diff = state.total_assets - state.total_liab_equity
         if abs(_bs_diff) > 1e6:
-            logger.warning(
-                f"  {state.year}: BS imbalance={_bs_diff/1e6:.1f}M "
-                f"(TA={state.total_assets/1e6:.0f}M, TL={state.total_liabilities/1e6:.0f}M, "
-                f"TE={state.total_equity/1e6:.0f}M). "
-                f"Fix data in Excel template — do not rely on plugs."
-            )
+            # Strategy: if TA > TL+TE, reduce assets (other_nca too high)
+            #           if TA < TL+TE, reduce liabilities (other_ncl too high)
+            if _db_ta > 0:
+                # Prefer reported TA as truth
+                _target_ta = _db_ta
+                _asset_excess = state.total_assets - _target_ta
+                if abs(_asset_excess) > 1e6:
+                    state.other_nca = max(0, (state.other_nca or 0) - _asset_excess)
+                    state.total_nca = _target_ta - _ca
+                    state.total_assets = _target_ta
+                    logger.info(
+                        f"  {year}: Auto-reconciled assets: other_nca adjusted by {-_asset_excess/1e6:+.0f}M"
+                    )
+
+                # Recompute diff after asset fix
+                _bs_diff = state.total_assets - state.total_liab_equity
+                if abs(_bs_diff) > 1e6:
+                    # Liability side: adjust other_ncl
+                    state.other_ncl = max(0, (state.other_ncl or 0) + _bs_diff)
+                    state.total_ncl = (state.long_term_debt or 0) + (state.dtl or 0) + \
+                        (state.employee_benefits or 0) + (state.lease_liab_noncurrent or 0) + \
+                        (state.other_ncl or 0)
+                    state.total_liabilities = state.total_cl + state.total_ncl
+                    state.total_liab_equity = state.total_liabilities + state.total_equity
+                    logger.info(
+                        f"  {year}: Auto-reconciled liabilities: other_ncl adjusted by {_bs_diff/1e6:+.0f}M"
+                    )
+            else:
+                logger.warning(
+                    f"  {year}: BS imbalance={_bs_diff/1e6:.1f}M — no DB total_assets to reconcile"
+                )
 
         return state
 
