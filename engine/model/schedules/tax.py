@@ -48,6 +48,19 @@ class TaxBlock:
     pension_dta_delta:  float = 0.0   # pension accruals that grow DTA balance
     other_dta_delta:    float = 0.0   # other sources that grow DTA balance
 
+    # ── Tax Basis PPE (CFI methodology) ─────────────────────────────────────
+    # Explicit tax basis tracking: more accurate than accel_dep_excess_pct
+    # When tax_ppe_open > 0, overrides accel_dep_excess with computed value
+    tax_ppe_open:       float = 0.0   # tax basis of PPE at start of year
+    book_dep:           float = 0.0   # accounting depreciation (from PPE corkscrew)
+    capex:              float = 0.0   # capex added to both book and tax PPE
+    tax_dep_rate:       float = 0.0   # blended tax depreciation rate (e.g. 0.15)
+    first_year_tax_dep: float = 0.5   # fraction of tax dep in first year of capex (half-year convention)
+
+    # Tax basis outputs
+    tax_dep:            Optional[float] = None   # tax depreciation amount
+    tax_ppe_close:      Optional[float] = None   # tax basis of PPE end of year
+
     # ── Payment timing ────────────────────────────────────────────────────────
     payment_lag:        int   = 0     # 0=current_year  1=next_year
 
@@ -80,9 +93,23 @@ class TaxBlock:
         self.nol_close = self.nol_open - self.nol_used + new_nol
 
         # ── 2. Depreciation adjustment (book vs tax) ────────────────────────
-        # Tax depreciation > book depreciation → taxable income lower → DTL grows
-        # accel_dep_excess = tax_dep − book_dep (positive when tax dep > book dep)
-        dep_adjustment = self.accel_dep_excess   # reduces taxable income
+        # Method A: explicit tax basis (CFI methodology)
+        # Method B: accel_dep_excess_pct approximation (legacy)
+        if self.tax_ppe_open > 0 and self.tax_dep_rate > 0:
+            # Explicit tax basis: tax_dep computed from tax PPE balance
+            # Tax dep on existing assets = tax_ppe_open × tax_dep_rate
+            # Tax dep on new capex = capex × tax_dep_rate × first_year_fraction
+            tax_dep_existing = self.tax_ppe_open * self.tax_dep_rate
+            tax_dep_new = self.capex * self.tax_dep_rate * self.first_year_tax_dep
+            self.tax_dep = tax_dep_existing + tax_dep_new
+            # Tax basis corkscrew: open + capex - tax_dep = close
+            self.tax_ppe_close = max(0.0, self.tax_ppe_open + self.capex - self.tax_dep)
+            # Override accel_dep_excess with computed value
+            dep_adjustment = max(0.0, self.tax_dep - self.book_dep)
+            self.accel_dep_excess = dep_adjustment
+        else:
+            # Legacy: accel_dep_excess from config (dep_ppe × accel_dep_excess_pct)
+            dep_adjustment = self.accel_dep_excess
 
         # ── 3. Taxable income (for current tax / cash tax) ───────────────────
         # = EBT − NOL used − depreciation adjustment (tax basis)

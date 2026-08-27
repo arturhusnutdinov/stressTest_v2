@@ -127,6 +127,9 @@ class ThreeStatementModel:
         # Fixed year-opening NOL (set once per year, before iteration loop); used by _solve_tax_block
         # to avoid depleting the NOL pool across iterations of the same year.
         self._nol_year_open: float = self._nol_carryforward
+        # Tax basis PPE (CFI methodology): opening balance from config
+        _tb_cfg = getattr(config, 'tax_basis_ppe', None) or {}
+        self._tax_ppe_balance: float = float(_tb_cfg.get('opening_balance', 0)) if isinstance(_tb_cfg, dict) else 0.0
         # Associates disposal gain for current year (set in _apply_associates_disposal, used in _solve_cf)
         self._associates_disposal_gain_year: float = 0.0
         # Covenant acceleration: callable instruments in breach → reclassified ST
@@ -749,6 +752,12 @@ class ThreeStatementModel:
         _nol_active = _nol_open > 0 or state.ebt < 0
         # Payment lag from config: 0=current_year, 1=next_year
         _pay_lag = 1 if getattr(self._c, 'tax_paid_timing', 'next_year') == 'next_year' else 0
+        # Tax Basis PPE (CFI methodology) — explicit book vs tax dep
+        _tax_basis_cfg = getattr(self._c, 'tax_basis_ppe', None) or {}
+        _tax_dep_rate = float(_tax_basis_cfg.get('blended_rate', 0)) if isinstance(_tax_basis_cfg, dict) else 0
+        _tax_ppe_open = getattr(self, '_tax_ppe_balance', 0.0)
+        _first_yr_frac = float(_tax_basis_cfg.get('first_year_fraction', 0.5)) if isinstance(_tax_basis_cfg, dict) else 0.5
+
         block = TaxBlock(
             ebt=state.ebt,
             statutory_rate=self._c.statutory_rate,
@@ -764,7 +773,17 @@ class ThreeStatementModel:
             other_dtl_delta=other_dtl_delta,
             other_dta_delta=other_dta_delta,
             payment_lag=_pay_lag,
+            # Tax basis PPE (CFI method)
+            tax_ppe_open=_tax_ppe_open,
+            book_dep=state.dep_ppe or 0.0,
+            capex=abs(state.cfi_capex or 0.0),
+            tax_dep_rate=_tax_dep_rate,
+            first_year_tax_dep=_first_yr_frac,
         ).solve()
+
+        # Persist tax PPE basis for next year
+        if block.tax_ppe_close is not None:
+            self._tax_ppe_balance = block.tax_ppe_close
         ok, issues = block.validate()
         if not ok:
             logger.warning(f"  {state.year} Tax: {issues}")

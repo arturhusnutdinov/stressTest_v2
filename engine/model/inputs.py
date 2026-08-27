@@ -455,6 +455,7 @@ class ModelConfig:
     additional_capex_schedule: Dict[int, float] = field(default_factory=dict)  # {year: $}
     dep_rate: Optional[float] = None
     accel_dep_excess_pct: float = 0.0  # % of book dep by which tax dep exceeds book dep (generates DTL)
+    tax_basis_ppe: Optional[Dict] = None  # CFI explicit tax basis: {opening_balance, blended_rate, first_year_fraction}
     dep_to_rev: Optional[float] = None   # D&A как % от Revenue (альтернатива dep_rate)
     dso_days: Optional[float] = None
     dih_days: Optional[float] = None

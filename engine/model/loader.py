@@ -298,6 +298,10 @@ class ModelInputLoader:
                 or cfg.get("model", {}).get("custom", {}).get("taxes", {}).get("accel_dep_excess_pct", 0.0)
                 or 0.0
             ),
+            tax_basis_ppe=(
+                mode_cfg.get("taxes", {}).get("tax_basis_ppe")
+                or cfg.get("model", {}).get("standard", {}).get("taxes", {}).get("tax_basis_ppe")
+            ),
             debt=debt_settings,
             leases=leases,
             lease=_lease_params,
