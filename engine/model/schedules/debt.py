@@ -36,7 +36,32 @@ class InstrumentKind:
 
 
 def infer_kind(name: str, raw_type: str = "") -> str:
-    """Определить kind инструмента по имени и типу."""
+    """Определить kind инструмента по имени и db_type.
+
+    Priority: 1. Explicit db_type mapping, 2. Name-based inference.
+    db_type values from YAML/DB: bond_fixed, bond_float, term_loan,
+    revolving, lease, bullet, amortizing.
+    """
+    # 1. Explicit db_type mapping (from YAML or debt_instruments.db_type)
+    rt = (raw_type or "").lower().strip()
+    _DB_TYPE_MAP = {
+        "bond_fixed": InstrumentKind.BOND_BULLET,
+        "bond_float": InstrumentKind.BOND_BULLET,
+        "bond_bullet": InstrumentKind.BOND_BULLET,
+        "bond_amort": InstrumentKind.TERM_AMORT,
+        "term_loan": InstrumentKind.TERM_AMORT,
+        "revolving": InstrumentKind.RC,
+        "revolver": InstrumentKind.RC,
+        "rc": InstrumentKind.RC,
+        "lease": InstrumentKind.LEASE,
+        "finance_lease": InstrumentKind.LEASE,
+        "bullet": InstrumentKind.BULLET,
+        "amortizing": InstrumentKind.TERM_AMORT,
+    }
+    if rt in _DB_TYPE_MAP:
+        return _DB_TYPE_MAP[rt]
+
+    # 2. Name-based inference (legacy)
     n = (name + " " + raw_type).upper()
     if "LEASE" in n:
         return InstrumentKind.LEASE
