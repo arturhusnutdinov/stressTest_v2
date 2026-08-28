@@ -1,0 +1,179 @@
+# ═══════════════════════════════════════════════════════════════
+# Stress Scenarios — Nornickel (PJSC MMC Norilsk Nickel)
+# ═══════════════════════════════════════════════════════════════
+# Primary commodity: Palladium (~38% revenue) + Nickel (~21%)
+# FX: USD/RUB (cost base in RUB, revenue in USD)
+# Energy: Russian power price (smelters)
+
+scenarios:
+
+  # ── Nickel Downturn ────────────────────────────────────────
+  nickel_downturn:
+    description: "LME Nickel -25%, WC deterioration"
+    macro_shocks:
+      lme_nickel:
+        type: percentage
+        value: -25.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 15.0
+      dih_days:
+        type: percentage
+        value: 20.0
+
+  # ── PGM Crash ──────────────────────────────────────────────
+  pgm_crash:
+    description: "Palladium -35%, Platinum -20% (EV transition)"
+    macro_shocks:
+      lme_palladium:
+        type: percentage
+        value: -35.0
+      lme_platinum:
+        type: percentage
+        value: -20.0
+    driver_shocks:
+      dih_days:
+        type: percentage
+        value: 15.0
+
+  # ── Metals Bear ────────────────────────────────────────────
+  metals_bear:
+    description: "All metals -20%, global slowdown"
+    macro_shocks:
+      lme_nickel:
+        type: percentage
+        value: -20.0
+      lme_copper:
+        type: percentage
+        value: -20.0
+      lme_palladium:
+        type: percentage
+        value: -20.0
+      lme_platinum:
+        type: percentage
+        value: -15.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 10.0
+
+  # ── FX Shock (RUB devaluation) ─────────────────────────────
+  fx_shock:
+    description: "RUB devaluation +30% — costs up, USD revenue flat"
+    macro_shocks:
+      usd_rub:
+        type: percentage
+        value: 30.0
+
+  # ── Energy Spike ───────────────────────────────────────────
+  energy_spike:
+    description: "Energy +40%, oil +30% — smelter costs up"
+    macro_shocks:
+      brent:
+        type: percentage
+        value: 30.0
+    driver_shocks:
+      cogs_pct:
+        type: pp
+        value: 3.0
+
+  # ── Rate Spike ─────────────────────────────────────────────
+  rate_spike:
+    description: "CBR rate +200bp — interest burden up"
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+
+  # ── Sanctions Shock ────────────────────────────────────────
+  sanctions_shock:
+    description: "LME ban — Ni -30%, Cu -15%, Pd -25%, FX +20%"
+    macro_shocks:
+      lme_nickel:
+        type: percentage
+        value: -30.0
+      lme_copper:
+        type: percentage
+        value: -15.0
+      lme_palladium:
+        type: percentage
+        value: -25.0
+      usd_rub:
+        type: percentage
+        value: 20.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 25.0
+      dih_days:
+        type: percentage
+        value: 30.0
+
+  # ── Severe (combined) ──────────────────────────────────────
+  severe:
+    description: "Combined: metals -30%, rates +300bp, WC stress, FX +15%"
+    macro_shocks:
+      lme_nickel:
+        type: percentage
+        value: -30.0
+      lme_copper:
+        type: percentage
+        value: -25.0
+      lme_palladium:
+        type: percentage
+        value: -30.0
+      lme_platinum:
+        type: percentage
+        value: -20.0
+      usd_rub:
+        type: percentage
+        value: 15.0
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 3.0
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0
+
+  # ── Upside ─────────────────────────────────────────────────
+  upside:
+    description: "Metals +20%, EV demand for Ni/Pd"
+    macro_shocks:
+      lme_nickel:
+        type: percentage
+        value: 20.0
+      lme_copper:
+        type: percentage
+        value: 15.0
+      lme_palladium:
+        type: percentage
+        value: 25.0
+      lme_platinum:
+        type: percentage
+        value: 15.0
+
+  # ── Demand Shock ───────────────────────────────────────────
+  demand_shock:
+    description: "Global recession — metals -15%, WC deterioration"
+    macro_shocks:
+      lme_nickel:
+        type: percentage
+        value: -15.0
+      lme_copper:
+        type: percentage
+        value: -12.0
+      lme_palladium:
+        type: percentage
+        value: -15.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0
