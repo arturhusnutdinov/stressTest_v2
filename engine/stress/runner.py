@@ -554,7 +554,36 @@ class StressRunner:
                 total += self._repo.upsert_stress_results(
                     self.company_id, stress_sid, yr, 'cf', cf_data)
 
+            # Also save to forecast_is/bs/cf tables (same as base scenario)
+            # so frontend can read stress data via standard forecast API
+            self._save_to_forecast_tables(stress_sid, model_result)
+
             self._repo.conn.commit()
             logger.info(f"  Стресс сохранён: {scenario_name} → {total} строк (полный 3-statement)")
         except Exception as e:
             logger.error(f"  Ошибка сохранения стресса {scenario_name}: {e}")
+
+    def _save_to_forecast_tables(self, scenario_id: int, model_result) -> None:
+        """Save stress results to forecast_is/bs/cf (same format as base scenario).
+
+        Enables frontend to read stress scenarios through standard forecast API.
+        """
+        try:
+            from ..model.saver import IS_METRICS, BS_METRICS, CF_METRICS
+            n = 0
+            for yr, s in model_result.years.items():
+                is_data = {db: getattr(s, attr, None) for attr, db in IS_METRICS.items()
+                           if getattr(s, attr, None) is not None}
+                n += self._repo.upsert_forecast(self.company_id, 'is', yr, scenario_id, is_data)
+                bs_data = {db: getattr(s, attr, None) for attr, db in BS_METRICS.items()
+                           if getattr(s, attr, None) is not None}
+                nd = (s.short_term_debt or 0) + (s.long_term_debt or 0) - (s.cash or 0)
+                bs_data['net_debt'] = nd
+                bs_data['total_debt'] = (s.short_term_debt or 0) + (s.long_term_debt or 0)
+                n += self._repo.upsert_forecast(self.company_id, 'bs', yr, scenario_id, bs_data)
+                cf_data = {db: getattr(s, attr, None) for attr, db in CF_METRICS.items()
+                           if getattr(s, attr, None) is not None}
+                n += self._repo.upsert_forecast(self.company_id, 'cf', yr, scenario_id, cf_data)
+            logger.debug(f"  Forecast tables: {n} rows for scenario_id={scenario_id}")
+        except Exception as e:
+            logger.debug(f"  Forecast tables save skipped: {e}")

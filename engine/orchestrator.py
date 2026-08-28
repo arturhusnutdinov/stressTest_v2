@@ -319,21 +319,39 @@ def build_model(
                     company_dir = (db_path.parent / "companies" / company_id
                                    if db_path else Path("companies") / company_id)
                     rating_runner = RatingRunner.from_project_yaml(company_id, repo, company_dir)
+
+                    # Base/forecast rating
                     rating_result = rating_runner.rate_model_result(
                         result.model_result,
                         rating_type=scenario_name,
                         save=True,
                     )
                     result.rating_result = rating_result
-                    result.timings["rating"] = time.time() - t0
                     if rating_result.success:
+                        logger.info(f"Рейтинг [{scenario_name}]: {company_id}")
                         logger.info(
-                            f"  OK: {rating_result.best_rating()} → {rating_result.worst_rating()}"
+                            f"  {rating_result.best_rating()} → {rating_result.worst_rating()}"
                         )
-                        logger.info(result.rating_result.summary())
-                    else:
-                        result.warnings += rating_result.errors
-                        logger.warning(f"  ⚠ Рейтинг: {rating_result.errors}")
+
+                    # Stress ratings (for each stress scenario that ran)
+                    if result.stress_results:
+                        for sc_name, sc_result in result.stress_results.items():
+                            if sc_result.success and sc_result.stress_values:
+                                try:
+                                    stress_rating = rating_runner.rate_from_kpis(
+                                        sc_result.stress_values,
+                                        rating_type=sc_name,
+                                        save=True,
+                                    )
+                                    if stress_rating and stress_rating.success:
+                                        logger.info(
+                                            f"  Рейтинг [{sc_name}]: "
+                                            f"{stress_rating.best_rating()} → {stress_rating.worst_rating()}"
+                                        )
+                                except Exception as e_sr:
+                                    logger.debug(f"  Stress rating {sc_name}: {e_sr}")
+
+                    result.timings["rating"] = time.time() - t0
                 except Exception as e:
                     result.warnings.append(f"Рейтинг: {e}")
                     logger.warning(f"  ⚠ Рейтинг: {e}")

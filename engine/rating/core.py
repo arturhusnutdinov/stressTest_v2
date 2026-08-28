@@ -218,6 +218,53 @@ class CreditMetrics:
             ebitda            = ebitda,
         )
 
+    @classmethod
+    def from_kpi_dict(cls, kpis: Dict[str, float], year: int) -> "CreditMetrics":
+        """Build CreditMetrics from stress KPI dict {metric_name: value}."""
+        g = lambda k, d=0: kpis.get(k, d) or d
+        total_debt = abs(g('short_term_debt')) + abs(g('long_term_debt'))
+        if total_debt == 0:
+            total_debt = abs(g('total_debt'))
+        cash = abs(g('cash'))
+        net_debt = total_debt - cash
+        ebitda = g('ebitda')
+        ebit = g('ebit')
+        revenue = g('revenue')
+        assets = g('total_assets')
+        equity = g('total_equity')
+        int_exp = g('interest_expense')
+        ni = g('net_income')
+        cfo = g('cfo_total')
+        capex = g('capex', g('cfi_capex'))
+        ca = g('total_current_assets', g('total_ca'))
+        cl = g('total_current_liabilities', g('total_cl'))
+        fcf = cfo + capex if capex < 0 else cfo - abs(capex)
+
+        def safe_div(a, b, default=None):
+            if b and abs(b) > 1e-6 and a is not None:
+                return a / b
+            return default
+
+        return cls(
+            year=year,
+            net_debt_ebitda=safe_div(net_debt, ebitda),
+            debt_to_equity=safe_div(total_debt, equity),
+            debt_to_capital=safe_div(total_debt, total_debt + equity) if equity else None,
+            interest_coverage=safe_div(ebit, abs(int_exp)),
+            ebitda_coverage=safe_div(ebitda, abs(int_exp)),
+            ebitda_margin=safe_div(ebitda, revenue),
+            ebit_margin=safe_div(ebit, revenue),
+            net_margin=safe_div(ni, revenue),
+            roa=safe_div(ni, assets),
+            current_ratio=safe_div(ca, cl),
+            cash_to_debt=safe_div(cash, total_debt),
+            fcf_to_debt=safe_div(fcf, total_debt),
+            cfo_to_debt=safe_div(cfo, total_debt),
+            fcf=fcf,
+            revenue=revenue,
+            ebitda=ebitda,
+        )
+
     def summary(self) -> str:
         return (
             f"  Net Debt/EBITDA: {self.net_debt_ebitda:.1f}x  "

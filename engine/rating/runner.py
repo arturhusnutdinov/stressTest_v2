@@ -161,6 +161,86 @@ class RatingRunner:
             result.errors.append(str(e))
         return result
 
+    def rate_from_kpis(
+        self,
+        stress_values: Dict[int, Dict[str, float]],
+        rating_type: str = "stress",
+        save: bool = True,
+    ) -> RatingResult:
+        """Rate from stress KPI values {year: {metric: value}}.
+
+        Builds CreditMetrics from raw KPI dict (revenue, ebitda, net_income,
+        total_debt, cash, interest_expense, total_assets, total_equity, etc.)
+        """
+        result = RatingResult(company_id=self.company_id, rating_type=rating_type)
+        try:
+            for yr, kpis in sorted(stress_values.items()):
+                metrics = CreditMetrics.from_kpi_dict(kpis, yr)
+                rating = self._engine.calculate(metrics)
+                # Factor analysis
+                rating['factor_analysis'] = self._factor_analysis(metrics, rating)
+                result.metrics[yr] = metrics
+                result.ratings[yr] = rating
+            if save:
+                self._save(result)
+            result.success = True
+        except Exception as e:
+            result.errors.append(str(e))
+            logger.debug(f"rate_from_kpis error: {e}")
+        return result
+
+    @staticmethod
+    def _factor_analysis(metrics: CreditMetrics, rating: Dict) -> Dict:
+        """Factor contribution analysis for rating.
+
+        Returns:
+          - sub_score_contributions: how each factor group contributes to total score
+          - proximity_to_threshold: how close each metric is to rating boundary
+          - key_drivers: top 3 factors driving the rating
+          - vulnerabilities: metrics closest to downgrade threshold
+        """
+        sub_scores = rating.get('sub_scores', {})
+        weights = rating.get('weights', {})
+        total_score = rating.get('score', 0)
+
+        # Contribution = weight × sub_score / total_score
+        contributions = {}
+        for factor, score in sub_scores.items():
+            w = weights.get(factor, 0.25)
+            contributions[factor] = {
+                'score': score,
+                'weight': w,
+                'weighted_score': score * w,
+                'contribution_pct': (score * w / total_score * 100) if total_score > 0 else 0,
+            }
+
+        # Sort by contribution
+        sorted_factors = sorted(contributions.items(), key=lambda x: x[1]['weighted_score'], reverse=True)
+        key_drivers = [f[0] for f in sorted_factors[:3]]
+
+        # Proximity to threshold (how close to downgrade)
+        # S&P-style: BB+ boundary ~55, BBB- ~60, BBB ~65, A- ~70
+        thresholds = {
+            'BBB-': 60, 'BBB': 65, 'BBB+': 68, 'A-': 70, 'A': 75,
+            'BB+': 55, 'BB': 50, 'BB-': 45, 'B+': 40,
+        }
+        current_grade = rating.get('rating', '')
+        numeric = rating.get('numeric', 0)
+        headroom = {}
+        for grade, threshold in thresholds.items():
+            headroom[grade] = total_score - threshold
+
+        # Vulnerabilities: metrics with low sub_scores
+        vulnerabilities = [f for f, s in sub_scores.items() if s < 50]
+
+        return {
+            'contributions': contributions,
+            'key_drivers': key_drivers,
+            'vulnerabilities': vulnerabilities,
+            'headroom_to_ig': total_score - thresholds.get('BBB-', 60),
+            'headroom_to_downgrade': total_score - thresholds.get('BB', 50),
+        }
+
     def _save(self, result: RatingResult) -> None:
         """Сохраняет рейтинги в БД через Repository."""
         try:
