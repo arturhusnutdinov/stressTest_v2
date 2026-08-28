@@ -45,6 +45,62 @@ class StressRunner:
     def list_scenarios(self) -> List[str]:
         return self._loader.list_scenarios()
 
+    @staticmethod
+    def _resolve_factor_alias(factor: str, available: set) -> Optional[str]:
+        """Resolve a factor name from stress YAML to available macro_forecasts key.
+
+        Uses progressive matching:
+        1. Exact match (already checked before calling)
+        2. Common suffix/prefix patterns (lme_nickel → lme_ni_usd)
+        3. Substring containment (brent → brent_usd)
+        4. None if no match found
+        """
+        fl = factor.lower()
+
+        # Pattern: strip known suffixes/prefixes and match
+        # e.g. lme_nickel → look for keys containing 'ni' after 'lme_'
+        for key in available:
+            kl = key.lower()
+            # Both start with same prefix and share a core token
+            if fl == kl:
+                return key
+            # Short name is prefix of canonical (brent → brent_usd)
+            if kl.startswith(fl + "_") or kl.startswith(fl):
+                logger.info(f"  Macro shock alias: {factor} → {key} (prefix match)")
+                return key
+            # Canonical is prefix of short (usd_rub → usd_rub_fx)
+            if fl.startswith(kl + "_") or fl.startswith(kl):
+                logger.info(f"  Macro shock alias: {factor} → {key} (reverse prefix)")
+                return key
+
+        # Deeper: extract core commodity name and match
+        # lme_nickel → nickel; lme_ni_usd → ni
+        # Map: nickel↔ni, copper↔cu, palladium↔pd, platinum↔pt, aluminium↔al
+        _COMMODITY_SHORT = {
+            "nickel": "ni", "copper": "cu", "palladium": "pd",
+            "platinum": "pt", "aluminium": "al", "aluminum": "al",
+            "gold": "au", "iron_ore": "iron_ore", "coal": "coal",
+        }
+        for long_name, short in _COMMODITY_SHORT.items():
+            if long_name in fl:
+                # factor contains long name → look for short in available
+                for key in available:
+                    if f"_{short}_" in key or key.endswith(f"_{short}"):
+                        logger.info(f"  Macro shock alias: {factor} → {key} (commodity map {long_name}→{short})")
+                        return key
+            if short in fl and len(short) >= 2:
+                # factor contains short → look for long in available
+                for key in available:
+                    if long_name in key:
+                        logger.info(f"  Macro shock alias: {factor} → {key} (commodity map {short}→{long_name})")
+                        return key
+
+        logger.warning(
+            f"  Macro shock {factor}: not resolved "
+            f"(available: {sorted(available)[:10]})"
+        )
+        return None
+
     def run(
         self,
         scenario_name: str,
@@ -242,11 +298,15 @@ class StressRunner:
         else:
             fc_years = list(range(base_year + 1, base_year + int(forecast_years) + 1))
 
+        # Dynamic alias resolution: find best match among available macro_forecasts
+        available_keys = set(stressed.macro_forecasts.keys())
+
         for shock in shocks:
             factor = shock.factor
-            if factor not in stressed.macro_forecasts:
-                logger.debug(f"  Macro shock {factor}: фактор не найден в macro_forecasts")
-                continue
+            if factor not in available_keys:
+                factor = self._resolve_factor_alias(factor, available_keys)
+                if factor is None:
+                    continue
 
             original = stressed.macro_forecasts[factor]
             # Сохраняем исторические значения (включая base_year) — нужны для chain-link
