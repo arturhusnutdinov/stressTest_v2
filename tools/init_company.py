@@ -268,69 +268,86 @@ def _create_excel_template(path: Path, company_id: str) -> None:
     # ── 1. meta ──────────────────────────────────────────────────
     ws = wb.active
     ws.title = "meta"
-    ws.append(["field", "value"])
-    ws.append(["template_version", "2.0.0"])
+    ws.append(["Parameter", "Value"])
+    ws.append(["template_version", "3.0"])
+    ws.append(["company_id", company_id])
     ws.append(["company_code", company_id])
     ws.append(["company_name", ""])
     ws.append(["base_currency", "USD"])
-    ws.append(["input_unit", "mUSD"])
-    ws.append(["accounting_standard", ""])
-    ws.append(["author", ""])
-    ws.append(["created_at", ""])
+    ws.append(["db_unit", "USD"])
+    ws.append(["reporting_standard", ""])
+    ws.append(["fiscal_year_end", "December"])
 
-    # ── 2. history_is ────────────────────────────────────────────
+    # ── 2. history_is (template v3 format) ────────────────────────
     ws_is = wb.create_sheet("history_is")
-    ws_is.append(["metric"] + years)
-    for m in [
-        "revenue", "cogs", "gross_profit",
-        "sga", "rnd", "distribution_expenses",
-        "other_operating_income", "other_operating_expense",
-        "asset_impairment", "restructuring_and_other_charges",
-        "depreciation_owned", "depreciation_rou", "amortization", "total_da",
-        "ebitda", "ebit",
-        "interest_expense", "interest_income", "lease_interest",
-        "earnings_from_investees", "other_financial_costs",
-        "loss_on_debt_extinguishment", "net_periodic_benefit_income",
-        "other_losses_gains_net",
-        "ebt", "current_tax_expense", "deferred_tax_expense", "tax_expense",
-        "net_income",
-        "eps_basic", "eps_diluted",
-        "cfo_stock_compensation",
-    ]:
-        ws_is.append([m] + [None] * len(years))
+    ws_is.append(["INCOME STATEMENT — template v3 (label | db_metric | sign | unit | years)"])
+    ws_is.append(["label", "db_metric", "sign", "unit"] + years)
+    IS_ROWS = [
+        ("Revenue", "revenue", 1, True),
+        ("Cost of Sales", "cogs", -1, True),
+        ("Gross Profit", "gross_profit", 1, False),
+        ("SG&A", "sga", -1, False),
+        ("Distribution Expenses", "distribution_expenses", -1, False),
+        ("R&D", "rnd", -1, False),
+        ("Other Operating Income", "other_operating_income", 1, False),
+        ("Other Operating Expense", "other_operating_expense", -1, False),
+        ("Asset Impairment", "asset_impairment", -1, False),
+        ("Depreciation (PPE)", "depreciation_owned", 1, False),
+        ("Depreciation (RoU)", "depreciation_rou", 1, False),
+        ("Amortization", "amortization", 1, False),
+        ("Total D&A", "total_da", 1, False),
+        ("EBITDA", "ebitda", 1, False),
+        ("EBIT", "ebit", 1, False),
+        ("Interest Expense", "interest_expense", -1, True),
+        ("Interest Income", "interest_income", 1, False),
+        ("Lease Interest", "lease_interest", -1, False),
+        ("Earnings from Investees", "earnings_from_investees", 1, False),
+        ("Other Financial Costs", "other_losses_gains_net", 1, False),
+        ("EBT", "ebt", 1, False),
+        ("Current Tax", "current_tax_expense", -1, False),
+        ("Deferred Tax", "deferred_tax_expense", -1, False),
+        ("Tax Expense", "tax_expense", -1, True),
+        ("Net Income", "net_income", 1, True),
+    ]
+    for label, metric, sign, _ in IS_ROWS:
+        ws_is.append([label, metric, sign, "mUSD"] + [None] * len(years))
 
-    # ── 3. history_bs ────────────────────────────────────────────
+    # ── 3. history_bs (template v3 format) ────────────────────────
     ws_bs = wb.create_sheet("history_bs")
-    ws_bs.append(["metric"] + years)
-    for m in [
-        # Current Assets
-        "cash", "restricted_cash", "short_term_investments",
-        "accounts_receivable", "inventory",
-        "prepaid_expenses", "other_current_assets", "total_current_assets",
-        # Non-Current Assets
-        "ppe_gross", "ppe_accum_dep", "ppe_net",
-        "rou_asset", "finance_lease_asset_net",
-        "goodwill", "intangibles",
-        "investments_lt", "dta", "dta_noncurrent",
-        "other_non_current_assets", "total_non_current_assets", "total_assets",
-        # Current Liabilities
-        "accounts_payable", "short_term_debt",
-        "accrued_liabilities", "accrued_interest", "taxes_payable",
-        "payroll_and_benefits_payable",
-        "lease_liab_current", "finance_lease_liab_current",
-        "other_current_liabilities", "total_current_liabilities",
-        # Non-Current Liabilities
-        "long_term_debt", "dtl", "dtl_noncurrent",
-        "lease_liab_noncurrent", "finance_lease_liab_noncurrent",
-        "employee_benefits", "deferred_credits",
-        "other_non_current_liabilities", "total_non_current_liabilities",
-        "total_liabilities",
-        # Equity
-        "share_capital", "common_stock_par", "apic",
-        "retained_earnings", "treasury_stock", "aoci",
-        "nci", "total_equity", "total_liab_equity",
-    ]:
-        ws_bs.append([m] + [None] * len(years))
+    ws_bs.append(["BALANCE SHEET — template v3 (label | db_metric | sign | unit | years)"])
+    ws_bs.append(["label", "db_metric", "sign", "unit"] + years)
+    BS_ROWS = [
+        ("Cash & Equivalents", "cash", 1), ("Restricted Cash", "restricted_cash", 1),
+        ("Accounts Receivable", "accounts_receivable", 1), ("Inventory", "inventory", 1),
+        ("Other Current Assets", "other_current_assets", 1),
+        ("Total Current Assets", "total_current_assets", 1),
+        ("PPE Net", "ppe_net", 1), ("RoU Asset", "rou_asset", 1),
+        ("Intangibles", "intangibles", 1), ("Goodwill", "goodwill", 1),
+        ("Investments in Associates", "investments_in_associates", 1),
+        ("LT Investments", "investments_lt", 1),
+        ("DTA", "dta", 1), ("Other Non-Current Assets", "other_nca", 1),
+        ("Total Non-Current Assets", "total_non_current_assets", 1),
+        ("Total Assets", "total_assets", 1),
+        ("Short-Term Debt", "short_term_debt", 1), ("Accounts Payable", "accounts_payable", 1),
+        ("Taxes Payable", "taxes_payable", 1), ("Interest Payable", "interest_payable", 1),
+        ("Payroll & Benefits", "payroll_payable", 1),
+        ("Lease Liab Current", "lease_liab_current", 1),
+        ("Other Current Liabilities", "other_cl", 1),
+        ("Total Current Liabilities", "total_current_liabilities", 1),
+        ("Long-Term Debt", "long_term_debt", 1), ("DTL", "dtl", 1),
+        ("Employee Benefits", "employee_benefits", 1),
+        ("Lease Liab Non-Current", "lease_liab_noncurrent", 1),
+        ("Other Non-Current Liabilities", "other_ncl", 1),
+        ("Total Non-Current Liabilities", "total_non_current_liabilities", 1),
+        ("Total Liabilities", "total_liabilities", 1),
+        ("Share Capital", "share_capital", 1), ("APIC", "apic", 1),
+        ("Treasury Stock", "treasury_stock", -1),
+        ("Retained Earnings", "retained_earnings", 1),
+        ("AOCI", "aoci", 1), ("NCI", "nci", 1),
+        ("Total Equity", "total_equity", 1),
+    ]
+    for label, metric, sign in BS_ROWS:
+        ws_bs.append([label, metric, sign, "mUSD"] + [None] * len(years))
 
     # ── 4. history_cf ────────────────────────────────────────────
     ws_cf = wb.create_sheet("history_cf")

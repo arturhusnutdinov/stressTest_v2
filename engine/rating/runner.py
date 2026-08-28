@@ -123,6 +123,7 @@ class RatingRunner:
             for yr, state in sorted(model_result.years.items()):
                 metrics = CreditMetrics.from_year_state(state, yr)
                 rating  = self._engine.calculate(metrics)
+                rating['factor_analysis'] = self._factor_analysis(metrics, rating)
                 result.metrics[yr] = metrics
                 result.ratings[yr] = rating
 
@@ -253,6 +254,24 @@ class RatingRunner:
             total = 0
             for yr, r in result.ratings.items():
                 yr_int = int(yr)
+                # Build score_detail from sub_scores + factor_analysis
+                score_detail = {}
+                if r.get('sub_scores'):
+                    score_detail['sub_scores'] = r['sub_scores']
+                if r.get('weights'):
+                    score_detail['weights'] = r['weights']
+                if r.get('factor_analysis'):
+                    fa = r['factor_analysis']
+                    score_detail['key_drivers'] = fa.get('key_drivers', [])
+                    score_detail['vulnerabilities'] = fa.get('vulnerabilities', [])
+                    score_detail['headroom_to_ig'] = fa.get('headroom_to_ig')
+                    score_detail['headroom_to_downgrade'] = fa.get('headroom_to_downgrade')
+
+                # Extract key metrics from CreditMetrics
+                metrics = result.metrics.get(yr)
+                nd_ebitda = getattr(metrics, 'net_debt_ebitda', None) if metrics else None
+                icr = getattr(metrics, 'interest_coverage', None) if metrics else None
+
                 self._repo.upsert_rating(
                     company_id=self.company_id,
                     scenario_id=sid,
@@ -260,6 +279,9 @@ class RatingRunner:
                     methodology='sp_scoring',
                     grade=r.get('rating', '?'),
                     score=r.get('score', 0),
+                    score_detail=score_detail if score_detail else None,
+                    nd_ebitda=nd_ebitda,
+                    icr=icr,
                 )
                 total += 1
 
