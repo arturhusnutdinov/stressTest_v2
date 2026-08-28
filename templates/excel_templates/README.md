@@ -2,7 +2,28 @@
 
 Эта директория содержит Excel шаблоны для загрузки данных в модель.
 
-## 📁 Файлы
+## template_UNIFIED_v3.xlsx (2026-08-28)
+
+Текущий стандарт. 18 листов с каноническими именами метрик.
+
+Формат IS/BS: `label | db_metric | sign | unit | year_1 | year_2 | ...`
+Формат CF: `label | excel_metric | db_metric | sign | unit | year_1 | ...`
+
+ExcelLoader (`engine/loader/excel.py`) автоматически определяет формат (legacy или v3) по наличию колонки `db_metric`.
+
+Заполненные шаблоны:
+- Nornickel: `companies/nornickel_v2/data/excel/nornickel_v2_template_v3.xlsx` (38 drivers, 5 segments, 14 cost items)
+- Rusal: `companies/rusal/data/excel/rusal_template_v3.xlsx` (10 drivers, 69 instruments, SGA/D&A/tax splits)
+
+```bash
+# Загрузить template_v3 файл
+python3 tools/load_unified_excel.py --company nornickel_v2 \
+    --excel companies/nornickel_v2/data/excel/nornickel_v2_template_v3.xlsx
+```
+
+---
+
+## Отдельные шаблоны (legacy)
 
 ### Финансовые отчеты
 
