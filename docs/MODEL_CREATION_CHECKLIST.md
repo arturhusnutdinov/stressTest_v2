@@ -235,13 +235,12 @@
 ### Фаза 1: Vertex PG
 - [x] Компания создана (nornickel)
 - [x] Version: 8b278956 (Q3_2026_base, draft)
-- [x] Historical IS 230 + BS 440 + CF 105 rows loaded
+- [x] Historical IS/BS/CF loaded (db_unit=USD, values in full USD)
 - [x] 10 debt instruments loaded
 - [x] Operational drivers 589 rows loaded
 - [x] Notes data (cost_breakdown 238, notes_da 33, notes_tax 7)
-- [x] Macro factors: lme_ni/cu/pd/pt_usd loaded (2009-2021)
-- [ ] Macro factors: need 2022-2025 LME data
-- [ ] Macro forecast: 2026-2028 (VECM/MR)
+- [x] Macro factors: lme_ni/cu/pd/pt_usd loaded (2009-2025, 17 years)
+- [x] LME 2022-2025 from public annual averages (LME/LBMA)
 
 ### Фаза 2: Конфигурация
 - [x] Revenue: custom segments (Ni/Cu/Pd/Pt/Other), Vol×Price, LME-linked
@@ -253,11 +252,17 @@
 - [x] Covenants: enabled (ND/EBITDA ≤ 4.5, ICR ≥ 2.0)
 - [x] Stress: 10 scenarios (nickel_downturn, pgm_crash, metals_bear, fx, energy, rate, sanctions, severe, upside, demand)
 - [x] Rating: S&P, industry -12%
-- [ ] Factor names aligned with PG registry (lme_ni_usd etc.)
+- [x] Factor names aligned with PG registry (lme_ni_usd etc.)
+- [x] macro_ecm.yaml: metals_prices + pgm_prices VECM groups, MR for commodity
 
-### Фаза 3: Запуск
-- [x] Base model run → status=done
-- [ ] Revenue > 0 (FAILED — was $0, fixing macro factors)
-- [ ] Full verification after re-run
+### Фаза 3: Запуск и верификация
+- [x] Base model run → status=done, Revenue=$18.4B
+- [x] Revenue > 0 ✅ (4 metal segments generating revenue)
+- [ ] Revenue calibration: $18.4B vs actual $13.8B (LME uses 2021 levels, MR не прогнозирует)
+- [ ] BS diff > 0 ($9.4B — нужен smart folding для NNK-specific BS items)
+- [ ] Cash accumulation: $7B→$33B (dividends не выплачиваются?)
+- [ ] Forecast 5yr vs config 3yr mismatch
+- [ ] EBITDA margin фиксирован 45.8% (нужна динамика)
 - [ ] Stress runs
 - [ ] Rating runs
+- [ ] 14-section notebook validation (BS/CF identity, regression, corkscrews)
