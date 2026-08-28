@@ -113,11 +113,16 @@ model:
       nol_opening_balance: 0
       nol_max_utilization_pct: 0.8
       tax_paid_timing: next_year
+      # DT category rates from Note 13 (2025 FS):
+      # DTL_PPE $1633M / PPE $22091M = 7.4%
+      # DTA_inv $179M / Inventory $3894M = 4.6%
+      # DTA_provisions $467M (env + other) / Provisions $1576M = 29.6%
+      # NOL carryforward $212M
       deferred_tax_categories:
-        ppe: 0.03
-        inventory: 0.02
+        ppe: 0.074
+        inventory: 0.046
         receivables: 0.01
-        payables: 0.01
+        payables: 0.02
     intangibles:
       mode: full
       additions_pct_of_revenue: 0.005
