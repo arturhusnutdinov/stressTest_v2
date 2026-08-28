@@ -55,11 +55,15 @@ class ExcelLoader(BaseLoader):
         mapping_config: Optional[MappingConfig] = None,
         db_unit: str = "tUSD",
         input_default_unit: str = "tUSD",
+        metric_aliases: Optional[Dict[str, Dict[str, str]]] = None,
     ) -> None:
         super().__init__(company_id, db_unit, input_default_unit)
         self._repo = repo
         self._mapping = mapping_config
         self._formula_engine = FormulaEngine()
+        # metric_aliases: {statement: {source_metric: canonical_metric}}
+        # Loaded from excel_loader.yaml → metric_aliases section
+        self._metric_aliases = metric_aliases or {}
 
     # ── публичный API ──────────────────────────────────────────────────────────
 
@@ -347,6 +351,27 @@ class ExcelLoader(BaseLoader):
         "payroll_payable":   "payroll_and_benefits_payable",
     }
 
+    def _apply_yaml_aliases(self, metrics: Dict[str, float], statement: str) -> Dict[str, float]:
+        """Apply YAML-defined metric aliases (from excel_loader.yaml → metric_aliases).
+
+        For aggregating aliases (e.g. social_liabilities_current → other_cl),
+        values are SUMMED into the target canonical metric.
+        """
+        aliases = self._metric_aliases.get(statement.upper(), {})
+        if not aliases:
+            aliases = self._metric_aliases.get(statement.lower(), {})
+        if not aliases:
+            return metrics
+
+        result: Dict[str, float] = {}
+        for metric, value in metrics.items():
+            canonical = aliases.get(metric, metric)
+            if canonical in result:
+                result[canonical] = result[canonical] + value  # aggregate
+            else:
+                result[canonical] = value
+        return result
+
     def _normalize_bs_metrics(self, metrics: Dict[str, float]) -> Dict[str, float]:
         """Normalize BS metric names to canonical (forecast) convention.
 
@@ -354,6 +379,9 @@ class ExcelLoader(BaseLoader):
         - taxes_payable < 0 → tax receivable → move to other_current_assets
         - All liabilities stored as positive magnitudes
         """
+        # Apply YAML aliases first
+        metrics = self._apply_yaml_aliases(metrics, "BS")
+
         normalized: Dict[str, float] = {}
         for metric, value in metrics.items():
             canonical = self._BS_ALIASES.get(metric, metric)
@@ -931,11 +959,12 @@ class ExcelLoader(BaseLoader):
 
     def _resolve_metric(self, raw_name: str, statement: str) -> Optional[str]:
         """
-        Разрешить имя метрики через конфиг маппинга.
-        Если конфига нет — возвращает имя как есть.
-        Для BS: aliases применяются позже в _normalize_bs_metrics (для корректного merge).
-        Здесь только предупреждаем о неизвестных именах.
+        Разрешить имя метрики через:
+        1. MappingConfig (от YAML маппинга с label→db_metric)
+        2. YAML metric_aliases (company-specific → canonical)
+        3. Return raw_name as-is
         """
+        # 1. MappingConfig
         if self._mapping:
             for sm in self._mapping.sheets.values():
                 if sm.statement != statement:
@@ -944,13 +973,19 @@ class ExcelLoader(BaseLoader):
                     if m.label.lower() == raw_name.lower():
                         return m.db_metric
 
-        # BS: warn if metric is unknown (not in schema and not a known alias)
+        # 2. YAML metric_aliases
+        stmt_aliases = self._metric_aliases.get(statement.upper(), {})
+        if not stmt_aliases:
+            stmt_aliases = self._metric_aliases.get(statement.lower(), {})
+        if raw_name in stmt_aliases:
+            return stmt_aliases[raw_name]
+
+        # 3. BS built-in aliases (warn if unknown)
         if statement.upper() == "BS":
             canonical = self._BS_ALIASES.get(raw_name, raw_name)
-            if canonical not in self._KNOWN_BS_METRICS and raw_name not in self._BS_ALIASES:
-                logger.warning(
-                    f"BS metric '{raw_name}' is not in the known schema. "
-                    f"Check YAML mapping or add to _KNOWN_BS_METRICS."
+            if canonical not in self._KNOWN_BS_METRICS and raw_name not in self._BS_ALIASES and raw_name not in stmt_aliases:
+                logger.debug(
+                    f"BS metric '{raw_name}' → stored as-is (not in canonical schema)"
                 )
 
         return raw_name
