@@ -45,7 +45,25 @@ class ExcelLoader(BaseLoader):
         "macro_factors",
         "segments_financial",
         "segments_operational",
+        "operational_drivers",
         "Production_KPI",
+    }
+
+    # Notes sheets: wide format metric × years → stored as preprocess_metrics
+    NOTES_SHEETS = {
+        "Notes_Finance":    "notes_finance",
+        "Notes_DA":         "notes_da",
+        "Notes_Tax":        "notes_tax",
+        "Cost_Breakdown":   "cost_breakdown",
+        "SGA_Split":        "sga_split",
+    }
+
+    # Schedule sheets: long format → stored as preprocess_metrics
+    SCHEDULE_SHEETS = {
+        "Lease_Schedule",
+        "Tax_DTA_DTL",
+        "Equity_Schedule",
+        "Provisions_Detail",
     }
 
     def __init__(
@@ -102,6 +120,16 @@ class ExcelLoader(BaseLoader):
             for sheet_name in self.CANONICAL_SHEETS:
                 if sheet_name in wb.sheetnames:
                     self._load_canonical_sheet(wb[sheet_name], sheet_name, result)
+
+            # 4. Notes sheets (wide: metric × years → preprocess_metrics)
+            for sheet_name, metric_group in self.NOTES_SHEETS.items():
+                if sheet_name in wb.sheetnames:
+                    self._load_notes_sheet(wb[sheet_name], metric_group, result)
+
+            # 5. Schedule sheets (long format → preprocess_metrics)
+            for sheet_name in self.SCHEDULE_SHEETS:
+                if sheet_name in wb.sheetnames:
+                    self._load_schedule_sheet(wb[sheet_name], sheet_name, result)
 
         except Exception as e:
             result.errors.append(f"Критическая ошибка при загрузке: {e}")
@@ -636,6 +664,7 @@ class ExcelLoader(BaseLoader):
             "macro_factors":         self._load_macro_factors,
             "segments_financial":    self._load_segments,
             "segments_operational":  self._load_segments,
+            "operational_drivers":   self._load_operational_drivers,
             "Production_KPI":        self._load_production_kpi,
         }
         handler = handlers.get(sheet_name)
@@ -780,7 +809,7 @@ class ExcelLoader(BaseLoader):
             return
         header_row = None
         for i, row in enumerate(rows):
-            if row and row[0] and str(row[0]).strip().lower() == "factor_name":
+            if row and row[0] and str(row[0]).strip().lower() in ("factor_name", "factor"):
                 header_row = i
                 break
         if header_row is None:
@@ -837,7 +866,7 @@ class ExcelLoader(BaseLoader):
             return
         header_row = None
         for i, row in enumerate(rows):
-            if row and row[0] and str(row[0]).strip().lower() == "segment_name":
+            if row and row[0] and str(row[0]).strip().lower() in ("segment_name", "segment"):
                 header_row = i
                 break
         if header_row is None:
@@ -853,7 +882,7 @@ class ExcelLoader(BaseLoader):
             except (ValueError, TypeError):
                 pass
 
-        i_segment = header.index("segment_name") if "segment_name" in header else 0
+        i_segment = header.index("segment_name") if "segment_name" in header else (header.index("segment") if "segment" in header else 0)
         i_metric  = header.index("metric") if "metric" in header else 1
         i_unit    = header.index("unit") if "unit" in header else None
 
@@ -950,6 +979,195 @@ class ExcelLoader(BaseLoader):
             n = self._repo.upsert_preprocess(
                 company_id=self.company_id,
                 metric_group="production_kpi",
+                metrics=metrics,
+                source="excel_loader",
+            )
+            result.rows_written += n
+
+    # ── operational drivers ──────────────────────────────────────────────────
+
+    def _load_operational_drivers(self, ws, result: LoadResult) -> None:
+        """Load operational_drivers: wide format driver | unit | year_cols.
+        Stores as preprocess_metrics with metric_group='operational_drivers'.
+        """
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            return
+        header_row = None
+        for i, row in enumerate(rows):
+            if row and row[0] and str(row[0]).strip().lower() == "driver":
+                header_row = i
+                break
+        if header_row is None:
+            return
+        header = [str(c).strip().lower() if c else "" for c in rows[header_row]]
+
+        year_cols = []
+        for idx, h in enumerate(header):
+            try:
+                year = int(h)
+                if 1990 <= year <= 2100:
+                    year_cols.append((idx, year))
+            except (ValueError, TypeError):
+                pass
+
+        metrics: Dict[str, Dict[int, float]] = {}
+        for row in rows[header_row + 1:]:
+            if not row or row[0] is None:
+                continue
+            driver_name = str(row[0]).strip()
+            if not driver_name or driver_name.startswith("#"):
+                continue
+
+            for col_idx, year in year_cols:
+                raw_val = row[col_idx] if col_idx < len(row) else None
+                if raw_val is None or raw_val == "":
+                    continue
+                try:
+                    val = float(raw_val)
+                except (TypeError, ValueError):
+                    continue
+                if driver_name not in metrics:
+                    metrics[driver_name] = {}
+                metrics[driver_name][year] = val
+
+        if metrics:
+            n = self._repo.upsert_preprocess(
+                company_id=self.company_id,
+                metric_group="operational_drivers",
+                metrics=metrics,
+                source="excel_loader",
+            )
+            result.rows_written += n
+
+    # ── notes sheets ──────────────────────────────────────────────────────────
+
+    def _load_notes_sheet(
+        self,
+        ws,
+        metric_group: str,
+        result: LoadResult,
+    ) -> None:
+        """Load notes sheets (Notes_Finance, Notes_DA, Notes_Tax, Cost_Breakdown, SGA_Split).
+        Wide format: metric | year_1 | year_2 | ...
+        Stores as preprocess_metrics with given metric_group.
+        """
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            return
+        header_row = None
+        for i, row in enumerate(rows):
+            if row and row[0] and str(row[0]).strip().lower() == "metric":
+                header_row = i
+                break
+        if header_row is None:
+            return
+        header = [str(c).strip().lower() if c else "" for c in rows[header_row]]
+
+        year_cols = []
+        for idx, h in enumerate(header):
+            try:
+                year = int(h)
+                if 1990 <= year <= 2100:
+                    year_cols.append((idx, year))
+            except (ValueError, TypeError):
+                pass
+
+        metrics: Dict[str, Dict[int, float]] = {}
+        for row in rows[header_row + 1:]:
+            if not row or row[0] is None:
+                continue
+            metric_name = str(row[0]).strip()
+            if not metric_name or metric_name.startswith("#"):
+                continue
+
+            for col_idx, year in year_cols:
+                raw_val = row[col_idx] if col_idx < len(row) else None
+                if raw_val is None or raw_val == "":
+                    continue
+                try:
+                    val = float(raw_val)
+                except (TypeError, ValueError):
+                    continue
+                if metric_name not in metrics:
+                    metrics[metric_name] = {}
+                metrics[metric_name][year] = val
+
+        if metrics:
+            n = self._repo.upsert_preprocess(
+                company_id=self.company_id,
+                metric_group=metric_group,
+                metrics=metrics,
+                source="excel_loader",
+            )
+            result.rows_written += n
+
+    # ── schedule sheets ───────────────────────────────────────────────────────
+
+    def _load_schedule_sheet(
+        self,
+        ws,
+        sheet_name: str,
+        result: LoadResult,
+    ) -> None:
+        """Load schedule sheets (Lease_Schedule, Tax_DTA_DTL, Equity_Schedule, Provisions_Detail).
+        Long format: metric | year | value (or company | year | category | value).
+        Stores as preprocess_metrics grouped by sheet_name.
+        """
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            return
+        header_row = None
+        for i, row in enumerate(rows):
+            if row and row[0] and str(row[0]).strip().lower() in ("metric", "company", "company_id"):
+                header_row = i
+                break
+        if header_row is None:
+            return
+        header = [str(c).strip().lower() if c else "" for c in rows[header_row]]
+
+        metric_group = sheet_name.lower()
+        metrics: Dict[str, Dict[int, float]] = {}
+
+        has_category = "category" in header
+        i_year = header.index("year") if "year" in header else None
+
+        if i_year is None:
+            return
+
+        # Find value column
+        val_cols = [h for h in header if "value" in h]
+        i_val = header.index(val_cols[0]) if val_cols else len(header) - 1
+
+        for row in rows[header_row + 1:]:
+            if not row or all(v is None for v in row):
+                continue
+            year = _to_int(row[i_year]) if i_year < len(row) else None
+            if year is None:
+                continue
+            val = _to_float(row[i_val]) if i_val < len(row) else None
+            if val is None:
+                continue
+
+            if has_category:
+                i_cat = header.index("category")
+                category = str(row[i_cat]).strip() if i_cat < len(row) and row[i_cat] else ""
+                metric_key = str(row[0]).strip() if row[0] else ""
+                if category:
+                    metric_key = f"{metric_key}_{category}" if metric_key else category
+            else:
+                metric_key = str(row[0]).strip() if row[0] else ""
+
+            if not metric_key:
+                continue
+            if metric_key not in metrics:
+                metrics[metric_key] = {}
+            metrics[metric_key][year] = val
+
+        if metrics:
+            n = self._repo.upsert_preprocess(
+                company_id=self.company_id,
+                metric_group=metric_group,
                 metrics=metrics,
                 source="excel_loader",
             )
