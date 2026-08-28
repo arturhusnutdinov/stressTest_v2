@@ -58,20 +58,20 @@ model:
       base_method: ewa
       ewa_halflife_years: 3
     margins:
-      ebitda_margin_default: 0.45
+      ebitda_margin_default: 0.41
       tax_rate_delta_pct: 0.0
     capex_policy:
-      method: ratio_to_revenue
-      ratio_default: 0.08
-      maint_as_dep_ratio: 1.0
-      capex_useful_life_years: 20.0
+      method: sustaining_plus_growth
+      sustaining_capex_da_ratio: 1.8
+      expansion_capex_pct_of_rev_growth: 0.05
+      capex_useful_life_years: 16.0
       disposals_ratio: history
     ppe:
       mode: full
-      useful_life_years: 15
+      useful_life_years: 16
       min_capex_da_ratio: 0.9
-      sustaining_capex_da_ratio: 0
-      expansion_capex_pct_of_rev_growth: 0.0
+      sustaining_capex_da_ratio: 1.8
+      expansion_capex_pct_of_rev_growth: 0.05
     wc:
       method: days
       # dio_days calculated by preprocessor from history (NNK ~200 days)
@@ -79,22 +79,22 @@ model:
     cogs:
       use_ppi_uplift: false
       clamp:
-        min: 0.55
-        max: 0.95
+        min: 0.45
+        max: 0.65
     leases:
       enabled: true
       default_discount_rate: 0.05
     debt:
       mode: optimizer
-      target_pct_revenue: 0.5
+      target_pct_revenue: 0.8
       version: v2_solver
       interest_treatment: separate_line
-      target_net_debt_ebitda: 0.0
-      max_voluntary_prepay_pct_fcf: 0.5
+      target_net_debt_ebitda: 1.5
+      max_voluntary_prepay_pct_fcf: 0.3
       rc:
         enable: false
         limit: 0
-        min_cash: 300000000
+        min_cash: 500000000
       iter_max: 50
       tol: 1.0e-06
       refinancing:
@@ -108,10 +108,16 @@ model:
       general_rate_delta_pct: 0.0
     taxes:
       mode: full
+      tax_rate_statutory: 0.25
       policy: statutory_with_floor
       nol_opening_balance: 0
       nol_max_utilization_pct: 0.8
-      tax_paid_timing: current_year
+      tax_paid_timing: next_year
+      deferred_tax_categories:
+        ppe: 0.03
+        inventory: 0.02
+        receivables: 0.01
+        payables: 0.01
     intangibles:
       mode: full
       additions_pct_of_revenue: 0.005
@@ -121,9 +127,11 @@ model:
       payment_timing: current_year
     equity:
       mode: full
-      dividend_payout_ratio: 0.75
+      # NNK dividend policy: 60% EBITDA if ND/EBITDA < 1.8x, 30% if > 2.2x
+      # Approximation: 60% of NI (NI/EBITDA ~45% → 60% NI ≈ 27% EBITDA)
+      dividend_payout_ratio: 0.60
       buyback_pct_fcf: 0.0
-      buyback_leverage_max: 2.0
+      buyback_leverage_max: 2.2
     train_test:
       train_end_year: 2022
   custom:
@@ -251,10 +259,11 @@ model:
             2025: 780000000.0
     ppe:
       min_capex_da_ratio: 0.9
-      expansion_capex_pct_of_rev_growth: 0.0
+      sustaining_capex_da_ratio: 1.8
+      expansion_capex_pct_of_rev_growth: 0.05
     debt:
       mode: optimizer
-      target_net_debt_ebitda: 2.5
+      target_net_debt_ebitda: 1.5
       max_voluntary_prepay_pct_fcf: 0.3
       refinancing:
         fees_pct: 0.001
@@ -262,14 +271,14 @@ model:
       enabled: true
       thresholds:
         net_debt_ebitda:
-          max: 4.5
-          warning: 4.0
+          max: 3.5
+          warning: 3.0
         interest_coverage:
-          min: 1.5
-          warning: 2.0
+          min: 2.0
+          warning: 2.5
         ebitda_margin:
-          min: 0.08
-          warning: 0.1
+          min: 0.15
+          warning: 0.20
     periods:
       history_end_year: 2025
       forecast_start_year: 2026
@@ -296,7 +305,13 @@ solver:
 outputs:
   base: companies/nornickel_v2/outputs
 features:
-  min_cash: 0
+  min_cash: 500000000
+  use_ppe_corkscrew: true
+  use_wc_days: true
+  use_tax_corkscrew: true
+  use_intangibles: true
+  use_interest_payable: true
+  use_provisions: true
 forecast_methods:
   is:
     asset_impairment:
@@ -341,12 +356,12 @@ covenants:
     ebitda_margin_min: 0.05
 rating:
   methodology: sp
-  industry_adjustment: -12.0
-  size_adjustment: 2.0
-  cycle_avg_ebitda_margin: 0.45
+  industry_adjustment: -6.0
+  size_adjustment: 3.0
+  cycle_avg_ebitda_margin: 0.41
   sovereign_rating: BBB+
   weights:
-    leverage: 0.35
-    coverage: 0.3
-    profitability: 0.2
-    liquidity: 0.15
+    leverage: 0.30
+    coverage: 0.25
+    profitability: 0.25
+    liquidity: 0.20
