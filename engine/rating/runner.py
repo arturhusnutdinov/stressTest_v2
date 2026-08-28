@@ -183,32 +183,36 @@ class RatingRunner:
                 )
                 total += 1
 
-            # Также сохраняем в legacy rating_results для обратной совместимости
-            self._repo.execute("""
-                CREATE TABLE IF NOT EXISTS rating_results (
-                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id   TEXT NOT NULL,
-                    rating_type  TEXT NOT NULL,
-                    ratings_json TEXT,
-                    metrics_json TEXT,
-                    created_at   TEXT DEFAULT (datetime('now')),
-                    UNIQUE(company_id, rating_type)
-                )
-            """)
-            metrics_serializable = {}
-            for yr, m in result.metrics.items():
-                metrics_serializable[yr] = {
-                    k: v for k, v in m.__dict__.items() if v is not None
-                }
-            self._repo.execute("""
-                INSERT OR REPLACE INTO rating_results
-                (company_id, rating_type, ratings_json, metrics_json, created_at)
-                VALUES (?, ?, ?, ?, datetime('now'))
-            """, (
-                self.company_id, result.rating_type,
-                json.dumps(result.ratings), json.dumps(metrics_serializable),
+            # Также сохраняем в legacy rating_results (SQLite only)
+            try:
+                self._repo.execute("""
+                    CREATE TABLE IF NOT EXISTS rating_results (
+                        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                        company_id   TEXT NOT NULL,
+                        rating_type  TEXT NOT NULL,
+                        ratings_json TEXT,
+                        metrics_json TEXT,
+                        created_at   TEXT DEFAULT (datetime('now')),
+                        UNIQUE(company_id, rating_type)
+                    )
+                """)
+                metrics_serializable = {}
+                for yr, m in result.metrics.items():
+                    metrics_serializable[yr] = {
+                        k: v for k, v in m.__dict__.items() if v is not None
+                    }
+                self._repo.execute("""
+                    INSERT OR REPLACE INTO rating_results
+                    (company_id, rating_type, ratings_json, metrics_json, created_at)
+                    VALUES (?, ?, ?, ?, datetime('now'))
+                """, (
+                    self.company_id, result.rating_type,
+                    json.dumps(result.ratings), json.dumps(metrics_serializable),
             ))
-            self._repo.conn.commit()
-            logger.info(f"  Рейтинг сохранён: {result.rating_type} → {total} лет (ratings + rating_results)")
+                self._repo.conn.commit()
+            except Exception as e_legacy:
+                # rating_results is SQLite-only legacy table; skip on PG
+                logger.debug(f"  Legacy rating_results skip (PG): {e_legacy}")
+            logger.info(f"  Рейтинг сохранён: {result.rating_type} → {total} лет")
         except Exception as e:
             logger.error(f"  Ошибка сохранения рейтинга: {e}")

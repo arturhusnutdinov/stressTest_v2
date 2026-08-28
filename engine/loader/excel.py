@@ -913,18 +913,26 @@ class ExcelLoader(BaseLoader):
                         continue
                 if val is None:
                     continue
-                period_id = self._repo.ensure_period(self.company_id, year)
-                self._repo.conn.execute(
-                    """
-                    INSERT INTO segment_data
-                        (company_id, period_id, segment_id, segment_name, metric, value, source, updated_at)
-                    VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
-                    ON CONFLICT(company_id, period_id, segment_id, metric) DO UPDATE SET
-                        value = excluded.value, updated_at = CURRENT_TIMESTAMP
-                    """,
-                    (self.company_id, period_id, segment_id, segment_name,
-                     metric, val, "excel_loader"),
-                )
+                # Use repo method if available (PG-compatible), else raw SQL (SQLite)
+                if hasattr(self._repo, 'upsert_segment_data'):
+                    self._repo.upsert_segment_data(
+                        self.company_id, year,
+                        [{"segment_name": segment_name, "segment_id": segment_id,
+                          "metric": metric, "value": val}],
+                    )
+                else:
+                    period_id = self._repo.ensure_period(self.company_id, year)
+                    self._repo.conn.execute(
+                        """
+                        INSERT INTO segment_data
+                            (company_id, period_id, segment_id, segment_name, metric, value, source, updated_at)
+                        VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+                        ON CONFLICT(company_id, period_id, segment_id, metric) DO UPDATE SET
+                            value = excluded.value, updated_at = CURRENT_TIMESTAMP
+                        """,
+                        (self.company_id, period_id, segment_id, segment_name,
+                         metric, val, "excel_loader"),
+                    )
                 result.rows_written += 1
 
     def _load_production_kpi(self, ws, result: LoadResult) -> None:

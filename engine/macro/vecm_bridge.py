@@ -280,11 +280,18 @@ def auto_group_factors(
     Returns:
         (vecm_groups: Dict[str, List[str]], mr_factors: List[str], ewa_factors: List[str])
     """
-    COMMODITY = {
+    # Exact set of known commodity factors
+    COMMODITY_EXACT = {
         "steel_price_hrc", "steel_ppi_iron_steel", "hot_rolled_steel_ppi",
-        "brent", "brent_usd", "coal_price", "iron_ore_price",
-        "lme_aluminum", "lme_al", "copper_price",
+        "brent", "brent_usd", "coal_price", "coal_usd", "iron_ore_price", "iron_ore_usd",
+        "lme_aluminum", "lme_al", "lme_al_usd", "lme_alumina",
+        "copper_price", "gold_price", "gold_usd",
+        # LME metals (Nornickel, etc.)
+        "lme_ni_usd", "lme_cu_usd", "lme_pd_usd", "lme_pt_usd",
+        "lme_nickel", "lme_copper", "lme_palladium", "lme_platinum",
     }
+    # Pattern-based: any factor with these keywords is commodity (MR)
+    COMMODITY_PATTERNS = {"lme_", "steel_", "brent", "coal_", "iron_ore", "gold_"}
     MACRO = {
         "gdp_us", "gdp_china", "cpi_us", "ppi_us",
         "industrial_production_us",
@@ -293,10 +300,15 @@ def auto_group_factors(
     # FX исключаем из VECM — слишком волатильны для коротких выборок
     EXCLUDE_VECM = {"fx_usdrub", "usd_rub", "rub_usd", "dxy", "gdp_world"}
 
-    commodity_factors = [f for f in factor_names if f in COMMODITY]
+    def _is_commodity(name: str) -> bool:
+        if name in COMMODITY_EXACT:
+            return True
+        return any(pat in name.lower() for pat in COMMODITY_PATTERNS)
+
+    commodity_factors = [f for f in factor_names if _is_commodity(f)]
     macro_factors     = [f for f in factor_names if f in MACRO]
     ewa_factors       = [f for f in factor_names
-                         if f not in COMMODITY and f not in MACRO
+                         if not _is_commodity(f) and f not in MACRO
                          and f not in EXCLUDE_VECM]
     exclude_factors   = [f for f in factor_names if f in EXCLUDE_VECM]
 

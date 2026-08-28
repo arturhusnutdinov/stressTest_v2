@@ -62,6 +62,24 @@ class BuildResult:
         return "\n".join(lines)
 
 
+def _get_forecast_years(project_config: Optional[dict]) -> int:
+    """Extract forecast_years from project.yaml (custom or standard mode)."""
+    if not project_config:
+        return 5
+    model = project_config.get("model", {})
+    mode = model.get("mode", "standard")
+    mode_cfg = model.get(mode, model.get("standard", {}))
+    periods = mode_cfg.get("periods", {})
+    fy = periods.get("forecast_years")
+    if fy:
+        return int(fy)
+    start = periods.get("forecast_start_year")
+    end = periods.get("forecast_end_year")
+    if start and end:
+        return int(end) - int(start) + 1
+    return 5
+
+
 def build_model(
     company_id:       str,
     config_path:      Optional[Path] = None,
@@ -171,9 +189,7 @@ def build_model(
                     repo=repo,
                     config_path=macro_cfg,
                     scenario_name=scenario_name,
-                    forecast_years=(
-                        5  # будет обновлено из config после загрузки
-                    ),
+                    forecast_years=_get_forecast_years(_project_cfg),
                     project_config=_project_cfg,
                 )
                 result.macro_result = macro_result
