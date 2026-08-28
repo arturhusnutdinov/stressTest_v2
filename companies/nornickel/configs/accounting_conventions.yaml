@@ -1,13 +1,13 @@
 # ═══════════════════════════════════════════════════════════════
 # Accounting Conventions Template — stressTest_v2 Engine
 # ═══════════════════════════════════════════════════════════════
-# Copy to: companies/nornickel/configs/accounting_conventions.yaml
+# Copy to: companies/nornickel_v2/configs/accounting_conventions.yaml
 #
 # NOTE: Key conventions (da_in_cogs, is_income_sign) are also in
 # project.yaml → accounting_conventions section. This file covers
 # additional reporting-specific conventions.
 
-company: nornickel
+company: nornickel_v2
 
 # ── Cash Reporting ───────────────────────────────────────────
 # CF statement cash definition:

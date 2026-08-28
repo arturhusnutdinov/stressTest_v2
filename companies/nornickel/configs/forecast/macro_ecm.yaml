@@ -1,92 +1,102 @@
-# Полный шаблон конфига макро-движка (VECM → VAR → ARIMA/RW)
-# Copy to: companies/nornickel/configs/forecast/macro_ecm.yaml
+# Макро-прогноз для Норникель — VECM + Mean Reversion для LME металлов
+# Аналитик настраивает факторы здесь, движок автоматически подбирает метод
+
 run:
   use_log: true
-  require_span_years: 15
+  require_span_years: 10
   window:
-    start_year_required: 2006
-    require_min_history_years: 12
+    start_year_required: 2009
+    require_min_history_years: 10
   max_lag: 2
-  criterion: aic  # aic|bic|hqic
+  criterion: aic
   resid_ar1: true
   johansen_alpha: 0.05
-  output_dir: companies/nornickel/outputs/macro_forecast
+  output_dir: companies/nornickel_v2/outputs/macro_forecast
 
 frequency:
-  target: Y   # Y|Q|M
-  aggregation: avg  # для даун-/ап-семплинга
+  target: Y
+  aggregation: avg
   annual:
     enable: true
-    method: mean  # mean|sum|end
+    method: mean
 
 factors:
-  # Укажите полный список факторов, удалите лишние
+  # ── Commodity prices (Mean Reversion) ──
+  - id: lme_ni_usd
+    display: "LME Nickel (USD/t)"
+    anchor: level
+    transform: log
+    category: commodity
+  - id: lme_cu_usd
+    display: "LME Copper (USD/t)"
+    anchor: level
+    transform: log
+    category: commodity
+  - id: lme_pd_usd
+    display: "LME Palladium (USD/oz)"
+    anchor: level
+    transform: log
+    category: commodity
+  - id: lme_pt_usd
+    display: "LME Platinum (USD/oz)"
+    anchor: level
+    transform: log
+    category: commodity
   - id: brent_usd
-    path: macro/global/drivers/brent_usd.csv
-    column: value
-    anchor: level      # level|trend
-    transform: log     # log|log_diff|diff|none
-    span_check: true
-  - id: lme_al_usd
-    path: macro/industry/aluminum/drivers/lme_al_usd.csv
-    column: value
+    display: "Brent (USD/bbl)"
     anchor: level
     transform: log
-    span_check: true
-  - id: fx_usdrub
-    path: macro/global/drivers/fx_usdrub.csv
-    column: value
+    category: commodity
+
+  # ── FX & Rates ──
+  - id: usd_rub
+    display: "USD/RUB"
     anchor: level
     transform: log
-    span_check: true
-  - id: dxy
-    path: macro/global/drivers/dxy.csv
-    column: value
+    category: fx
+  - id: cbr_key_rate
+    display: "CBR Key Rate (%)"
     anchor: level
-    transform: log
-    span_check: true
+    transform: none
+    category: rate
+
+  # ── Inflation ──
   - id: cpi_ru
-    path: macro/global/drivers/cpi_ru_index.csv
-    column: value
+    display: "CPI Russia (index)"
     anchor: trend
     transform: log_diff
-    span_check: true
+    category: inflation
   - id: ppi_ru
-    path: macro/global/drivers/ppi_ru_index.csv
-    column: value
+    display: "PPI Russia (index)"
     anchor: trend
     transform: log_diff
-    span_check: true
+    category: inflation
+
+  # ── Growth ──
   - id: gdp_world
-    path: macro/global/drivers/world_gdp.csv
-    column: value
+    display: "GDP World"
     anchor: trend
     transform: log
-    span_check: true
+    category: growth
   - id: gdp_ru
-    path: macro/global/drivers/gdp_ru.csv
-    column: value
+    display: "GDP Russia (real)"
     anchor: trend
     transform: log
-    span_check: true
-  - id: gdp_deflator_ru
-    path: macro/global/drivers/gdp_deflator_ru.csv
-    column: value
-    anchor: trend
-    transform: log
-    span_check: true
+    category: growth
 
 vecm:
   groups:
-    - name: energy_metals
-      factors: [brent_usd, lme_al_usd, fx_usdrub]
+    - name: metals_prices
+      factors: [lme_ni_usd, lme_cu_usd, brent_usd]
+    - name: pgm_prices
+      factors: [lme_pd_usd, lme_pt_usd]
     - name: inflation_block
       factors: [cpi_ru, ppi_ru]
     - name: growth_block
-      factors: [gdp_world, gdp_ru, gdp_deflator_ru]
-  horizon_periods: 60  # для M: месяцы; для Y: годы
-  deterministic_terms: ci  # none|co|ci|li|both
-  rank: auto              # auto|int
+      factors: [gdp_world, gdp_ru]
+  horizon_periods: 5
+  deterministic_terms: ci
+  rank: auto
   lag_order_select: true
 
 fallback:
@@ -104,12 +114,4 @@ fallback:
 
 io:
   logs:
-    run_report: companies/nornickel/outputs/logs/vecm_run_report.md
-  avf:
-    summary_file: _summary.csv
-    merged_file: actual_vs_fitted_merged.csv
-    metrics_file: actual_vs_fitted_metrics.csv
-    fit_suffix: _ecm_fit.csv
-    forecast_suffix: _forecast.csv
-
-
+    run_report: companies/nornickel_v2/outputs/logs/vecm_run_report.md

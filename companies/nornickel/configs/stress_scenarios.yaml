@@ -1,33 +1,15 @@
 # ═══════════════════════════════════════════════════════════════
-# Stress Scenarios Template — stressTest_v2 Engine
+# Stress Scenarios — Nornickel (PJSC MMC Norilsk Nickel)
 # ═══════════════════════════════════════════════════════════════
-# Copy to: companies/nornickel/configs/stress_scenarios.yaml
-# Orchestrator auto-reads this file for the company.
-#
-# Shock types:
-#   macro_shocks  — applied to macro_forecasts (commodity prices, FX, rates)
-#   driver_shocks — applied to model drivers (cogs_pct, dso_days, avg_rate)
-#
-# Value types:
-#   percentage — multiply factor by (1 + value/100): {type: percentage, value: -25.0}
-#   pp         — add percentage points to ratio:     {type: pp, value: 3.0}
-#   level      — set to absolute value:              {type: level, value: 50.0}
-#
-# NOTE: If CogsBlock (cogs.mode=component) is active, macro_shocks on
-# lme_alumina, russian_power_price, usd_rub flow through automatically.
-# Remove redundant driver_shocks.cogs_pct in that case.
+# Factor names MUST match macro_forecast keys (PG registry factor_id)
+# Use: lme_ni_usd, lme_cu_usd, lme_pd_usd, lme_pt_usd, brent_usd, usd_rub
 
 scenarios:
 
-  # ── Commodity Downturn ───────────────────────────────────────
-  # (customize commodity factors for your industry)
-  commodity_downturn:
-    description: "Primary commodity -25%, secondary -15%"
+  nickel_downturn:
+    description: "LME Nickel -25%, WC deterioration"
     macro_shocks:
-      # Steel: steel_price_hrc: {type: percentage, value: -25.0}
-      # Aluminium: lme_aluminium: {type: percentage, value: -25.0}
-      # Oil: brent: {type: percentage, value: -30.0}
-      steel_price_hrc:
+      lme_ni_usd:
         type: percentage
         value: -25.0
     driver_shocks:
@@ -38,57 +20,149 @@ scenarios:
         type: percentage
         value: 20.0
 
-  # ── FX Shock ────────────────────────────────────────────────
-  # (for companies with FX-denominated costs)
-  fx_shock:
-    description: "Local currency devaluation +30%"
+  pgm_crash:
+    description: "Palladium -35%, Platinum -20% (EV transition)"
     macro_shocks:
-      usd_rub:                     # change to your FX pair
+      lme_pd_usd:
         type: percentage
-        value: 30.0
-      # If energy costs are FX-linked:
-      # russian_power_price:
-      #   type: percentage
-      #   value: 15.0
-
-  # ── Energy Spike ────────────────────────────────────────────
-  energy_spike:
-    description: "Power price +40%, oil +30%"
-    macro_shocks:
-      russian_power_price:         # change to your energy factor
-        type: percentage
-        value: 40.0
-      brent:
-        type: percentage
-        value: 30.0
-    # If NOT using CogsBlock, add flat COGS override:
-    # driver_shocks:
-    #   cogs_pct:
-    #     type: pp
-    #     value: 5.0
-
-  # ── Rate Spike ──────────────────────────────────────────────
-  rate_spike:
-    description: "Interest rate +200bp across all instruments"
-    driver_shocks:
-      avg_rate:
-        type: pp
-        value: 2.0
-
-  # ── Covenant Breach (combined severe shock) ─────────────────
-  covenant_breach:
-    description: "Combined: commodity -20%, rates +200bp, WC stress"
-    macro_shocks:
-      steel_price_hrc:             # change to your primary commodity
+        value: -35.0
+      lme_pt_usd:
         type: percentage
         value: -20.0
     driver_shocks:
-      avg_rate:
-        type: pp
-        value: 2.0
+      dih_days:
+        type: percentage
+        value: 15.0
+
+  metals_bear:
+    description: "All metals -20%, global slowdown"
+    macro_shocks:
+      lme_ni_usd:
+        type: percentage
+        value: -20.0
+      lme_cu_usd:
+        type: percentage
+        value: -20.0
+      lme_pd_usd:
+        type: percentage
+        value: -20.0
+      lme_pt_usd:
+        type: percentage
+        value: -15.0
+    driver_shocks:
       dso_days:
         type: percentage
         value: 10.0
+
+  fx_shock:
+    description: "RUB devaluation +30% — costs up, USD revenue flat"
+    macro_shocks:
+      usd_rub:
+        type: percentage
+        value: 30.0
+
+  energy_spike:
+    description: "Energy +40%, oil +30% — smelter costs up"
+    macro_shocks:
+      brent_usd:
+        type: percentage
+        value: 30.0
+    driver_shocks:
+      cogs_pct:
+        type: pp
+        value: 3.0
+
+  rate_spike:
+    description: "CBR rate +200bp — interest burden up"
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 2.0
+
+  sanctions_shock:
+    description: "LME ban — Ni -30%, Cu -15%, Pd -25%, FX +20%"
+    macro_shocks:
+      lme_ni_usd:
+        type: percentage
+        value: -30.0
+      lme_cu_usd:
+        type: percentage
+        value: -15.0
+      lme_pd_usd:
+        type: percentage
+        value: -25.0
+      usd_rub:
+        type: percentage
+        value: 20.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 25.0
       dih_days:
         type: percentage
-        value: 10.0
+        value: 30.0
+
+  severe:
+    description: "Combined: metals -30%, rates +300bp, WC stress, FX +15%"
+    macro_shocks:
+      lme_ni_usd:
+        type: percentage
+        value: -30.0
+      lme_cu_usd:
+        type: percentage
+        value: -25.0
+      lme_pd_usd:
+        type: percentage
+        value: -30.0
+      lme_pt_usd:
+        type: percentage
+        value: -20.0
+      usd_rub:
+        type: percentage
+        value: 15.0
+    driver_shocks:
+      avg_rate:
+        type: pp
+        value: 3.0
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0
+
+  upside:
+    description: "Metals +20%, EV demand for Ni/Pd"
+    macro_shocks:
+      lme_ni_usd:
+        type: percentage
+        value: 20.0
+      lme_cu_usd:
+        type: percentage
+        value: 15.0
+      lme_pd_usd:
+        type: percentage
+        value: 25.0
+      lme_pt_usd:
+        type: percentage
+        value: 15.0
+
+  demand_shock:
+    description: "Global recession — metals -15%, WC deterioration"
+    macro_shocks:
+      lme_ni_usd:
+        type: percentage
+        value: -15.0
+      lme_cu_usd:
+        type: percentage
+        value: -12.0
+      lme_pd_usd:
+        type: percentage
+        value: -15.0
+    driver_shocks:
+      dso_days:
+        type: percentage
+        value: 20.0
+      dih_days:
+        type: percentage
+        value: 25.0
