@@ -47,7 +47,7 @@ engine/
 │   └── repository.py            # 46 методов CRUD
 ├── loader/
 │   ├── base.py                  # FormulaEngine, MappingConfig, unit conversion
-│   └── excel.py                 # ExcelLoader: xlsx → DB (IS/BS/CF + canonical)
+│   └── excel.py                 # ExcelLoader v2: IS/BS/CF + canonical + notes + ops_drivers
 ├── preprocessor/core.py         # 14 групп метрик (margins, WC days, capex, debt...)
 ├── model/
 │   ├── core.py                  # ThreeStatementModel (solver, 10 итераций, $1K tol)
@@ -171,16 +171,16 @@ Provisions:   open + charge - utilization + accretion = close (3 categories)
 - **Кредитный отчёт:** `UnionMethodology/reports/credit_report_rusal_Q3_2026.html` (9 разделов, 24 SVG, 190KB)
 
 ### Nornickel
-- IFRS, USD, `is_income_sign=natural`
+- IFRS, USD, 2011-2025 → 2026-2028 (3-year forecast)
 - Metals/mining: Ni (~35%), Pd (~30%), Cu (~20%), Pt (~10%)
 - MOEX: GMKN
-- **Этапы:**
-  1. ✅ Init + Data Collection (2026-05-18)
-  2. ⬜ Data Loading → DB
-  3. ⬜ Revenue Analysis → макро-факторы
-  4. ⬜ YAML Config → Model Run → Stress/Rating
-- **Дневник:** `companies/nornickel/PROJECT_DIARY.md`
-- **Excel:** `companies/nornickel/data/excel/nornickel_unified.xlsx`
+- IS 16, BS 26, CF 29 metrics, 38 ops drivers from Databook, 5 metal segments
+- 10 debt instruments, 14 cost breakdown items
+- Revenue: segment Vol×Price (Ni, Cu, Pd, Pt, Other), LME-linked
+- Template v3: `nornickel_v2_template_v3.xlsx` (18 sheets, canonical metrics)
+- BS: smart folding (social_liab, provisions, dividend_payable → canonical)
+- **Excel:** `companies/nornickel_v2/data/excel/nornickel_v2_template_v3.xlsx`
+- **Config:** `companies/nornickel_v2/configs/project.yaml`
 
 ## TaxBlock (IAS 12 / ASC 740)
 ```

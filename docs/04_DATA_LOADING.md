@@ -1,18 +1,26 @@
 # Data Loading — ExcelLoader and Preprocessor
 
+**Updated: 2026-08-28** — Template v3, ExcelLoader v2
+
 ## Overview
 
 Data flows into the model through two independent stages:
 
 ```
-Excel file (rusal_unified_complete.xlsx)
+Excel template_v3 (18 sheets, canonical metrics)
       │
       ▼
-  ExcelLoader                 ← engine/loader/excel.py
-  (parses Excel, applies unit conversion, populates DB)
-      │
-      ▼
-  history_is / history_bs / history_cf  (EAV tables in DB)
+  ExcelLoader v2              ← engine/loader/excel.py
+  │ Supports: legacy format (metric|years) + v3 (label|db_metric|sign|unit|years)
+  │ Sheets:
+  │   STATEMENT_SHEETS:   history_is, history_bs, history_cf
+  │   CANONICAL_SHEETS:   debt_instruments, macro_factors, segments, operational_drivers
+  │   NOTES_SHEETS:       Notes_Finance, Notes_DA, Notes_Tax, Cost_Breakdown, SGA_Split
+  │   SCHEDULE_SHEETS:    Lease_Schedule, Tax_DTA_DTL, Equity_Schedule, Provisions_Detail
+  │
+  ├─► history_is / history_bs / history_cf  (EAV tables)
+  ├─► debt_instruments, segment_data, macro_factor_data
+  └─► preprocess_metrics (operational_drivers, notes, cost_breakdown, ...)
       │
       ▼
   Preprocessor                ← engine/preprocessor/core.py
@@ -28,6 +36,18 @@ Excel file (rusal_unified_complete.xlsx)
       ▼
   ThreeStatementModel         ← engine/model/core.py
 ```
+
+### Template v3 Format
+
+Standard: `templates/excel_templates/template_UNIFIED_v3.xlsx` (18 sheets)
+- IS/BS: `label | db_metric | sign | unit | year_1 | year_2 | ...`
+- CF: `label | excel_metric | db_metric | sign | unit | year_1 | ...`
+- Operational drivers: `driver | unit | year_1 | year_2 | ...`
+- Notes/Cost sheets: `metric | year_1 | year_2 | ...`
+
+Filled examples:
+- `companies/nornickel_v2/data/excel/nornickel_v2_template_v3.xlsx` (38 drivers, 5 segments)
+- `companies/rusal/data/excel/rusal_template_v3.xlsx` (10 drivers, 69 instruments)
 
 ---
 

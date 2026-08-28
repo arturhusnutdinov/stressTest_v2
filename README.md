@@ -24,15 +24,15 @@ print(result.summary())
 ```
 engine/          ← движок (model, macro, stress, rating, covenants)
 companies/       ← данные компаний
-  us_steel/      ← пример: US Steel
-    configs/     ← project.yaml, covenants.yaml
-    data/        ← Excel файлы
-    notebooks/   ← ноутбуки анализа
+  us_steel/      ← US Steel (US GAAP, 2010-2024)
+  rusal/         ← UC RUSAL (IFRS, 2011-2025, 69 debt instruments)
+  nornickel/     ← Nornickel v1 (source data, Databook)
+  nornickel_v2/  ← Nornickel v2 (template_v3, 38 ops drivers, 5 segments)
 notebooks/       ← шаблонные ноутбуки
-templates/       ← YAML и Excel шаблоны
+templates/       ← YAML и Excel шаблоны (template_UNIFIED_v3.xlsx)
 tools/           ← init_company.py, ExcelExporter
-docs/            ← документация
-data_mart_v2.db  ← база данных
+docs/            ← документация (22 файла)
+data_mart_v2.db  ← база данных (39 таблиц)
 ```
 
 ## Документация
@@ -50,3 +50,19 @@ python3 tools/init_company.py rusal \
     --currency USD \
     --standard IFRS
 ```
+
+## Template v3
+
+Стандартный формат загрузки данных (18 листов, канонические метрики):
+
+```bash
+# Загрузить Excel → DB
+python3 tools/load_unified_excel.py --company nornickel_v2 \
+    --excel companies/nornickel_v2/data/excel/nornickel_v2_template_v3.xlsx
+```
+
+Шаблон: `templates/excel_templates/template_UNIFIED_v3.xlsx`
+
+Заполненные файлы:
+- Nornickel: `companies/nornickel_v2/data/excel/nornickel_v2_template_v3.xlsx`
+- Rusal: `companies/rusal/data/excel/rusal_template_v3.xlsx`

@@ -1,5 +1,9 @@
-# Спецификация: Excel-шаблон и загрузчик v2.0
-**stressTest v2 · Апрель 2026 · Статус: К реализации**
+# Спецификация: Excel-шаблон и загрузчик v2.0 → v3.0
+**stressTest v2 · Обновлено: 2026-08-28 · Статус: Реализовано**
+
+> **template_UNIFIED_v3.xlsx** — текущий стандарт (18 листов, канонические метрики).
+> ExcelLoader v2 (`engine/loader/excel.py`) поддерживает оба формата (legacy + v3).
+> Заполненные шаблоны: `nornickel_v2_template_v3.xlsx`, `rusal_template_v3.xlsx`.
 
 ---
 
@@ -77,18 +81,43 @@ SCHEDULES (детализация к основным формам)
 
 ### 3.1 Формат ячеек
 
+**Template v3 (рекомендуемый):**
+```
+Строка 1:  заголовок листа + описание
+Строка 2:  "label" | "db_metric" | "sign" | "unit" | 2010 | 2011 | ... | 2025
+Строки 3+: <label_ru/en> | <canonical_metric> | <+1/-1> | <mUSD> | <value> | ...
+```
+
+**Legacy формат (совместим):**
 ```
 Строка 1:  заголовок листа + инструкция
 Строка 2:  "metric" | 2010 | 2011 | ... | 2024 | 2025
 Строки 3+: <metric_name> | <value> | <value> | ...
 ```
 
+ExcelLoader определяет формат автоматически по наличию колонки `db_metric`.
+
 **Правила:**
-- Первый столбец = canonical metric name (или алиас из dict_metrics)
-- Значения в единицах, указанных в `meta.base_unit` (mUSD по умолчанию)
-- Знаки: расходы/liabilities = отрицательные (единая конвенция)
+- `db_metric` = canonical metric name (revenue, cogs, ppe_net, ...)
+- `sign`: +1 = хранится как положительное, -1 = как отрицательное
+- Значения в единицах `unit` (mUSD по умолчанию), loader конвертирует в db_unit
 - Пустая ячейка = данных нет (NaN), не 0
 - Нули хранить явно как 0
+
+### 3.1.1 Новые листы (v3)
+
+| Лист | Формат | ExcelLoader handler | Хранение |
+|------|--------|-------------------|---------|
+| `operational_drivers` | driver \| unit \| years | `_load_operational_drivers` | preprocess_metrics |
+| `Notes_Finance` | metric \| years | `_load_notes_sheet` | preprocess_metrics |
+| `Notes_DA` | metric \| years | `_load_notes_sheet` | preprocess_metrics |
+| `Notes_Tax` | metric \| years | `_load_notes_sheet` | preprocess_metrics |
+| `Cost_Breakdown` | metric \| years | `_load_notes_sheet` | preprocess_metrics |
+| `SGA_Split` | metric \| years | `_load_notes_sheet` | preprocess_metrics |
+| `Lease_Schedule` | metric \| year \| value | `_load_schedule_sheet` | preprocess_metrics |
+| `Tax_DTA_DTL` | metric \| year \| value | `_load_schedule_sheet` | preprocess_metrics |
+| `Equity_Schedule` | tabular | `_load_schedule_sheet` | preprocess_metrics |
+| `Provisions_Detail` | company \| year \| category \| value | `_load_schedule_sheet` | preprocess_metrics |
 
 ### 3.2 history_is — полный список метрик
 
