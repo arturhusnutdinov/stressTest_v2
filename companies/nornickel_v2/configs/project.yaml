@@ -74,7 +74,7 @@ model:
       expansion_capex_pct_of_rev_growth: 0.0
     wc:
       method: days
-      dio_days: 60
+      # dio_days calculated by preprocessor from history (NNK ~200 days)
       transform_days: dln
     cogs:
       use_ppi_uplift: false

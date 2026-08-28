@@ -234,12 +234,19 @@ class ModelSaver:
         state_dict = state.to_dict()
         n = 0
 
-        # IS
-        is_metrics = {
-            canonical: state_dict[field_name]
-            for field_name, canonical in IS_METRICS.items()
-            if field_name in state_dict and state_dict[field_name] is not None
-        }
+        # IS — normalize signs: expenses stored as positive (IFRS convention)
+        # Engine-internal: cogs/sga/tax negative; history stored positive
+        _ABS_METRICS = {"cogs", "sga", "tax_expense", "interest_expense",
+                        "distribution_expenses", "admin_expenses", "ecl_expenses",
+                        "other_operating_expenses", "current_tax_expense", "deferred_tax_expense"}
+        is_metrics = {}
+        for field_name, canonical in IS_METRICS.items():
+            if field_name not in state_dict or state_dict[field_name] is None:
+                continue
+            val = state_dict[field_name]
+            if canonical in _ABS_METRICS:
+                val = abs(val)
+            is_metrics[canonical] = val
         n += self._repo.upsert_forecast(
             self.company_id, "IS", year, scenario_id,
             is_metrics, version_id=version_id,
