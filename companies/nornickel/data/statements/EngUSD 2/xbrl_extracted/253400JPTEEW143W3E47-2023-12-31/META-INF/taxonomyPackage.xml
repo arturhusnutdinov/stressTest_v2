@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<tp:taxonomyPackage xml:lang="en" xmlns:tp="http://xbrl.org/2016/taxonomy-package" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://xbrl.org/2016/taxonomy-package http://www.xbrl.org/2016/taxonomy-package.xsd">
+  <tp:identifier>http://nornickel.com/xbrl/20231231</tp:identifier>
+  <tp:name>Nornickel XBRL Taxonomy 20231231</tp:name>
+  <tp:description>ESEF Report package</tp:description>
+  <tp:version>Final</tp:version>
+  <tp:publisher>Nornickel</tp:publisher>
+  <tp:publisherURL>http://nornickel.com</tp:publisherURL>
+  <tp:publisherCountry>RU</tp:publisherCountry>
+  <tp:publicationDate>2023-12-31</tp:publicationDate>
+  <tp:entryPoints>
+    <tp:entryPoint>
+      <tp:name>Nornickel XBRL Taxonomy 20231231 Entry point</tp:name>
+      <tp:description>Entry point to be used to load Nornickel XBRL Taxonomy and Annual Report for 20231231</tp:description>
+      <tp:entryPointDocument href="http://nornickel.com/xbrl/20231231/253400JPTEEW143W3E47-2023-12-31.xsd" />
+      <tp:languages>
+        <tp:language>EN</tp:language>
+      </tp:languages>
+    </tp:entryPoint>
+  </tp:entryPoints>
+</tp:taxonomyPackage>

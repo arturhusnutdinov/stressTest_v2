@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:link="http://www.xbrl.org/2003/linkbase" xmlns:num="http://www.xbrl.org/dtr/type/numeric" xmlns:dtr-types="http://www.xbrl.org/dtr/type/2022-03-31" xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:xbrldt="http://xbrl.org/2005/xbrldt" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsd="http://www.w3.org/2001/XMLSchema" targetNamespace="http://nornickel.com/xbrl/20251231" xmlns:mnod="http://nornickel.com/xbrl/20251231">
+  <xsd:import namespace="http://www.xbrl.org/2003/instance" schemaLocation="http://www.xbrl.org/2003/xbrl-instance-2003-12-31.xsd" />
+  <xsd:import namespace="http://www.xbrl.org/dtr/type/numeric" schemaLocation="http://www.xbrl.org/dtr/type/numeric-2009-12-16.xsd" />
+  <xsd:import namespace="http://www.xbrl.org/dtr/type/2022-03-31" schemaLocation="https://www.xbrl.org/dtr/type/2022-03-31/types.xsd" />
+  <xsd:import namespace="https://www.esma.europa.eu/taxonomy/2024-03-27/esef_cor" schemaLocation="https://www.esma.europa.eu/taxonomy/2024-03-27/esef_cor.xsd" />
+  <xsd:annotation>
+    <xsd:appinfo>
+      <link:linkbaseRef xlink:href="253400JPTEEW143W3E47-2025-12-31_pre.xml" xlink:arcrole="http://www.w3.org/1999/xlink/properties/linkbase" xlink:role="http://www.xbrl.org/2003/role/presentationLinkbaseRef" xlink:type="simple" />
+      <link:linkbaseRef xlink:href="253400JPTEEW143W3E47-2025-12-31_cal.xml" xlink:arcrole="http://www.w3.org/1999/xlink/properties/linkbase" xlink:role="http://www.xbrl.org/2003/role/calculationLinkbaseRef" xlink:type="simple" />
+      <link:linkbaseRef xlink:href="253400JPTEEW143W3E47-2025-12-31_def.xml" xlink:arcrole="http://www.w3.org/1999/xlink/properties/linkbase" xlink:role="http://www.xbrl.org/2003/role/definitionLinkbaseRef" xlink:type="simple" />
+      <link:linkbaseRef xlink:href="253400JPTEEW143W3E47-2025-12-31_lab-en.xml" xlink:arcrole="http://www.w3.org/1999/xlink/properties/linkbase" xlink:role="http://www.xbrl.org/2003/role/labelLinkbaseRef" xlink:type="simple" />
+      <link:linkbaseRef xlink:href="https://www.esma.europa.eu/taxonomy/2024-03-27/esef_cor-lab-en.xml" xlink:arcrole="http://www.w3.org/1999/xlink/properties/linkbase" xlink:role="http://www.xbrl.org/2003/role/labelLinkbaseRef" xlink:type="simple" />
+      <link:roleType id="Anchoring" roleURI="http://nornickel.com/role/Anchoring">
+        <link:definition>Anchoring</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="CSOfCashFlows" roleURI="http://nornickel.com/role/CSOfCashFlows">
+        <link:definition>CS of Cash Flows</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+        <link:usedOn>link:presentationLink</link:usedOn>
+        <link:usedOn>link:calculationLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="CSOfChangesInEquity" roleURI="http://nornickel.com/role/CSOfChangesInEquity">
+        <link:definition>CS of Changes in Equity</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+        <link:usedOn>link:presentationLink</link:usedOn>
+        <link:usedOn>link:calculationLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="CSOfComprehensiveIncome" roleURI="http://nornickel.com/role/CSOfComprehensiveIncome">
+        <link:definition>CS of Comprehensive Income</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+        <link:usedOn>link:presentationLink</link:usedOn>
+        <link:usedOn>link:calculationLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="CSOfFinancialPosition" roleURI="http://nornickel.com/role/CSOfFinancialPosition">
+        <link:definition>CS of Financial Position</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+        <link:usedOn>link:presentationLink</link:usedOn>
+        <link:usedOn>link:calculationLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="CSOfIncomeStatement" roleURI="http://nornickel.com/role/CSOfIncomeStatement">
+        <link:definition>CS of Income Statement</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+        <link:usedOn>link:presentationLink</link:usedOn>
+        <link:usedOn>link:calculationLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="Notes" roleURI="http://nornickel.com/role/Notes">
+        <link:definition>Notes</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+        <link:usedOn>link:presentationLink</link:usedOn>
+        <link:usedOn>link:calculationLink</link:usedOn>
+      </link:roleType>
+      <link:roleType id="esef_role-999999" roleURI="http://nornickel.com/role/esef_role-999999">
+        <link:definition>esef_role-999999</link:definition>
+        <link:usedOn>link:definitionLink</link:usedOn>
+      </link:roleType>
+    </xsd:appinfo>
+  </xsd:annotation>
+  <xsd:element id="mnod_MetalSales" name="MetalSales" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_CostOfMetalSales" name="CostOfMetalSales" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_CostOfOtherSales" name="CostOfOtherSales" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_SellingAndDistributionExpense" name="SellingAndDistributionExpense" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_ImpairmentLossReversalOfImpairmentLossOfNonFinancialAssets" name="ImpairmentLossReversalOfImpairmentLossOfNonFinancialAssets" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_GainsLossesRecognisedWhenControlInSubsidiaryIsLostAndDisposalOfForeignJointOperations" name="GainsLossesRecognisedWhenControlInSubsidiaryIsLostAndDisposalOfForeignJointOperations" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_OtherComprehensiveIncomeNetOfTaxExchangeDifferencesOnTranslationAndOtherReserves" name="OtherComprehensiveIncomeNetOfTaxExchangeDifferencesOnTranslationAndOtherReserves" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_ReserveOfExchangeDifferencesOnTranslationAndOtherReserves" name="ReserveOfExchangeDifferencesOnTranslationAndOtherReserves" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="instant" xbrli:balance="credit" />
+  <xsd:element id="mnod_NonCurrentLoansAndBorrowings" name="NonCurrentLoansAndBorrowings" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="instant" xbrli:balance="credit" />
+  <xsd:element id="mnod_NoncurrentSocialliabilities" name="NoncurrentSocialliabilities" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="instant" xbrli:balance="credit" />
+  <xsd:element id="mnod_CurrentLoansAndBorrowings" name="CurrentLoansAndBorrowings" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="instant" xbrli:balance="credit" />
+  <xsd:element id="mnod_CurrentSocialliabilities" name="CurrentSocialliabilities" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="instant" xbrli:balance="credit" />
+  <xsd:element id="mnod_AdjustmentsForImpairmentLossReversalOfImpairmentLossOfNonFinancialAssets" name="AdjustmentsForImpairmentLossReversalOfImpairmentLossOfNonFinancialAssets" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_AdjustmentsForGainLossOnDisposalOfInvestmentsInSubsidiariesAndJointOperations" name="AdjustmentsForGainLossOnDisposalOfInvestmentsInSubsidiariesAndJointOperations" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_AdjustmentsForAccrualsOfProvisions" name="AdjustmentsForAccrualsOfProvisions" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_AdjustmentForAdvancesAndPrepaidExpenses" name="AdjustmentForAdvancesAndPrepaidExpenses" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_AdjustmentForOtherTaxesReceivable" name="AdjustmentForOtherTaxesReceivable" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_AdjustmentForUtilizationOfProvisions" name="AdjustmentForUtilizationOfProvisions" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_AdjustmentForOtherTaxesPayable" name="AdjustmentForOtherTaxesPayable" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_NetChangeInDepositsPlaced" name="NetChangeInDepositsPlaced" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_ReceiptOfDividendsNotRemittedToShareholdersAndADRHolders" name="ReceiptOfDividendsNotRemittedToShareholdersAndADRHolders" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_NetProceedsOnExchangeOfFlowsUnderCrossCurrencyInterestRateSwaps" name="NetProceedsOnExchangeOfFlowsUnderCrossCurrencyInterestRateSwaps" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+  <xsd:element id="mnod_OtherEffectsRelatedToTransactionsWithNonControllingInterestOwners" name="OtherEffectsRelatedToTransactionsWithNonControllingInterestOwners" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_PurchaseOfInterestsInAssociatesAndJointVentures" name="PurchaseOfInterestsInAssociatesAndJointVentures" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_AdjustmentsForIncomeCostFromInvestments" name="AdjustmentsForIncomeCostFromInvestments" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_ReserveOfExchangeDifferencesOnTranslationAndOtherReservesMember" name="ReserveOfExchangeDifferencesOnTranslationAndOtherReservesMember" nillable="true" abstract="true" substitutionGroup="xbrli:item" type="dtr-types:domainItemType" xbrli:periodType="duration" />
+  <xsd:element id="mnod_RecoveryOfUnclaimedDividends" name="RecoveryOfUnclaimedDividends" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="credit" />
+  <xsd:element id="mnod_DisposalsOfSubsidiariesJointOperationsJointVenturesAndAssociates" name="DisposalsOfSubsidiariesJointOperationsJointVenturesAndAssociates" nillable="true" substitutionGroup="xbrli:item" type="xbrli:monetaryItemType" xbrli:periodType="duration" xbrli:balance="debit" />
+</xsd:schema>
