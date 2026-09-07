@@ -1,0 +1,48 @@
+# РусГидро
+
+**company_id**: `rushydro`
+**Отрасль**: energy
+**Валюта**: RUB
+**Стандарт учёта**: IFRS
+
+## Структура
+```
+companies/rushydro/
+  configs/
+    project.yaml              # Главный конфиг модели
+    excel_loader.yaml         # Маппинг Excel → DB
+    accounting_conventions.yaml
+    forecast/macro_ecm.yaml   # Настройки макро-прогноза
+    stress_scenarios.yaml     # Стресс-сценарии
+  data/
+    excel/                    # UNIFIED Excel с данными (IS/BS/CF/debt/macro)
+    statements/               # МСФО / US GAAP отчётность (PDF)
+    annual_reports/           # Годовые отчёты для акционеров (PDF)
+    macro/                    # Макро-факторы (CSV)
+    debt/                     # Долговые расписания
+    operational/              # Операционные KPI
+  notebooks/
+    00_Build_Model_Main.ipynb # Главный pipeline
+    01_Data_Loading.ipynb     # Загрузка данных
+    02_Test_Model_Module.ipynb # Тестирование модели
+    03_Stress_Testing.ipynb   # Стресс-тесты
+    04_Rating.ipynb           # Кредитный рейтинг
+    05_Covenants.ipynb        # Ковенанты
+  outputs/                    # Результаты модели
+```
+
+## Быстрый старт
+
+1. Заполните Excel: `data/excel/rushydro_unified.xlsx`
+2. Настройте: `configs/project.yaml`
+3. Загрузите данные: `notebooks/01_Data_Loading.ipynb`
+4. Запустите модель: `notebooks/00_Build_Model_Main.ipynb`
+
+## CLI
+```bash
+# Полный прогон
+python3 -m engine.orchestrator rushydro --stress --rating
+
+# Только модель
+python3 -m engine.orchestrator rushydro --no-preprocess
+```
