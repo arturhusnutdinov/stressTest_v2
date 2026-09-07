@@ -1,0 +1,178 @@
+company:
+  name: ПАО Ростелеком
+  industry: telecom
+  currency: RUB
+  accounting_standard: IFRS
+accounting_conventions:
+  da_in_cogs: false
+  capitalize_interest: false
+  interest_in_cff: false
+  da_presentation: separate_line
+  is_income_sign: natural
+macro_forecast:
+  profile: vecm_default
+  factors:
+  - brent
+  - usd_rub
+  - cpi_ru
+  - cbr_key_rate
+  - gdp_real
+  policy:
+    factors:
+    - brent
+    - usd_rub
+  search_paths:
+  - companies/gazprom/data/macro
+  - macro/global/drivers
+model:
+  engine_version: v2
+  mode: standard
+  standard:
+    periods:
+      history_start_year: 2021
+      history_end_year: 2025
+      forecast_start_year: 2026
+      forecast_end_year: 2028
+      forecast_years: 3
+    transforms:
+      revenue_target: dln
+      revenue_features: dln
+    revenue:
+      driver: brent
+      macro_factors:
+      - brent
+      - gdp_real
+      - usd_rub
+      elasticity: 0.8
+      use_elastic_net: true
+      l1_ratio: 0.5
+      fallback_growth: ewa
+      target_transform: dln
+      feature_transform: dln
+      chainlink_anchor: history_last
+      segment_modeling: false
+    ewa:
+      sgna_halflife_years: 3
+      wc_days_halflife_years: 3
+    sgna:
+      base_method: ewa
+      ewa_halflife_years: 3
+    margins:
+      ebitda_margin_default: 0.35
+      tax_rate_delta_pct: 0.0
+    capex_policy:
+      method: ratio_to_revenue
+      ratio_default: 0.20
+      maint_as_dep_ratio: 1.0
+      capex_useful_life_years: 20.0
+      disposals_ratio: history
+    ppe:
+      mode: full
+      useful_life_years: 20
+      min_capex_da_ratio: 0.9
+    wc:
+      method: days
+      transform_days: dln
+    cogs:
+      use_ppi_uplift: false
+      clamp:
+        min: 0.50
+        max: 0.80
+    leases:
+      enabled: true
+      default_discount_rate: 0.14
+    debt:
+      mode: optimizer
+      target_pct_revenue: 0.6
+      version: v2_solver
+      interest_treatment: separate_line
+      target_net_debt_ebitda: 2.0
+      max_voluntary_prepay_pct_fcf: 0.3
+      rc:
+        enable: false
+      iter_max: 50
+      tol: 1.0e-06
+      refinancing:
+        enable: true
+        mode: simple
+        simple:
+          extend_years: 5
+          rate_adjustment: 0.0
+          fees_pct: 0.1
+    taxes:
+      mode: full
+      tax_rate_statutory: 0.20
+      policy: statutory_with_floor
+      nol_opening_balance: 0
+      nol_max_utilization_pct: 0.8
+      tax_paid_timing: next_year
+    intangibles:
+      mode: full
+      additions_pct_of_revenue: 0.002
+      amortization_pct_of_balance: 5.0
+    interest_payable:
+      mode: full
+      payment_timing: current_year
+    equity:
+      mode: full
+      dividend_payout_ratio: 0.30
+      buyback_pct_fcf: 0.0
+    train_test:
+      train_end_year: 2023
+solver:
+  max_iter: 10
+  tol: 1000.0
+outputs:
+  base: companies/rostelecom/outputs
+features:
+  min_cash: 20000000000
+  use_ppe_corkscrew: true
+  use_wc_days: true
+  use_tax_corkscrew: true
+  use_intangibles_corkscrew: true
+  use_interest_payable_cork: true
+forecast_methods:
+  is:
+    asset_impairment:
+      method: ewa
+      ewa_halflife_years: 3
+    interest_income:
+      method: ewa
+      ewa_halflife_years: 2
+    other_financial_costs:
+      method: ewa
+      ewa_halflife_years: 3
+  bs:
+    goodwill:
+      method: last
+    restricted_cash:
+      method: last
+    investments_lt:
+      method: last
+    employee_benefits:
+      method: ewa
+      ewa_halflife_years: 5
+covenants:
+  enabled: true
+  methodology: default
+  warning_buffer: 0.1
+  acceleration_triggers:
+  - interest_coverage
+  - net_debt_ebitda
+  thresholds:
+    net_debt_ebitda_max: 4.0
+    interest_coverage_min: 2.0
+    debt_to_equity_max: 3.0
+    current_ratio_min: 1.0
+    ebitda_margin_min: 0.10
+rating:
+  methodology: sp
+  industry_adjustment: -4.0
+  size_adjustment: 4.0
+  cycle_avg_ebitda_margin: 0.30
+  sovereign_rating: BBB+
+  weights:
+    leverage: 0.30
+    coverage: 0.25
+    profitability: 0.25
+    liquidity: 0.20
