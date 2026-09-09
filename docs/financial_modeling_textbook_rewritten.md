@@ -4466,24 +4466,77 @@ python3 parsers/tests/smoke_rusal_note13_ppe.py
    - Автоматизация процессов
 
 
-### 10.4 Ресурсы
+### 10.4 Статистика системы (сентябрь 2026)
 
-**Документация:**
+| Параметр | Значение |
+|----------|----------|
+| Компаний с моделями | 13 (active), 4 (stub, требуют банковскую модель) |
+| Секторов | metals, oil_gas, telecom, energy, tech, consumer |
+| Стандарты отчётности | US GAAP, IFRS (RU), IFRS (international) |
+| Валюты моделей | USD, RUB |
+| Рейтинговых оценок | 358 (base + stress × years × companies) |
+| Стресс-сценариев | 7-12 на компанию |
+| Макрофакторов | 22 (из внешней ECM, VECM, Mean Reversion, EWA) |
+| Corkscrews | 9 + iterative solver |
+| Канонических метрик | 110 (32 IS + 45 BS + 33 CF) |
+| Строк кода движка | ~9,000 Python |
+| Тестов | 45 (unit + integration + smoke) |
+| История данных | 2009-2025 (до 17 лет) |
+| Прогнозный горизонт | 3-7 лет |
+
+### 10.5 Ресурсы
+
+**Документация движка:**
+- `docs/01_MODELING_SCHEMA.md` — YearState и ForecastMethods (comprehensive)
 - `docs/03_YAML_CONFIGURATION.md` — руководство по конфигурации (497 строк)
 - `docs/06_STRESS_RATING_COVENANTS.md` — стресс, рейтинг, ковенанты
 - `docs/09_RUSAL_MODEL_GUIDE.md` — полное описание Rusal модели
-- `docs/HANDOFF_FINAL.md` — передача контекста с актуальными метриками
+- `docs/MODEL_ARCHITECTURE.md` — архитектура системы v2.3
+- `docs/MODEL_CREATION_CHECKLIST.md` — 5-фазный гайд по созданию новой модели
 
-**Примеры (production ready):**
-- `companies/us_steel/` — US Steel (US GAAP, сталь, EDGAR XBRL), Rating BBB→A-
-- `companies/rusal/` — Rusal (IFRS, алюминий, PDF парсер), Rating B, 8 stress scenarios
+**Практические примеры (production ready):**
+- `companies/nornickel/` — Норникель (IFRS, мультиметалл, 4 сегмента), Rating BBB
+- `companies/rusal/` — Rusal (IFRS, алюминий, component COGS, 31 instrument), Rating BB+
+- `companies/us_steel/` — US Steel (US GAAP, сталь, EDGAR XBRL, NOL $2.5B), Rating BBB→A−
+- `companies/gazprom/` — Газпром (IFRS, RUB, natural gas), Rating BBB−
+- + ещё 9 компаний (Газпром нефть, МТС, Ростелеком, Полюс, РусГидро, Россети, Яндекс, ИКС 5, АЛРОСА)
+
+**Связанные системы:**
+- **modelMacro** — квартальная VECM (13 уравнений, 130+ переменных) → macro_forecasts
+- **impliedPD** — рыночные PD из 909 облигаций (fixed + floater pipeline) → PD integral
+- **stressTest_complete** — Top-Down портфельный стресс-тест (Basel II IRB, Vasicek MC)
+- **Vertex** — production-платформа (FastAPI + PostgreSQL + Celery + React, 20 страниц UI)
 
 **Инфраструктура:**
 - 45 тестов (pytest): `python3 -m pytest tests/ -v`
-- CI/CD: GitHub Actions (Python 3.11/3.12)
+- CI/CD: GitHub Actions (Python 3.11/3.12, lint + tsc)
 - CLI: `stresstest` (после `pip install -e .`)
-- Docker: `docker build -t stresstest .`
-- SQLite база данных `data_mart_v2.db` (WAL mode)
+- Docker: `docker compose up -d` (9 контейнеров)
+- PostgreSQL 15 (production) / SQLite (standalone)
+- Celery Beat: 25 ежедневных задач автоматизации
+- Telegram alerts: daily digest + pipeline notifications
+
+### 10.6 Ограничения и направления развития
+
+**Текущие ограничения модели:**
+
+1. **Банковский сектор**: модель IS/BS/CF не подходит для банков (NII вместо Revenue, provisions вместо COGS, RWA вместо PPE). Требуется отдельный банковский модуль с NII/Provisions/RWA engine.
+
+2. **Нелинейные эффекты**: все связи линейные (OLS, EWA). Нелинейности (regime switching, jump diffusion) не моделируются. Для commodity cycles это упрощение может занижать tail risk.
+
+3. **Counterparty risk**: модель не учитывает цепочки зависимостей (A → B → C default cascade). Для системно значимых компаний (Газпром → цепочка поставщиков) это может быть существенно.
+
+4. **ESG-факторы**: экологические и социальные риски (carbon tax, transition risk) не формализованы в модели. Для горнодобывающих компаний (Норникель — экологические обязательства) это может стать всё более важным.
+
+5. **Операционный leverage**: фиксированные vs переменные расходы не разделяются (кроме component COGS Русала). Для компаний с высокими фиксированными затратами (МТС — сетевая инфраструктура) это занижает чувствительность к падению выручки.
+
+**Направления развития:**
+
+1. **Банковская модель** (NII/provisions/RWA) для ВТБ, Сбербанк
+2. **Monte Carlo** для стресс-тестирования (вместо детерминированных сценариев)
+3. **Machine Learning** для feature selection в Revenue/COGS regression
+4. **Real options** для оценки инвестиционных проектов (CapEx decisions)
+5. **Multi-currency consolidation** для групп с дочерними компаниями в разных юрисдикциях
 
 **Успехов в финансовом моделировании!**
 
@@ -5091,6 +5144,104 @@ $$\text{EAD}_i = \begin{cases}
 \text{sc\_results fallback}_i & \text{(68 эмитентов)}
 \end{cases}$$
 
+### 15.5 Практический пример: запуск модели через API
+
+**Шаг 1: Аутентификация**
+```bash
+TOKEN=$(curl -s -X POST http://localhost/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+```
+
+**Шаг 2: Загрузка исторических данных (Excel template)**
+```bash
+curl -X POST http://localhost/api/v1/historical/upload-preview \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@template_nornickel.xlsx" \
+  -F "version_id=8b278956-898c-450d-b5a5-b717e72b1774"
+# → Preview: 2457 rows, 0 errors
+
+curl -X POST http://localhost/api/v1/historical/upload-commit \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"preview_id":"abc123"}'
+# → 2457 rows inserted
+```
+
+**Шаг 3: Запуск модели**
+```bash
+curl -X POST http://localhost/api/v1/financial-model/versions/8b278956-.../run \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"scenario_name":"base","run_stress":true,"run_rating":true,"run_covenants":true}'
+# → {"success": true, "rows_written": 2310, "base_rating": "BBB", ...}
+```
+
+**Шаг 4: Получение результатов**
+```bash
+# IS forecast (history + forecast merged)
+curl http://localhost/api/v1/financial-model/versions/8b278956-.../forecast/is?scenario_name=base \
+  -H "Authorization: Bearer $TOKEN"
+# → {"items": [{year: 2023, is_forecast: false, metric: "revenue", value: 15541.0}, ...]}
+
+# Rating trajectory
+curl http://localhost/api/v1/financial-model/versions/8b278956-.../ratings?scenario_name=base \
+  -H "Authorization: Bearer $TOKEN"
+# → [{year: 2026, rating: "BBB", score: 64.2, nd_ebitda: 1.00, icr: 9.9}, ...]
+
+# Covenants
+curl http://localhost/api/v1/financial-model/versions/8b278956-.../covenants \
+  -H "Authorization: Bearer $TOKEN"
+# → [{year: 2026, covenant: "nd_ebitda", status: "ok", actual: 1.00, threshold: 4.0, headroom: 0.75}, ...]
+```
+
+### 15.6 Dashboard: 10 графиков на одной странице
+
+Для каждой компании Vertex автоматически строит dashboard (страница ModelDetail) с 10 графиками:
+
+| # | График | Тип | Данные |
+|---|--------|-----|--------|
+| 1 | Revenue / EBITDA / NI | ComposedChart | KPI: bars (Revenue) + lines (EBITDA, NI) |
+| 2 | Маржинальность | LineChart | Gross, EBITDA, Net margins (%) |
+| 3 | Денежные потоки | ComposedChart | Bars (CFO, CFI, CFF) + line (FCF) |
+| 4 | Финансовые коэффициенты | ComposedChart | ND/EBITDA, ICR (left axis) + ROE (right axis, %) |
+| 5 | Структура баланса | BarChart | Stacked: Equity + LT Debt + ST Debt + line (Total Assets) |
+| 6 | Рейтинговая траектория | ComposedChart | Bars (Rating Score) + lines (ND/EBITDA, ICR) |
+| 7 | IS Waterfall | BarChart | Revenue → COGS → Gross → SGA → EBITDA → ... → NI |
+| 8 | Чистый долг и leverage | ComposedChart | Bars (Net Debt, Cash) + line (ND/EBITDA) |
+| 9 | Оборотный капитал | ComposedChart | Bars (AR, Inventory, AP) |
+| 10 | CapEx vs D&A | ComposedChart | Bars (CapEx, D&A) + line (Reinvestment %) + ref line 100% |
+
+Каждый график:
+- Разделяет историю (тёмные тона) и прогноз (светлые тона)
+- Показывает значения на столбцах (LabelList)
+- Имеет tooltip с форматированием ($B, %, x)
+- Адаптируется к валюте компании (USD/RUB) и единицам измерения
+
+### 15.7 Полный pipeline автоматизации: от данных до кредитного заключения
+
+```
+Ежедневно (Celery Beat):
+  19:00 → MOEX bond quotes (909 bonds)
+  20:00 → IPD pipeline (6 steps) → PD for 111 issuers
+  20:20 → Floater pipeline (5 steps) → PD for 83 issuers
+  20:30 → Stress pipeline → EL/VaR portfolio
+  20:45 → Mart refresh (122 issuers, 20 sectors)
+  21:00 → Telegram digest (summary to analyst)
+
+Еженедельно:
+  Smart-lab financials → IS/BS/CF for 43 issuers
+  → auto-update total_debt → EAD for stress-test
+
+Ежемесячно:
+  Analyst reviews dashboard → identifies deteriorating issuers
+  → re-runs financial models with updated macro
+  → generates credit report (HTML/PPTX)
+  → presents to credit committee
+
+Полный цикл: данные → модель → стресс → рейтинг → implied PD → портфель → отчёт
+Время: ~5 минут на полное обновление (автоматически)
+```
+
 ---
 
 **Успехов в финансовом моделировании!**
@@ -5125,4 +5276,35 @@ https://support.numxl.com/hc/en-us/articles/115000142626-Understanding-Exponenti
 
 Financial Modelling for Startups - Step by Step with Example
 https://www.wallstreetmojo.com/financial-modelling-for-startups/
+
+Duffie, D., Singleton, K.J. (1999). Modeling Term Structures of Defaultable Bonds. Review of Financial Studies, 12(4), 687-720.
+
+Hamilton, J.D. (1994). Time Series Analysis. Princeton University Press.
+
+Johansen, S. (1995). Likelihood-Based Inference in Cointegrated Vector Autoregressive Models. Oxford University Press.
+
+Kalman, R.E. (1960). A New Approach to Linear Filtering and Prediction Problems. ASME Journal of Basic Engineering, 82(1), 35-45.
+
+Lütkepohl, H. (2005). New Introduction to Multiple Time Series Analysis. Springer.
+
+S&P Global Ratings. Corporate Methodology. Standard & Poor's Rating Services.
+
+Basel Committee on Banking Supervision (2006). International Convergence of Capital Measurement and Capital Standards (Basel II). BIS.
+
+IFRS Foundation (2016). IFRS 16 Leases. International Accounting Standards Board.
+
+IFRS Foundation (2001). IAS 12 Income Taxes. International Accounting Standards Board.
+
+Daubechies, I. (1992). Ten Lectures on Wavelets. SIAM.
+
+Vasicek, O. (2002). The Distribution of Loan Portfolio Value. Risk, 15(12), 160-162.
+
+Merton, R.C. (1974). On the Pricing of Corporate Debt: The Risk Structure of Interest Rates. Journal of Finance, 29(2), 449-470.
+
+---
+
+*Учебное пособие по финансовому моделированию v3.0*
+*stressTest Engine v2.1 · Vertex Platform · Сентябрь 2026*
+*13 компаний · 22 сектора · 9+1 corkscrews · 10-итерационный solver*
+*358 рейтинговых оценок · 22 макро-фактора · 3 implied PD оценки*
 
