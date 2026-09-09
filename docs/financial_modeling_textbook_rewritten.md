@@ -5405,6 +5405,59 @@ python3 parsers/tests/smoke_rusal_note13_ppe.py
 
 5. **Операционный leverage**: фиксированные vs переменные расходы не разделяются (кроме component COGS Русала). Для компаний с высокими фиксированными затратами (МТС — сетевая инфраструктура) это занижает чувствительность к падению выручки.
 
+### 10.7 Типичные ошибки при построении финансовых моделей
+
+Из опыта построения 13 моделей выделены наиболее частые ошибки:
+
+**1. Двойной счёт в CF Statement**
+
+| Ошибка | Пример | Последствие |
+|--------|--------|-------------|
+| Начисленные + денежные | `finance_costs_net` + `interest_paid` | Interest удваивается |
+| D&A дважды | `cfo_da` + `depreciation` (дубликат) | total_da 2x |
+| Dividends | `dividends_declared` + `dividends_paid` | CFF завышен |
+
+*Решение:* в CF используем ТОЛЬКО cash-based метрики. Начисленные (`finance_costs_net`, `dividends_declared`) → `_skip`.
+
+**2. Знаковая несогласованность**
+
+IFRS COGS = +7,813 (positive), но модель ожидает positive → отображает −7,813 (frontend `sign: -1`). Если загрузить COGS как −7,813 → модель покажет +7,813.
+
+*Решение:* IS expenses всегда positive в БД. Frontend применяет знак. Loader делает `abs()` для `_ABS_METRICS`.
+
+**3. BS не балансируется**
+
+Если |Assets − Liab − Equity| > $1K — модель некорректна. Частые причины:
+- Пропущена строка (`other_current_assets`, `other_non_current_liabilities`)
+- Retained Earnings не обновляется через NI → Equity drift
+- DTA/DTL не учтены в Assets/Liabilities
+
+*Решение:* triple check (BS identity + CF bridge + Debt recon) на каждой итерации solver'а.
+
+**4. CapEx < DA (недоинвестирование)**
+
+Если CapEx < DA на протяжении 3+ лет, PPE net снижается → производственная мощность деградирует. Модель продолжает генерировать Revenue, но это нереалистично.
+
+*Решение:* CapEx floor = DA × 0.90. Компания не может инвестировать меньше износа.
+
+**5. Floating rate не пересчитывается**
+
+Если floating-rate debt моделируется с фиксированной ставкой, interest expense не отражает изменение Key Rate. Для Русала (40% floating) при КС 14%→8%: interest снижается на $300M/год — это 50% разницы между убытком и прибылью.
+
+*Решение:* `is_fixed: false` в Debt\_Schedule, `base_rate: cbr_key_rate` в config.
+
+**6. WC не учитывает цикличность**
+
+При revenue decline на 20%: AR должна снижаться (меньше продаж), но DSO может расти (клиенты задерживают платежи). Без cyclical elasticity модель занижает WC drain.
+
+*Решение:* DSO_adj = DSO × (1 + ε × ΔRevenue/Revenue), ε ≈ −0.3.
+
+**7. Stale preprocessor**
+
+Если preprocessor запускался на старых данных, а модель — на новых, параметры (margins, betas, WC days) могут быть неактуальны. Например, preprocessor calibrated на 2019-2023 (pre-rate hike), а модель на 2024-2028 (high rates) → interest rate assumptions stale.
+
+*Решение:* всегда запускать preprocessor перед моделью (`run_preprocessor: true`).
+
 **Направления развития:**
 
 1. **Банковская модель** (NII/provisions/RWA) для ВТБ, Сбербанк
@@ -5841,6 +5894,78 @@ for factor in ['gdp_ru', 'cpi_ru', 'cbr_key_rate', 'usd_rub', ...]:
     macro_forecasts[factor] = annual.value.to_dict()
 ```
 
+### 12.7 Сценарный анализ: как макро-условия меняют результат модели
+
+Одно из главных преимуществ интеграции макро-факторов — возможность проводить **сценарный анализ**: как изменятся финансовые результаты компании при различных макроэкономических условиях.
+
+**Три сценария для Норникеля (2026):**
+
+| Фактор | Baseline | Adverse | Severe |
+|--------|---------|---------|--------|
+| LME Ni ($/t) | 17,200 | 13,000 (−24%) | 10,000 (−42%) |
+| LME Cu ($/t) | 8,200 | 6,500 (−21%) | 5,000 (−39%) |
+| LME Pd ($/oz) | 1,450 | 1,100 (−24%) | 800 (−45%) |
+| USD/RUB | 92 | 100 (+9%) | 110 (+20%) |
+| CBR Key Rate | 12% | 14% (0%) | 16% (+4pp) |
+| CPI RU (yoy) | 6.5% | 8% | 12% |
+| Power price (руб/МВтч) | 4,500 | 5,000 (+11%) | 6,000 (+33%) |
+
+**Каскад влияния на модель:**
+
+| Метрика | Baseline | Adverse | Severe |
+|---------|---------|---------|--------|
+| Revenue | $13.8B | $10.8B (−22%) | $8.5B (−38%) |
+| COGS | $7.3B | $6.8B (−7%) | $6.5B (−11%) |
+| EBITDA | $6.5B | $4.0B (−38%) | $2.0B (−69%) |
+| Interest | $655M | $710M (+8%) | $780M (+19%) |
+| Net Income | $2.8B | $1.2B (−57%) | −$0.3B (убыток) |
+| ND/EBITDA | 0.71x | 1.15x | 2.30x |
+| Rating | BBB+ | BBB− | BB |
+
+**Ключевые наблюдения:**
+
+1. **Revenue падает быстрее COGS**: при commodity downturn revenue = f(LME price), а COGS более стабилен (fixed costs: энергия, труд). Это **operating leverage** — маржа сжимается нелинейно.
+
+2. **Рублёвый парадокс**: в adverse/severe USD/RUB растёт → рублёвые расходы (energy, labour) в долларах дешевеют → COGS снижается. Без этого эффекта EBITDA было бы ещё ниже. Русал выигрывает от девальвации сильнее Норникеля (больше доля рублёвых затрат).
+
+3. **Interest растёт в стрессе**: Key Rate ↑ → floating debt rate ↑. Для Норникеля эффект умеренный (+$55-125M), для Русала — катастрофический (+$200-400M из-за 40% floating share).
+
+4. **Рейтинговый cliff**: при ND/EBITDA > 2x Норникель теряет IG status (BBB → BB). Это может trigger covenant breach и ограничить доступ к рынку капитала.
+
+**Как сценарии задаются в системе:**
+
+```yaml
+# modelMacro scenario_results.csv содержит 5-7 сценариев:
+# baseline, moderate_adverse, adverse, severe, upside, v_recovery
+
+# Или override в project.yaml:
+macro:
+  scenario: adverse  # Выбрать один из доступных
+  # Или manual overrides:
+  overrides:
+    lme_ni: 13000
+    usd_rub: 100
+```
+
+*Предположение:* макро-факторы коррелированы (commodity downturn → FX depreciation → rate hike). В External ECM эти корреляции учтены через VECM. При manual overrides — нет.
+
+### 12.8 Чувствительность: какой фактор важнее?
+
+Для каждой компании можно определить **ключевой фактор** — тот, к которому EBITDA наиболее чувствительна:
+
+| Компания | Ключевой фактор | Elasticity | +10% фактора → EBITDA |
+|----------|----------------|-----------|----------------------|
+| Норникель | LME Ni price | 0.85 | +8.5% |
+| Русал | LME Al price | 0.92 | +9.2% |
+| US Steel | HRC Steel price | 0.78 | +7.8% |
+| Газпром | Gas export price | 0.72 | +7.2% |
+| МТС | GDP RU (спрос) | 0.30 | +3.0% |
+| Яндекс | GDP RU + ad market | 0.50 | +5.0% |
+
+Elasticity вычисляется из OLS regression: $d\ln(\text{EBITDA}) = \alpha + \beta \times d\ln(\text{Factor})$.
+
+**Для кредитного анализа:** если ключевой фактор — commodity price с σ = 25%, то EBITDA может колебаться на ±20% в год. Это определяет adequate leverage: Норникель может позволить ND/EBITDA 2x (margin of safety), а Русал с elasticity 0.92 и тонкой маржой — не более 1x.
+
 ---
 
 ## 13. Препроцессор: от истории к параметрам модели
@@ -6187,6 +6312,115 @@ result = service.upload_commit(preview)
    ↓
 7. Dashboard: ModelDetail page (графики, таблицы, рейтинг)
 ```
+
+### 14.8 Практический пример: загрузка Норникеля от нуля
+
+Покажем полный workflow загрузки данных Норникеля — от скачивания отчётности до готовой модели.
+
+**Шаг 1: Источники данных**
+
+| Источник | Данные | Метод загрузки |
+|----------|--------|---------------|
+| Smart-lab | IS/BS/CF (агрегаты, 2020-2025) | Celery task weekly |
+| Годовой отчёт МСФО | PPE schedule, Debt instruments, Tax | Excel template v3 |
+| MOEX ISS API | Облигации (ISINs, YTM, volume) | Celery task daily |
+
+**Шаг 2: Заполнение template\_UNIFIED\_Nornickel.xlsx**
+
+Лист IS (пример строк):
+
+| Metric | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 |
+|--------|------|------|------|------|------|------|
+| revenue | 15545 | 17852 | 16876 | 14409 | 12535 | 13763 |
+| cogs | 4500 | 5057 | 6103 | 7032 | 6877 | 7613 |
+| sga | | 1180 | 1614 | 1389 | 1465 | 1560 |
+| total_da | 943 | 928 | 1026 | 1165 | 1181 | 1411 |
+| interest_expense | 879 | 279 | 493 | 567 | 896 | 934 |
+| net_income | 3634 | 6974 | 5854 | 2870 | 1815 | 2470 |
+
+*Заметка:* значения в USD миллионах. COGS **положительный** (IFRS convention) — loader применит abs() автоматически.
+
+Лист Debt\_Schedule (пример):
+
+| instrument_id | type | currency | rate | is_fixed | maturity | amount |
+|--------------|------|----------|------|----------|----------|--------|
+| eurobond_2028 | bullet | USD | 0.03375 | true | 2028 | 750 |
+| eurobond_2031 | bullet | USD | 0.0255 | true | 2031 | 500 |
+| rub_bond_06 | amortizing | RUB | 0.015 | false | 2027 | 30000 |
+| revolver | revolver | USD | 0.012 | false | 2027 | 2000 |
+
+*Заметка:* для floating-rate `is_fixed=false`, `rate` = spread over base (0.015 = +150bp over Key Rate).
+
+**Шаг 3: Upload через API**
+
+```bash
+# Preview (валидация без записи)
+curl -X POST http://localhost/api/v1/historical/upload-preview \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@template_UNIFIED_Nornickel.xlsx" \
+  -F "version_id=8b278956-898c-450d-b5a5-b717e72b1774"
+
+# Response:
+# {
+#   "summary": {"is_rows": 384, "bs_rows": 612, "cf_rows": 544, "total": 2457},
+#   "warnings": [],
+#   "errors": []
+# }
+
+# Commit (запись в БД)
+curl -X POST http://localhost/api/v1/historical/upload-commit \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"preview_id": "..."}'
+# → 2457 rows inserted
+```
+
+**Шаг 4: Запуск модели**
+
+```bash
+curl -X POST http://localhost/api/v1/financial-model/versions/8b278956-.../run \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"scenario_name":"base","run_stress":true,"run_rating":true}'
+
+# Response:
+# {
+#   "success": true,
+#   "rows_written": 2310,
+#   "base_rating": "BBB",
+#   "timings": {"preprocessor": 0.12, "macro": 0.08, "model": 0.53, "stress": 7.2}
+# }
+```
+
+**Шаг 5: Результат на Dashboard**
+
+После запуска модели на странице ModelDetail появляются:
+- 10 графиков (Revenue/EBITDA/NI, margins, CF, ratios, BS structure, rating trajectory, waterfall, net debt, WC, CapEx vs DA)
+- IS/BS/CF таблицы с историей + прогнозом
+- Рейтинговая траектория (BBB → A−)
+- Ковенантный мониторинг (все OK)
+- Стресс-сценарии (11 вариантов)
+
+**Типичные проблемы при загрузке:**
+
+| Проблема | Причина | Решение |
+|----------|---------|---------|
+| "Column X not found" | Имя метрики не в canonical list | Проверить маппинг в листе Mapping |
+| BS не балансируется | Пропущена строка (other_ca, other_ncl) | Добавить недостающую строку |
+| Interest = 0 в прогнозе | Debt\_Schedule пуст | Заполнить инструменты |
+| D&A удваивается в CF | cfo_da + depreciation | Оставить только cfo_da |
+| Revenue = 0 | Нет macro factors | Заполнить лист Macro или настроить YAML |
+
+### 14.9 Чеклист загрузки данных новой компании
+
+Перед запуском модели проверьте:
+
+- [ ] IS: revenue, cogs, sga, total_da, interest_expense, net_income — все заполнены
+- [ ] BS: cash, accounts_receivable, inventory, ppe_net, total_assets, short/long_term_debt, accounts_payable, total_equity — все заполнены
+- [ ] BS балансируется: |total_assets − total_liabilities − total_equity| < $1M
+- [ ] CF: capex, cfo_total (или net_income + total_da как минимум)
+- [ ] Debt\_Schedule: хотя бы 1 инструмент (иначе interest = 0)
+- [ ] PPE\_Schedule: capex и depreciation за все годы
+- [ ] project.yaml создан с правильными revenue/cogs/debt настройками
+- [ ] Macro factors доступны (external ECM или manual override)
 
 ---
 
