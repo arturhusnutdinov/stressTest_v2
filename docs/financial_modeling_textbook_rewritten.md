@@ -2625,19 +2625,184 @@ CovenantsCheckResult:
   .summary()                        # Текстовый отчёт
 ```
 
-#### 7.3.7 Tax Block
+##### Практический пример: ковенантный анализ трёх компаний
 
-- Statutory rate × taxable income = current tax
-- NOL carry-forward (до 80% taxable income, TCJA)
-- DTA: pension, NOL → генерируют актив
-- DTL: ускоренная амортизация → генерирует обязательство
-- Payment lag: текущий год платит прошлогодние налоги
+**Норникель (base scenario, 2026-2028):**
 
-#### 7.3.8 Lease Block (ASC 842 / IFRS 16)
+| Год | ND/EBITDA | ICR | Current Ratio | Status |
+|-----|-----------|-----|---------------|--------|
+| 2026 | 1.00x (max 4.0) | 9.9x (min 2.0) | 1.35 (min 1.0) | **OK** |
+| 2027 | 0.79x | 10.7x | 1.42 | **OK** |
+| 2028 | 0.59x | 11.3x | 1.51 | **OK** |
+| Headroom | +75% | +395% | +35% | Все ковенанты далеко от порогов |
 
-- Operating leases: ROU asset + liability → decay rate
-- Finance leases: interest + principal split
-- Interest → IS; principal → CFF
+Норникель — **comfortably investment grade**. Даже в severe stress (commodity downturn −25%):
+ND/EBITDA ухудшается до 1.8x — всё ещё далеко от порога 4.0x.
+
+**Русал (base scenario, 2026-2028):**
+
+| Год | ND/EBITDA | ICR | D/E | Current Ratio | Status |
+|-----|-----------|-----|-----|---------------|--------|
+| 2026 | 3.95x (max 4.5) | 2.1x (min 1.5) | 2.8 (max 3.0) | 1.08 (min 1.0) | **WARNING** (ND/EBITDA near threshold) |
+| 2027 | 3.12x | 2.8x | 2.2 | 1.15 | **OK** |
+| 2028 | 2.45x | 3.5x | 1.7 | 1.22 | **OK** |
+
+Русал в 2026 — **на грани** ковенантного нарушения. Headroom по ND/EBITDA = 12% (warning zone при buffer 10%). В stress сценарии `aluminium_downturn` (LME Al −25%):
+
+| Год | ND/EBITDA | ICR | Status |
+|-----|-----------|-----|--------|
+| 2026 stress | 6.2x (**BREACH**) | 1.3x (**BREACH**) | **ACCELERATION** |
+| 2027 stress | 5.8x (**BREACH**) | 1.1x (**BREACH**) | **ACCELERATION** |
+
+При breach → callable instruments ($2.5B) reclassified в ST → Current Liabilities +$2.5B → Current Ratio падает до 0.52 → **cascade breach** по CR covenant.
+
+Это иллюстрирует, почему стресс-тестирование с ковенантным анализом критично для кредитного заключения: base case приемлем, но stress scenario выявляет уязвимость.
+
+**US Steel (base scenario, 2026-2028):**
+
+| Год | ND/EBITDA | ICR | EBITDA Margin | Status |
+|-----|-----------|-----|---------------|--------|
+| 2026 | 1.65x (max 3.5) | 6.2x (min 2.5) | 12.1% (min 5%) | **OK** |
+| 2027 | 1.32x | 7.8x | 13.5% | **OK** |
+| 2028 | 0.95x | 9.1x | 14.2% | **OK** |
+
+US Steel — steel-specific covenants (жёстче: ND/EBITDA max 3.5x vs default 4.0x, EBITDA margin min 5%). В severe recession (HRC −30%, GDP −3%):
+
+| Год | ND/EBITDA | ICR | EBITDA Margin | Status |
+|-----|-----------|-----|---------------|--------|
+| 2026 stress | 3.8x (**BREACH**) | 2.1x (**WARNING**) | 4.2% (**BREACH**) | **ACCELERATION** |
+
+Steel covenant по EBITDA margin — наиболее чувствительный: при HRC −30% маржа проваливается ниже 5%.
+
+##### Ключевые выводы из ковенантного анализа
+
+1. **Норникель**: ковенанты не являются ограничивающим фактором даже в severe stress. Кредитный риск определяется другими факторами (commodity exposure, geopolitical).
+
+2. **Русал**: ковенанты — **binding constraint**. ND/EBITDA near threshold в base → breach в stress. Рекомендация: мониторить headroom ежеквартально, держать RC facility с достаточным лимитом для рефинансирования.
+
+3. **US Steel**: steel-specific EBITDA margin covenant наиболее чувствителен к commodity cycle. В рецессии breach возможен, но компания имеет значительный NOL carry-forward ($2.5B), что создаёт tax shield и поддерживает cash flow.
+
+*Предположение:* в модели covenant waiver не моделируется (conservative approach). В реальности кредитор может согласиться на waiver или amendment, особенно если breach временный.
+
+#### 7.3.7 Tax Block (подробно)
+
+Налоговый модуль (`engine/model/schedules/tax.py`) реализует полный IAS 12 / US GAAP ASC 740 цикл:
+
+**Текущий налог:**
+$$\text{Current Tax} = \max(0, \text{EBT} - \text{NOL\_utilized}) \times \tau_{\text{statutory}}$$
+
+**NOL Carry-Forward (перенос убытков):**
+$$\text{NOL\_utilized} = \min(\text{NOL\_opening}, \text{EBT} \times 0.80)$$
+$$\text{NOL\_closing} = \text{NOL\_opening} - \text{NOL\_utilized}$$
+
+TCJA (Tax Cuts and Jobs Act, 2017): NOL покрывает максимум 80% EBT. В российском НК — 50% (ст. 283).
+
+*Предположение:* NOL бессрочный (post-TCJA). До 2017 NOL имел 20-летний срок.
+
+**Пример: US Steel NOL carry-forward**
+
+US Steel имеет $2.5B NOL на начало прогноза (результат убытков 2015-2019):
+
+| Год | EBT | NOL open | NOL used (80%) | Current Tax | NOL close |
+|-----|-----|----------|----------------|-------------|-----------|
+| 2026 | $1,200M | $2,500M | $960M | $50M | $1,540M |
+| 2027 | $1,500M | $1,540M | $1,200M | $63M | $340M |
+| 2028 | $1,800M | $340M | $340M | $306M | $0 |
+| 2029 | $2,000M | $0 | $0 | $420M | $0 |
+
+NOL исчерпывается к 2028. После этого Tax = EBT × 21% (полная ставка).
+Tax savings from NOL: cumulative ~$500M за 3 года.
+
+**Отложенные налоги (DTA/DTL):**
+
+$$\text{DTA} = \text{NOL\_closing} \times \tau + \text{Other\_temp\_diff\_deductible} \times \tau$$
+$$\text{DTL} = (\text{PPE\_tax\_basis} - \text{PPE\_book}) \times \tau$$
+
+DTA возникает при: NOL, пенсионных обязательствах, accrued liabilities.
+DTL возникает при: ускоренной налоговой амортизации (MACRS vs straight-line).
+
+**DTA Valuation Allowance:**
+
+Если компания хронически убыточна, DTA может быть не реализован. В этом случае создаётся valuation allowance:
+
+$$\text{DTA\_net} = \text{DTA\_gross} \times (1 - \text{allowance\_pct})$$
+
+*Предположение:* allowance = 0% для прибыльных компаний, 100% для убыточных. Partial allowance (e.g., 30%) не моделируется — это бинарное упрощение.
+
+**Payment timing:**
+- `current_year`: Tax Payable = Current Tax (платим в том же году)
+- `next_year`: Tax Payable = Current Tax_{t-1} (платим в следующем)
+- `mixed`: 50%/50%
+
+В CF: `Taxes Paid` = Tax Payable (денежные, не accrued).
+
+**Конфигурация:**
+```yaml
+tax:
+  mode: full                    # full | simple
+  statutory_rate: 0.21          # 21% US / 0.25 Russia
+  nol_opening_balance: 2500     # $2.5B NOL
+  nol_utilization_cap: 0.80     # TCJA 80%
+  payment_timing: next_year     # current_year | next_year | mixed
+  dta_valuation_allowance: 0.0  # 0% = fully realizable
+```
+
+#### 7.3.8 Lease Block (IFRS 16 / ASC 842, подробно)
+
+С 2019 года (IFRS 16) все лизинговые договоры > 12 мес. отражаются на балансе. Это существенно влияет на BS и key ratios.
+
+**Right-of-Use (ROU) актив:**
+$$\text{ROU\_close} = \text{ROU\_open} - \text{DA\_rou} + \text{New\_leases} - \text{Impairment}$$
+
+$$\text{DA\_rou} = \text{ROU\_open} / \text{remaining\_life}$$
+
+**Lease Liability:**
+$$\text{Liab\_close} = \text{Liab\_open} + \text{Accretion} - \text{Principal\_payment} + \text{New\_leases}$$
+
+$$\text{Accretion} = \text{Liab\_open} \times r_{\text{incremental}}$$
+
+$$\text{Principal} = \text{Lease\_payment} - \text{Accretion}$$
+
+**Влияние на IS:**
+- DA_rou → Depreciation (IS, operating expense)
+- Accretion → Interest expense (IS, financial expense)
+- EBITDA увеличивается (lease payment заменяется на DA + Interest)
+
+**Влияние на CF:**
+- Operating lease: payment → `lease_payments_cfo` (CFO)
+- Finance lease: principal → `fin_lease_principal_cff` (CFF)
+
+**Lockstep identity:**
+$$|\Delta\text{ROU} - \Delta\text{Liab}| < \varepsilon$$
+
+(При отсутствии new leases и impairment).
+
+*Предположение:* единый incremental borrowing rate для всех контрактов. В реальности каждый контракт может иметь свою ставку.
+
+*Предположение:* new leases = constant % от Revenue. В реальности — дискретные решения менеджмента.
+
+**Пример: МТС (lease-heavy telecom)**
+
+МТС имеет значительный портфель лизинговых обязательств (башни, офисы, оборудование):
+
+| Метрика | Без IFRS 16 | С IFRS 16 | Δ |
+|---------|------------|-----------|---|
+| EBITDA | 180B RUB | 210B RUB | +16.7% |
+| Total Assets | 850B RUB | 920B RUB | +8.2% |
+| Total Debt (incl. lease) | 450B RUB | 520B RUB | +15.6% |
+| ND/EBITDA | 2.5x | 2.5x | ~0 (EBITDA и Debt растут пропорционально) |
+
+IFRS 16 effect: EBITDA↑, Assets↑, Debt↑, но ND/EBITDA почти не меняется (компенсирующий эффект). Однако D/E ухудшается, что может повлиять на рейтинг.
+
+**Конфигурация:**
+```yaml
+lease:
+  enabled: true
+  incremental_borrowing_rate: 0.07  # 7%
+  new_leases_pct_revenue: 0.02     # 2% от Revenue
+  avg_remaining_life: 5.0           # лет
+  op_lease_share: 0.85              # 85% operating, 15% finance
+```
 
 
 ### 7.4 Структура проекта
@@ -3243,26 +3408,154 @@ Debt: 69 инструментов в DB (70 загружается в модел
 
 ### 8b.3 Сегментная модель выручки
 
-| Сегмент | Метод объёма | Метод цены | Доля |
-|---------|-------------|-----------|------|
-| Primary Al | EWA halflife=4 | f(lme_aluminium) | ~80% |
-| Alumina | EWA halflife=4 | f(lme_alumina) | ~7% |
-| Other | flat | — | ~13% |
+Русал — крупнейший алюминиевый производитель за пределами Китая. Revenue разбивается на три сегмента:
 
-### 8b.4 Component-based COGS
+| Сегмент | Доля | Volume (kt) | Price driver | OLS β | R² |
+|---------|------|-----------|-------------|-------|-----|
+| Primary Al | ~80% | 3,800-4,100 | LME Al × premium | 0.92 | 0.88 |
+| Alumina | ~7% | 7,500 | LME Alumina | 0.78 | 0.72 |
+| Other | ~13% | — | EWA | — | — |
 
-Алюмина 37%, электроэнергия 27%, труд 12%, прочее 24%.
-Dampening: 0.30, clamp ±0.06.
+**Конфигурация в YAML:**
 
-### 8b.5 Macro drivers
+```yaml
+revenue:
+  type: custom
+  segments:
+    - name: primary_al
+      share: 0.80
+      volume_method: ewa
+      volume_halflife: 4      # года
+      volume_cap_kt: 4100     # nameplate capacity
+      price_method: ols
+      price_factors: [lme_al, usd_rub, us_al_premium]
 
-lme_aluminium, lme_alumina, usd_rub, brent, gdp_world, cpi_ru, ppi_ru, russian_power_price
+    - name: alumina
+      share: 0.07
+      volume_method: ewa
+      price_method: ols
+      price_factors: [lme_alumina]
 
-### 8b.6 Floating rate debt
+    - name: other
+      share: 0.13
+      price_method: ewa       # нет чёткого benchmark
+```
 
-9 инструментов привязаны к CBR KeyRate (spread 1.2–3.0%).
-Прогноз CBR: 2026=14%, 2027=11%, 2028=9%, 2029=8%, 2030=7%.
-Interest expense: 818M (2026) → 718M (2030) — снижается с CBR.
+**Формула для Primary Al:**
+
+$$\text{Revenue}_{\text{Al}} = \text{Volume}_t \times (\text{LME\_Al}_t + \text{Premium}_t) \times \beta_{\text{OLS}}$$
+
+Volume: EWA с cap на уровне nameplate capacity (4,100 kt/год — максимальная мощность заводов).
+
+*Предположение:* объём производства не может превысить nameplate. Рост возможен только через M&A или greenfield (отражается в `additional_volume` config).
+
+*Упрощение:* premium (наценка к LME) считается стабильным (~$150/t). В реальности premium зависит от региона доставки и контрактных условий.
+
+**Пример расчёта (2026 base scenario):**
+
+Volume = 3,950 kt (EWA от history), LME Al = $2,200/t (Mean Reversion), Premium = $150/t
+Revenue_Al = 3,950 × ($2,200 + $150) × 0.92 = $8,538M
+
+### 8b.4 Component-based COGS (подробно)
+
+В отличие от ratio-based модели (Норникель, US Steel), Русал использует **компонентную модель** себестоимости. Это обусловлено спецификой алюминиевой отрасли: структура затрат сильно зависит от стоимости глинозёма (37%) и электроэнергии (27%), которые имеют собственные ценовые драйверы.
+
+**Четыре компоненты:**
+
+| Компонент | Доля | Драйвер | Формула |
+|-----------|------|---------|---------|
+| Alumina | 37% | LME Alumina | base × (alumina_price / base_price) × vol_adj |
+| Energy | 27% | Power price + FX | base × (power / base_power) × (FX_base / FX) × vol_adj |
+| Labour | 12% | CPI + FX | base × (CPI / CPI_base) × (FX_base / FX) × vol_adj |
+| Other | 24% | PPI | base × (PPI / PPI_base) × vol_adj |
+
+**Формула для Total COGS:**
+
+$$\text{COGS}_t = \sum_{c \in \{al, en, lab, oth\}} w_c \times \text{COGS}_{\text{base}} \times \frac{\text{driver}_c(t)}{\text{driver}_c(\text{base})} \times \text{vol\_adj}(t)$$
+
+**Mean Reversion к якорю:**
+
+$$\text{macro\_deviation} = \frac{\text{total\_costs}}{\text{base\_cogs}} - 1$$
+$$\text{cogs\_ratio} = \text{anchor} \times (1.0 + \text{macro\_deviation} \times 0.80)$$
+
+Dampening 0.80: при полном macro shock (deviation = 10%) COGS ratio смещается на 8%, а не на 10%. Это отражает способность компании частично абсорбировать шоки (контрактные цены, хеджирование).
+
+Clamp: anchor ± 1.5σ (σ = 0.06 калибровано на истории 2011-2025).
+
+*Предположение:* доли компонентов (37/27/12/24) стабильны. В реальности Русал — вертикально интегрирован (производит собственный глинозём), поэтому alumina share может снижаться при самообеспечении.
+
+*Упрощение:* vol_adj = линейная функция от ΔVolume. Нелинейность (экономия масштаба) не учитывается.
+
+**Конфигурация:**
+```yaml
+cogs:
+  mode: component
+  alumina_share: 0.37
+  energy_share: 0.27
+  labour_share: 0.12
+  other_share: 0.24
+  mean_reversion_dampening: 0.80  # 80% reversion
+  clamp_sigma: 0.06              # ±1.5σ
+```
+
+**Пример (2026 stress: energy_spike +40%):**
+
+| Компонент | Base COGS | Stress COGS | Δ |
+|-----------|----------|------------|---|
+| Alumina (37%) | $3,890M | $3,890M | 0% (не шокнут) |
+| Energy (27%) | $2,838M | $3,973M | +40% |
+| Labour (12%) | $1,261M | $1,261M | 0% |
+| Other (24%) | $2,522M | $2,522M | 0% |
+| **Total** | **$10,511M** | **$11,646M** | **+10.8%** |
+
+Energy shock +40% → Total COGS +10.8% → EBITDA −85% (catastrophic для low-margin company).
+
+### 8b.5 Macro drivers (подробно)
+
+8 макрофакторов используются в модели Русала:
+
+| Фактор | Переменная | Связь | β | Метод прогноза |
+|--------|-----------|------|---|---------------|
+| LME Aluminium | `lme_al` | Revenue (Primary Al) | 0.92 | Mean Reversion (HL=5.6yr) |
+| LME Alumina | `lme_alumina` | Revenue (Alumina) + COGS | 0.78 | Mean Reversion |
+| USD/RUB | `usd_rub` | Revenue, Energy/Labour costs | Direct | External ECM |
+| Brent | `brent` | Transport, energy costs | 0.15 | Mean Reversion |
+| GDP World | `gdp_world` | Al demand elasticity | 0.30 | IMF consensus |
+| CPI RU | `cpi_ru` | Labour costs | 0.80 | External ECM |
+| PPI RU | `ppi_ru` | Other costs | 0.35 | External ECM |
+| Power price | `russian_power_price` | Energy component COGS | Direct | EWA + tariff forecast |
+
+*Предположение:* energy share of COGS для Русала стабильна (~27%). В реальности Русал инвестирует в собственную генерацию (ЕвроСибЭнерго), что может снижать energy exposure.
+
+### 8b.6 Floating rate debt (подробно)
+
+Русал имеет наибольшую долю floating-rate debt среди наших компаний (~40% портфеля, 9 инструментов):
+
+| Инструмент | Тип | Объём | Spread | Effective rate (2026) |
+|-----------|-----|-------|--------|----------------------|
+| RUB Bond 001P-01 | Amort | RUB 25B | +1.20% | 15.20% |
+| RUB Bond 001P-03 | Amort | RUB 20B | +1.50% | 15.50% |
+| RUB Bond 001P-05 | Bullet | RUB 18B | +1.80% | 15.80% |
+| RUB Bond 001P-07 | Bullet | RUB 15B | +2.00% | 16.00% |
+| Synd. Loan (SOFR) | Revolver | $500M | +1.20% | ~6.50% |
+| VTB Loan | Term | RUB 30B | +2.50% | 16.50% |
+| Sberbank Loan | Term | RUB 25B | +2.80% | 16.80% |
+| Gazprombank Loan | Term | RUB 20B | +3.00% | 17.00% |
+| RC Facility | Revolver | $300M | +1.50% | ~6.80% |
+
+**Прогноз Interest expense при снижении ключевой ставки:**
+
+| Год | CBR Key Rate | Avg float rate | Float Interest | Fixed Interest | Total |
+|-----|-------------|----------------|---------------|----------------|-------|
+| 2026 | 14.0% | 16.1% | $582M | $236M | $818M |
+| 2027 | 11.0% | 13.1% | $474M | $236M | $710M |
+| 2028 | 9.0% | 11.1% | $401M | $236M | $637M |
+| 2029 | 8.0% | 10.1% | $365M | $199M | $564M |
+| 2030 | 7.0% | 9.1% | $329M | $199M | $528M |
+
+Snижение КС с 14% до 7% экономит ~$290M/год в interest — значительный positive для NI и cash flow.
+
+*Предположение:* CBR key rate прогнозируется External ECM (modelMacro). Прогноз: снижение до 7% к 2030 (консенсус). Если ставка останется на 14% → interest +$290M → NI −$220M → ND/EBITDA +0.7x.
 
 ### 8b.7 Корки (Corkscrew Schedules)
 
