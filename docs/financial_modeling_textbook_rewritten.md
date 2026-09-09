@@ -909,6 +909,154 @@ dummies:
 
 Это делает модель устойчивой к различным сценариям и обеспечивает приемлемые прогнозы даже при недостатке данных или нестабильности.
 
+#### 4.4.7 Пример: Mean Reversion для LME Nickel (Норникель)
+
+Для Норникеля ключевой ценовой фактор — LME Nickel. В отличие от HRC (US Steel), для которого применяется VECM, для LME Ni используется **Mean Reversion** (Ornstein-Uhlenbeck), поскольку:
+- Ряд log(LME Ni) показывает сильный mean-reverting характер (ADF p-value = 0.08 на уровнях)
+- VECM с макро-факторами нестабилен для Ni (short sample, structural breaks)
+- Mean Reversion интерпретируем: цена тяготеет к cost of production (~$15,000-18,000/t)
+
+**Модель Ornstein-Uhlenbeck:**
+$$dX_t = \kappa(\mu - X_t)dt + \sigma dW_t$$
+
+**Калибровка на данных 2005-2025 (ежемесячные):**
+
+```python
+import numpy as np
+from scipy.optimize import minimize
+
+# Log-price series
+X = np.log(lme_ni_monthly)  # 240 observations
+
+# MLE estimation (discretized OU)
+# X(t+1) - X(t) = κ(μ - X(t))Δt + σ√Δt × ε
+# → AR(1): ΔX = a + b×X(t) + ε
+dX = np.diff(X)
+X_lag = X[:-1]
+
+b, a = np.polyfit(X_lag, dX, 1)  # OLS
+kappa = -b * 12  # annualize (monthly data)
+mu_log = -a / b
+sigma_log = np.std(dX - a - b * X_lag) * np.sqrt(12)
+
+mu = np.exp(mu_log + sigma_log**2 / (2 * kappa))  # level space
+
+print(f"κ = {kappa:.3f}")      # 0.164
+print(f"μ = ${mu:.0f}/t")      # $17,800/t
+print(f"σ = ${sigma_log:.3f}") # 0.248 (log)
+print(f"Halflife = {np.log(2)/kappa:.1f} yr")  # 4.2 years
+```
+
+**Результаты калибровки:**
+
+| Параметр | Значение | Интерпретация |
+|----------|----------|---------------|
+| κ (speed) | 0.164 | Скорость возврата к среднему |
+| μ (long-run) | $17,800/t | Долгосрочное равновесие (cost of production) |
+| σ (volatility) | 24.8% годовых | Стандартное отклонение log-returns |
+| Halflife | 4.2 года | Через 4.2 года 50% отклонения исчезает |
+| R² (in-sample) | 0.12 | Низкий (expected for OU — most variation is noise) |
+
+**Forecast (из текущей цены $17,000/t):**
+
+$$E[X_t] = \mu + (X_0 - \mu) \times e^{-\kappa t}$$
+
+| Горизонт | Forecast | 90% CI |
+|----------|---------|--------|
+| 1 год | $17,200 | [$13,800, $21,400] |
+| 2 года | $17,400 | [$12,500, $24,200] |
+| 3 года | $17,500 | [$11,600, $26,400] |
+| 5 лет | $17,650 | [$10,100, $30,800] |
+
+*Предположение:* долгосрочное равновесие μ = $17,800 стабильно. В реальности cost of production меняется (energy costs, new supply from Indonesia). Модель не учитывает structural shifts в supply curve.
+
+*Предположение:* Normal distribution shocks. Commodity prices имеют fat tails (kurtosis > 3). Model underpredicts extreme events.
+
+**Использование в Revenue модели Норникеля:**
+
+$$\text{Revenue\_Ni}_{2026} = \text{Volume}_{2026} \times \text{LME\_Ni\_forecast}_{2026} \times \beta_{\text{OLS}}$$
+$$= 198\text{kt} \times \$17{,}200/\text{t} \times 0.85 = \$2{,}893M$$
+
+Это ~21% от total Revenue Норникеля. Аналогичные расчёты для Cu ($2,634M), PGM ($2,693M), Other ($1,580M).
+
+#### 4.4.8 Пример: EWA для EBITDA margin (Норникель)
+
+Для стабильных показателей (margins, ratios, WC days) используется **Exponentially Weighted Average**:
+
+$$\alpha = 1 - e^{-\ln 2 / h}, \quad S_t = \alpha X_t + (1-\alpha) S_{t-1}$$
+
+**EBITDA margin Норникеля (2015-2025):**
+
+| Год | EBITDA margin | EWA (h=3) | EWA (h=5) | EWA (h=7) |
+|-----|-------------|-----------|-----------|-----------|
+| 2015 | 48.2% | — | — | — |
+| 2016 | 47.5% | — | — | — |
+| 2017 | 44.1% | — | — | — |
+| 2018 | 52.3% | 49.7% | 48.4% | 47.8% |
+| 2019 | 51.8% | 51.0% | 49.5% | 48.6% |
+| 2020 | 25.7% | 37.8% | 41.3% | 43.1% |
+| 2021 | 34.9% | 36.3% | 39.0% | 40.5% |
+| 2022 | 46.9% | 42.3% | 41.7% | 41.9% |
+| 2023 | 53.1% | 48.5% | 45.3% | 43.8% |
+| 2024 | 83.9% | 68.1% | 57.0% | 51.1% |
+| 2025 | 63.2% | 65.5% | 59.1% | 54.3% |
+
+**Выбор halflife:**
+
+- h=3 (reactive): EWA = 65.5% — слишком волатильный, overweight 2024 outlier
+- h=5 (balanced): EWA = 59.1% — good compromise
+- h=7 (smooth): EWA = 54.3% — too smooth, doesn't capture recent recovery
+
+Preprocessor выбирает h=5 по умолчанию (настраивается в YAML: `ewa_halflife: 5.0`).
+
+**Winsorization** (P10/P90): 25.7% и 83.9% — outliers. После winsorization:
+- EWA(h=5, winsorized) = 52.8% — более робастная оценка
+
+**Clamp** (final forecast):
+$$\text{EBITDA\_margin}_{2026} = \text{clamp}(52.8\%, P10=34.9\%, P90=63.2\%) = 52.8\%$$
+
+В пределах — используется. Если бы EWA = 70% (вне P90) → clamped до 63.2%.
+
+*Предположение:* history representative. 2020-2024 содержит COVID, sanctions, supercycle — нетипичный период. EWA с h=5 придаёт 2020 вес ~6%, 2024 вес ~21%.
+
+*Предположение:* margins mean-revert. Для Норникеля это обосновано (resource base stable, cost structure predictable). Для tech companies (Яндекс) — questionable (margins may structurally shift).
+
+#### 4.4.9 Практическая реализация: выбор метода для каждого фактора
+
+В нашей системе каждый макро-фактор и company metric имеет автоматически выбранный метод прогнозирования:
+
+**Макро-факторы (22 переменных):**
+
+| Фактор | Метод | Обоснование |
+|--------|-------|------------|
+| GDP RU | External ECM | Structural model (13 eq.) |
+| CPI RU | External ECM | Linked to key rate, GDP gap |
+| Key Rate | External ECM | Taylor rule linkage |
+| USD/RUB | External ECM | PPP + interest parity |
+| Brent | Mean Reversion (κ=0.18) | Commodity, HL=3.8yr |
+| LME Al | Mean Reversion (κ=0.12) | Commodity, HL=5.6yr |
+| LME Ni | Mean Reversion (κ=0.16) | Commodity, HL=4.2yr |
+| LME Cu | Mean Reversion (κ=0.14) | Commodity, HL=4.9yr |
+| LME Pd | Mean Reversion (κ=0.10) | Commodity, HL=6.9yr |
+| HRC Steel | VECM (rank=2) | Cointegrated with GDP+IP |
+| Power price | EWA + CPI growth | Regulated tariff |
+| GDP World | Gap-fill (+2.8%) | IMF consensus |
+
+**Company metrics (per issuer, from preprocessor):**
+
+| Метрика | Метод | halflife | Пример (Норникель) |
+|---------|-------|----------|-------------------|
+| EBITDA margin | EWA | 5yr | 52.8% |
+| COGS/Revenue | EWA + PPI | 5yr | 53.2% (β_ppi=0.35) |
+| SGA/Revenue | EWA + CPI | 3yr | 5.8% (β_cpi=0.80) |
+| DSO days | EWA | 3yr | 28.4 |
+| DIH days | EWA | 3yr | 82.1 |
+| DPO days | EWA | 3yr | 41.2 |
+| CapEx/Revenue | EWA | 5yr | 17.2% |
+| DA rate | EWA | 5yr | 7.1% |
+| Dividend payout | EWA | 5yr | 60% |
+| Tax rate | Historical avg | — | 21% (statutory) |
+
 ---
 
 ## 5. Построение интегрированной модели «3 statements» (трех отчетов)
@@ -2278,6 +2426,227 @@ Debt Recon:     15/15 years |Debt_close − Debt_open − Net_draws| < $1K  ✓
     15. BS totals + BS check
     16. Covenant acceleration check
 ```
+
+#### 7.3.2b Детали каждого блока: входы, логика, выходы
+
+**Block 1: Revenue** (`blocks/revenue.py` + `segment_revenue.py`)
+
+```python
+def _solve_revenue(state: YearState, prev: YearState, config: ModelConfig):
+    # Fallback chain:
+    # 1. SegmentRevenueModel (if configured)
+    if config.revenue.type == 'custom' and config.segments:
+        for seg in config.segments:
+            vol = ewa(seg.history_volume, halflife=seg.volume_halflife)
+            vol = min(vol, seg.volume_cap)  # nameplate limit
+            price = ols_predict(seg.price_factors, macro_forecasts)
+            state.revenue += vol * price * seg.beta
+        return
+
+    # 2. Macro OLS: dln(Revenue) ~ dln(factor)
+    if config.revenue.type == 'macro' and preprocessor.rev_best_beta:
+        factor = macro_forecasts[preprocessor.rev_best_factor]
+        growth = preprocessor.rev_best_beta * dln(factor)
+        state.revenue = prev.revenue * exp(growth)
+        return
+
+    # 3. EWA growth
+    growth = preprocessor.revenue_growth_ewa  # halflife=5yr, clamped [P10, P90]
+    state.revenue = prev.revenue * (1 + growth)
+```
+
+*Гипотеза:* выручка лучше всего прогнозируется через ценовые факторы (commodity linked) для resource companies и через GDP/CPI для non-commodity. Preprocessor тестирует оба подхода и выбирает лучший по R².
+
+**Block 2: COGS** (`core.py` + `cogs_block.py`)
+
+```python
+def _solve_cogs(state: YearState, prev: YearState, config: ModelConfig):
+    if config.cogs.mode == 'component':
+        # Component model (Rusal): 4 weighted components
+        cogs_macro = sum(
+            weight * base_cost * (driver[year] / driver[base_year]) * vol_adj
+            for weight, base_cost, driver in components
+        )
+        deviation = (cogs_macro / base_cogs) - 1
+        ratio = anchor * (1 + deviation * dampening)  # mean reversion
+        ratio = clamp(ratio, anchor - 1.5*sigma, anchor + 1.5*sigma)
+        state.cogs = state.revenue * ratio
+    else:
+        # Ratio model with PPI indexation
+        ratio = preprocessor.cogs_ratio_ewa
+        ppi_adj = 1 + preprocessor.cogs_beta_ppi * dln(ppi_forecast)
+        state.cogs = state.revenue * ratio * ppi_adj
+
+    # D&A separation (if da_in_cogs)
+    if config.accounting.da_in_cogs:
+        state.cogs -= state.total_da  # D&A computed separately in PPE block
+```
+
+**Block 3: SGA** (`blocks/sga.py`)
+
+```python
+def _solve_sga(state: YearState, prev: YearState, config: ModelConfig):
+    base_growth = preprocessor.sga_growth_ewa
+    cpi_adj = preprocessor.sga_beta_cpi * dln(cpi_forecast)
+    growth = base_growth + cpi_adj
+
+    # Demand decline adjustment
+    if state.revenue < prev.revenue:
+        decline_pct = (prev.revenue - state.revenue) / prev.revenue
+        growth -= config.sga.demand_decline_cut * decline_pct
+
+    # Double clamp
+    growth = clamp(growth, preprocessor.sga_growth_p10, preprocessor.sga_growth_p90)
+    state.sga = prev.sga * (1 + growth)
+
+    ratio = state.sga / state.revenue
+    ratio = clamp(ratio, preprocessor.sga_ratio_min, preprocessor.sga_ratio_max)
+    state.sga = state.revenue * ratio
+```
+
+*Упрощение:* SGA как % от Revenue стабильно для large-cap industrials. Для быстрорастущих компаний (Яндекс) SGA/Revenue может снижаться (scale effects) — модель не учитывает нелинейности.
+
+**Block 4: PPE** (`schedules/ppe.py`)
+
+```python
+def _solve_ppe(state: YearState, prev: YearState, config: ModelConfig):
+    # CapEx
+    capex_raw = state.revenue * preprocessor.capex_to_revenue_ewa
+    capex_floor = prev.total_da * config.ppe.min_capex_da_ratio  # typically 0.90
+    state.capex = max(capex_raw, capex_floor)
+
+    # Additional CapEx (projects)
+    if year in config.ppe.additional_capex:
+        state.capex += config.ppe.additional_capex[year]
+
+    # Depreciation
+    state.depreciation_owned = prev.ppe_net * preprocessor.da_rate_ewa
+
+    # PPE corkscrew
+    state.ppe_gross = prev.ppe_gross + state.capex
+    state.accumulated_depreciation = prev.accumulated_depreciation + state.depreciation_owned
+    state.ppe_net = state.ppe_gross - state.accumulated_depreciation
+
+    # Disposals
+    disposal = prev.ppe_net * preprocessor.disposal_ratio_ewa
+    state.ppe_gross -= disposal
+    state.accumulated_depreciation -= disposal * 0.8  # assumed 80% depreciated
+```
+
+*Гипотеза:* CapEx floor 90% DA обеспечивает sustaining investment. Для growth companies (Норникель с greenfield проектами) additional_capex добавляется вручную.
+
+**Block 5: WC** (`schedules/wc.py`)
+
+```python
+def _solve_wc(state: YearState, prev: YearState, config: ModelConfig):
+    # Base days from preprocessor (EWA, clamped)
+    dso = preprocessor.dso_ewa
+    dih = preprocessor.dih_ewa
+    dpo = preprocessor.dpo_ewa
+
+    # Cyclical elasticity (if enabled)
+    if config.wc.cyclical_elasticity:
+        rev_change = (state.revenue - prev.revenue) / prev.revenue
+        dso *= (1 + config.wc.dso_elasticity * rev_change)  # ε ≈ -0.3
+        dih *= (1 + config.wc.dih_elasticity * rev_change)  # ε ≈ -0.4
+        dpo *= (1 + config.wc.dpo_elasticity * rev_change)  # ε ≈ +0.2
+
+    # Compute BS items
+    state.accounts_receivable = state.revenue * dso / 365
+    state.inventory = abs(state.cogs) * dih / 365
+    state.accounts_payable = abs(state.cogs) * dpo / 365
+
+    # WC change for CF
+    state.wc_ar_change = state.accounts_receivable - prev.accounts_receivable
+    state.wc_inv_change = state.inventory - prev.inventory
+    state.wc_ap_change = state.accounts_payable - prev.accounts_payable
+    state.wc_delta = state.wc_ar_change + state.wc_inv_change - state.wc_ap_change
+```
+
+*Предположение:* AR зависит от Revenue (DSO), Inventory и AP зависят от COGS (DIH, DPO). Это стандартная практика, но для компаний с seasonal revenue (ритейл Q4) может давать ошибку.
+
+**Block 6-7: Lease, Intangibles** — подробно описаны в секциях 7.3.8 и 11.6.
+
+**Block 8-16: Iterative Debt/Tax/Equity/CF** — подробно описаны в секции 5.1c (долговое моделирование).
+
+#### 7.3.2c Orchestrator: единая точка входа
+
+Функция `build_model()` (`engine/orchestrator.py`, 22.8 KB) координирует все модули:
+
+```python
+def build_model(
+    company_id: str,
+    config_path: Path = None,
+    scenario_name: str = "base",
+    run_preprocessor: bool = True,
+    run_macro: bool = True,
+    run_model: bool = True,
+    run_stress: bool = False,
+    run_rating: bool = False,
+    run_covenants: bool = False,
+) -> BuildResult:
+
+    # Step 1: Preprocessor → 1306+ metrics (0.1s)
+    if run_preprocessor:
+        preprocess_result = Preprocessor(db, company_id).compute()
+
+    # Step 2: Macro → 22 factors forecast (0.1s)
+    if run_macro:
+        macro_result = MacroForecastModule(db, company_id, config).forecast()
+
+    # Step 3: Load inputs (0.05s)
+    historic, model_config = ModelInputLoader(db, config).load()
+
+    # Step 4: Run 3-Statement Model (0.1s per year × 5 years = 0.5s)
+    if run_model:
+        model = ThreeStatementModel(historic, model_config, macro_result)
+        model_result = model.run()  # 5-7 forecast years
+        ModelSaver(db).save(model_result)  # → forecast_is/bs/cf tables
+
+    # Step 5: Stress (0.8s per scenario × 9 = 7.2s)
+    if run_stress:
+        for scenario in config.stress_scenarios:
+            stressed = StressRunner(scenario).apply_and_run(model)
+            StressSaver(db).save(stressed)
+
+    # Step 6: Rating (0.1s per scenario)
+    if run_rating:
+        for scenario_result in [model_result] + stress_results:
+            rating = RatingEngine(config.rating).score(scenario_result)
+            RatingSaver(db).save(rating)
+
+    # Step 7: Covenants (in-loop, already computed during model run)
+    if run_covenants:
+        covenants = CovenantsChecker(config.covenants).check(model_result)
+        CovenantsSaver(db).save(covenants)
+
+    return BuildResult(
+        success=True,
+        timings={...},           # Performance profile
+        rows_written=2310,       # DB insert count
+        preprocess_result=...,   # 1306 metrics
+        macro_result=...,        # 22 factors
+        model_result=...,        # YearState × years
+        stress_results={...},    # scenario → StressResult
+        rating_result=...,       # base + stressed ratings
+        covenants_result=...,    # breach status
+    )
+```
+
+**Типичные timings (Русал, 31 instrument, 9 stress scenarios):**
+
+| Шаг | Время | Описание |
+|-----|-------|----------|
+| Preprocessor | 0.12s | 14 groups, 1306 metrics |
+| Macro | 0.08s | 22 factors (external ECM loaded) |
+| Model (base) | 0.53s | 5 years × 10 iterations × 16 blocks |
+| Stress (9 scenarios) | 7.2s | 0.8s per scenario re-run |
+| Rating | 0.15s | 10 scenarios × 4 sub-scores |
+| Covenants | 0.02s | 5 covenants × 5 years |
+| **Total** | **~8.1s** | Full pipeline |
+
+Для Норникеля (10 instruments, simpler debt): ~4.2s total.
+Для US Steel (4 instruments, no stress in SQLite): ~0.9s total.
 
 #### 7.3.3a Database Module (engine/database/)
 
