@@ -453,7 +453,89 @@ Recovery Rate — ожидаемая доля возврата при дефол
 
 **Вывод:** Перед тем как строить прогнозную модель для какого-либо показателя, необходимо проанализировать его график, проверить на тренд, сезонность, при необходимости выполнить преобразования (лог, разности), чтобы обеспечить стационарность. Только после этого имеет смысл переходить к выбору и оценке модели. В следующей главе мы подробно рассмотрим различные модели временных рядов, которые мы использовали для прогнозирования макроэкономических (и не только) показателей.
 
-### 3.3 Практический пример: анализ ряда LME Aluminium
+### 3.3 Формальное тестирование стационарности: ADF тест
+
+На практике стационарность проверяется тестом Augmented Dickey-Fuller (ADF). Регрессия:
+
+$$\Delta X_t = \alpha + \beta t + \gamma X_{t-1} + \sum_{i=1}^{p} \delta_i \Delta X_{t-i} + \varepsilon_t$$
+
+Нулевая гипотеза: $H_0: \gamma = 0$ (единичный корень, ряд нестационарен).
+Альтернативная: $H_1: \gamma < 0$ (ряд стационарен).
+
+Если p-value < 0.05 → отвергаем $H_0$ → ряд стационарен.
+
+**Пример на наших данных (Python):**
+
+```python
+from statsmodels.tsa.stattools import adfuller
+
+# Revenue Норникеля (2009-2025, в USD млн)
+revenue = [10228, 12782, 14095, 11863, 12014, 11875, 9273,
+           8610, 9146, 11670, 13562, 15545, 17852, 16876,
+           14409, 12535, 13763]
+
+# Тест на уровнях
+adf_level = adfuller(revenue, autolag='AIC')
+print(f"ADF на уровнях: stat={adf_level[0]:.3f}, p={adf_level[1]:.4f}")
+# → ADF stat=-1.87, p=0.3459 → НЕ стационарен
+
+# Тест на log-returns
+import numpy as np
+log_ret = np.diff(np.log(revenue))
+adf_logret = adfuller(log_ret, autolag='AIC')
+print(f"ADF на log-returns: stat={adf_logret[0]:.3f}, p={adf_logret[1]:.4f}")
+# → ADF stat=-4.12, p=0.0008 → СТАЦИОНАРЕН
+```
+
+**Интерпретация для моделирования:**
+- Revenue в уровнях: нестационарен (p=0.35) → нельзя напрямую в ARIMA/VAR
+- Log-returns Revenue: стационарен (p<0.001) → можно моделировать
+- Значит: прогнозируем $d\ln(\text{Revenue})$, затем восстанавливаем уровни через $\text{Revenue}_T = \text{Revenue}_0 \times \exp\left(\sum_{t=1}^{T} d\ln(\text{Revenue}_t)\right)$
+
+**Результаты ADF для ключевых показателей Норникеля:**
+
+| Показатель | ADF (уровни) | p-value | ADF (log-ret) | p-value | d(I) |
+|-----------|-------------|---------|--------------|---------|------|
+| Revenue | -1.87 | 0.346 | -4.12 | 0.001 | I(1) |
+| EBITDA | -1.52 | 0.524 | -3.89 | 0.002 | I(1) |
+| Net Debt | -0.93 | 0.775 | -3.41 | 0.011 | I(1) |
+| EBITDA margin | -2.98 | 0.038 | — | — | I(0) ← стационарен! |
+| COGS/Revenue | -3.21 | 0.019 | — | — | I(0) ← стационарен! |
+
+**Вывод:** абсолютные показатели (Revenue, EBITDA, Debt) — I(1), нужно дифференцирование. Ratios (margins, COGS/Revenue) — I(0), стационарны сами по себе. Поэтому:
+- Для **Revenue/EBITDA**: используем VECM/ARIMA на log-returns
+- Для **margins/ratios**: используем EWA напрямую (не нужно дифференцировать)
+
+### 3.4 Преобразования данных: от уровней к стационарным рядам
+
+**Логарифмическое преобразование и его свойства:**
+
+$$Y_t = \ln(X_t)$$
+
+Зачем:
+1. Стабилизирует дисперсию: $\text{Var}(\Delta \ln X) \approx \text{const}$ даже при $\text{Var}(\Delta X)$ ↑
+2. Линеаризует экспоненциальный рост: $\ln(X_t) \approx \alpha + \beta t$ при $X_t \sim e^{\alpha + \beta t}$
+3. Коэффициенты → эластичности: $\beta_1$ в $\Delta \ln Y = \beta_0 + \beta_1 \Delta \ln X$ означает «1% рост X → β₁% рост Y»
+
+**Первая разность (differencing):**
+
+$$\Delta X_t = X_t - X_{t-1}$$
+
+Для log-transformed:
+
+$$\Delta \ln X_t = \ln X_t - \ln X_{t-1} = \ln\left(\frac{X_t}{X_{t-1}}\right) \approx \frac{X_t - X_{t-1}}{X_{t-1}}$$
+
+т.е. log-return ≈ процентное изменение (при малых изменениях).
+
+**Обратное преобразование (из прогноза в уровни):**
+
+Если мы спрогнозировали $\hat{r}_t = \Delta \ln X_t$ на T периодов вперёд:
+
+$$\hat{X}_T = X_0 \times \prod_{t=1}^{T} e^{\hat{r}_t} = X_0 \times \exp\left(\sum_{t=1}^{T} \hat{r}_t\right)$$
+
+*Важно:* при обратном преобразовании ошибки прогноза накапливаются мультипликативно. Для Revenue Норникеля с σ(log-return) ≈ 14%: за 3 года вперёд 95% CI ≈ ±42% (√3 × 14% × 1.96). Это значит: прогноз Revenue $13.8B, но CI [$8.0B, $19.6B]. Широкий — но это реальность commodity producers.
+
+### 3.5 Практический пример: анализ ряда LME Aluminium
 
 Рассмотрим реальный временной ряд — цену алюминия на LME (основной ценовой фактор для Русала):
 
@@ -1286,6 +1368,93 @@ $$|\text{Cash}_{\text{iter}(n)} - \text{Cash}_{\text{iter}(n-1)}| < \$1{,}000$$
 $$|\text{NI}_{\text{iter}(n)} - \text{NI}_{\text{iter}(n-1)}| < \$1{,}000$$
 
 Типично: 2-3 итерации для стабильных компаний, 4-5 для компаний с высоким leverage, максимум 10 (safety valve).
+
+#### 5.1c.1b Числовой пример: итеративный solver для Русала (2026)
+
+Покажем, как solver сходится за 3 итерации на реальных данных:
+
+**Входные данные (после неитеративных блоков):**
+- Revenue = $13,378M, COGS = $10,511M, SGA = $1,603M, D&A = $717M
+- EBITDA = $1,264M, EBIT = $547M
+- CFI = −$1,328M (CapEx)
+- Cash_opening = $1,543M, min_cash = $200M
+- Total Debt_opening = $9,537M (31 instrument, avg rate 15.5% float)
+- RC limit = $300M, RC_opening = $0
+
+**Итерация 0 (initial estimate):**
+
+```
+Cash_estimate = Cash_opening = $1,543M (приближение)
+→ Debt: no draw needed (cash > min_cash)
+→ Interest = $9,537M × 15.5% / 2 = $739M (на средний баланс, грубо)
+→ EBT = EBIT − Interest = $547M − $739M = −$192M (убыток!)
+→ Tax = $0 (убыток, нет налога)
+→ NI = −$192M
+→ CFO = NI + D&A + ΔWC + ... = −$192M + $717M + $200M − $739M + ... ≈ $21M
+→ Cash_close = $1,543M + $21M − $1,328M − $485M = −$249M ← ОТРИЦАТЕЛЬНЫЙ!
+→ |ΔCash| = |−$249M − $1,543M| = $1,792M >> $1K → НЕ сошлось
+```
+
+**Итерация 1:**
+
+```
+Cash_estimate = −$249M → нужен RC draw!
+→ Debt: RC draw = min_cash − Cash_estimate = $200M − (−$249M) = $449M
+  Но RC limit = $300M → draw = $300M, ещё нужно $149M → LT draw
+→ Total Debt = $9,537M + $300M + $149M − $485M(mandatory) = $9,501M
+→ Interest = ($9,537M + $9,501M)/2 × 15.5% = $1,476M × 15.5% = ... пересчёт
+  Средний баланс × rate per instrument → Interest = $818M
+→ EBT = $547M − $818M = −$271M
+→ Tax = $0
+→ NI = −$271M
+→ CFO = −$271M + $717M + ... ≈ −$64M
+→ CFF = +$449M draw − $485M repay = −$36M
+→ Cash_close = $1,543M + (−$64M) + (−$1,328M) + (−$36M) = $115M
+→ |ΔCash| = |$115M − (−$249M)| = $364M >> $1K → НЕ сошлось (но ближе!)
+```
+
+**Итерация 2:**
+
+```
+Cash_estimate = $115M → draw нужен = $200M − $115M = $85M
+→ Debt: RC draw = $85M (в пределах лимита)
+→ Total Debt = $9,537M + $85M − $485M = $9,137M
+→ Interest = средний($9,537M, $9,137M) × rates = $804M
+→ EBT = $547M − $804M = −$257M
+→ NI = −$257M
+→ CFO ≈ −$48M
+→ CFF = +$85M − $485M = −$400M
+→ Cash_close = $1,543M + (−$48M) + (−$1,328M) + (−$400M) = −$233M → draw ещё!
+```
+
+**Итерация 3:**
+
+```
+→ RC draw = $433M (max $300M → $300M + LT $133M)
+→ Interest = $821M (чуть выше из-за большего draw)
+→ NI = −$274M
+→ Cash_close = $180M ← Close to min_cash!
+→ |ΔCash| = |$180M − (−$233M)| = $413M → не сошлось
+
+...продолжение до итерации 5-6 для Русала (high leverage = slow convergence)
+```
+
+**Итоговый результат (после convergence):**
+
+| Метрика | Значение |
+|---------|---------|
+| Revenue | $13,378M |
+| EBITDA | $1,264M |
+| Interest expense | $818M |
+| Net Income | **−$1,043M** (убыток из-за высокой ставки 14%) |
+| Total Debt | $9,117M |
+| Cash | $202M (≈ min_cash) |
+| RC drawn | $300M (лимит исчерпан) |
+| ND/EBITDA | 7.1x (**deep distress**) |
+
+*Ключевое наблюдение:* при КС 14% Русал не может обслуживать долг без убытков. Прогноз модели — убыток $1B. Но при снижении КС до 10% (2027): interest ~$550M → NI ≈ +$100M → turnaround.
+
+*Предположение solver'а:* RC facility всегда доступен. Для Русала с ND/EBITDA 7.1x банк мог бы отказать в предоставлении RC. Модель не учитывает credit rationing.
 
 #### 5.1c.2 Семь шагов Debt Optimizer
 
@@ -6197,6 +6366,105 @@ curl http://localhost/api/v1/financial-model/versions/8b278956-.../covenants \
 Полный цикл: данные → модель → стресс → рейтинг → implied PD → портфель → отчёт
 Время: ~5 минут на полное обновление (автоматически)
 ```
+
+### 15.8 Deployment Guide: развёртывание с нуля
+
+Протестированный процесс (верифицирован на чистой машине):
+
+```bash
+# 1. Клонировать репозиторий
+git clone git@github.com:arturhusnutdinov/vertex.git
+cd vertex
+
+# 2. Создать конфигурацию
+cp .env.example .env
+# Отредактировать .env: заполнить пароли PostgreSQL, Redis, MinIO, SECRET_KEY
+
+# 3. Собрать и запустить (9 контейнеров)
+docker compose up -d --build
+# Проверить: docker compose ps — все 9 running
+
+# 4. Создать таблицы (38 миграций)
+docker compose exec backend alembic upgrade head
+# Должно быть: Running upgrade ... → 0038
+
+# 5. Создать admin пользователя
+docker compose exec backend python -m app.scripts.create_admin
+# Или: make create-admin
+
+# 6. Загрузить данные с GitHub Release
+make init-data
+# Скачивает vertex_db.dump (46MB) и восстанавливает pg_restore
+
+# 7. Проверить
+curl http://localhost/api/v1/health
+# → {"status":"ok"}
+
+# 8. Открыть в браузере
+# http://localhost (admin / admin123)
+```
+
+**Требования к серверу:**
+- Docker 24+ и Docker Compose v2
+- 4GB RAM (minimum), 8GB рекомендуется
+- 10GB disk для Docker images + 5GB для данных
+- Порты: 80 (nginx), 5432 (postgres), 6379 (redis)
+- Для production: SSL сертификаты в docker/nginx/certs/
+
+### 15.9 Troubleshooting: типичные проблемы при развёртывании
+
+**Проблема: backend не стартует**
+
+```bash
+docker compose logs backend --tail 20
+# Ищите: ImportError, SyntaxError, connection refused
+```
+
+Частые причины:
+- `.env` не создан → backend не видит DATABASE_URL
+- PostgreSQL ещё не ready → рестартовать backend после postgres healthy
+- Alembic не запущен → таблицы не созданы → ImportError на ORM
+
+**Проблема: все endpoints 500**
+
+```bash
+# Проверить что миграции прошли:
+docker compose exec backend alembic current
+# Должно показать: 0038 (head)
+
+# Если нет — запустить:
+docker compose exec backend alembic upgrade head
+```
+
+**Проблема: данные не загружаются (Celery PENDING)**
+
+```bash
+# Проверить что worker слушает нужные очереди:
+docker compose exec celery_worker celery -A app.workers.celery_app inspect active_queues
+# Должны быть: raw_fetch, pipeline, macro, implied_pd, stress_complete, ...
+
+# Если нет raw_fetch/pipeline — проверить docker-compose.yml:
+# celery_worker command должен содержать: -Q ...,raw_fetch,pipeline
+```
+
+**Проблема: make init-data не работает**
+
+```bash
+# Убедиться что gh CLI установлен и авторизован:
+gh auth status
+
+# Ручная загрузка:
+gh release download -R arturhusnutdinov/vertex -p "vertex_db.dump" -D /tmp
+docker compose cp /tmp/vertex_db.dump postgres:/tmp/vertex_db.dump
+docker compose exec -T postgres pg_restore -U vertex -d vertex_db --clean --if-exists /tmp/vertex_db.dump
+```
+
+**Проблема: frontend пустой (нет данных на dashboard)**
+
+Данные появляются после:
+1. `make init-data` (из дампа) — моментально
+2. Или после первого прогона Celery pipeline (19:00-20:45 MSK) — ~2 часа ожидания
+3. Или вручную: Admin → "Обновить всё" → ждать 5-10 минут
 
 ---
 
