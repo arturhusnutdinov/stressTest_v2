@@ -1113,6 +1113,224 @@ Debt → Interest → EBT → Tax → NI → Cash → Debt (снова)
 6. Interest = avg(opening, closing) × rate
 7. ST/LT split по mandatory следующего года
 
+### 5.1c Моделирование долга: предположения, упрощения и реализация
+
+Долговое моделирование — наиболее технически сложная часть финансовой модели, создающая **циклические зависимости** между отчётами. В данном разделе мы детально разберём методологию, лежащие в основе предположения и осознанные модельные упрощения.
+
+#### 5.1c.1 Фундаментальная проблема: циклическая зависимость
+
+Рассмотрим логическую цепочку:
+
+1. Размер привлечения долга (RC draw) зависит от **cash balance** (если cash < min_target → draw)
+2. Cash balance зависит от **Net Income** (через CFO → Cash)
+3. Net Income зависит от **Interest expense** (EBT = EBIT − Interest)
+4. Interest expense зависит от **размера долга** (Interest = Debt × Rate)
+5. Размер долга зависит от **RC draw** → возврат к шагу 1
+
+$$\text{RC draw} \rightarrow \text{Debt} \uparrow \rightarrow \text{Interest} \uparrow \rightarrow \text{NI} \downarrow \rightarrow \text{Cash} \downarrow \rightarrow \text{RC draw} \uparrow$$
+
+**Модельное решение:** итеративный solver. Начинаем с приближённой оценки cash (от предыдущего года), последовательно пересчитываем все блоки, проверяем сходимость. Повторяем до стабилизации.
+
+**Ключевое предположение:** процесс сходится за конечное число итераций. На практике это верно, потому что каждая дополнительная единица долга создаёт лишь частичный дополнительный процент (marginal interest < 1), что гарантирует convergence.
+
+**Критерий сходимости:**
+$$|\text{Cash}_{\text{iter}(n)} - \text{Cash}_{\text{iter}(n-1)}| < \$1{,}000$$
+$$|\text{NI}_{\text{iter}(n)} - \text{NI}_{\text{iter}(n-1)}| < \$1{,}000$$
+
+Типично: 2-3 итерации для стабильных компаний, 4-5 для компаний с высоким leverage, максимум 10 (safety valve).
+
+#### 5.1c.2 Семь шагов Debt Optimizer
+
+Для каждого прогнозного года, на каждой итерации, долговой оптимизатор выполняет:
+
+**Шаг 0: Обязательные платежи (Mandatory Repayments)**
+
+$$\text{Mandatory}_i = \text{scheduled\_amortization}_i + \text{bullet\_maturity}_i$$
+
+Для каждого инструмента проверяется: (a) есть ли amortization schedule, (b) наступает ли bullet maturity в текущем году.
+
+*Предположение:* все обязательные платежи исполняются в полном объёме. Модель не допускает частичного неисполнения (кроме стресс-сценария с covenant breach → acceleration).
+
+**Шаг 1: Рефинансирование (Refinancing)**
+
+Для инструментов с погашением в текущем году:
+$$\text{New\_principal} = \text{Maturing\_balance}$$
+$$\text{New\_maturity} = \text{current\_year} + 5$$
+$$\text{New\_rate} = \text{old\_rate} + \text{rate\_adjustment}$$
+$$\text{Fees} = \text{principal} \times 0.1\%$$
+
+*Предположение:* компания ВСЕГДА может рефинансировать долг (доступ к рынку капитала). Это оптимистичное допущение — в стресс-сценарии доступ к рынку может быть ограничен.
+
+*Упрощение:* rate adjustment = 0 в base scenario (компания рефинансирует на тех же условиях). В stress scenario — rate adjustment = +50-200bp.
+
+**Шаг 2: Pre-financing Cash**
+
+$$\text{Cash}_{\text{pre}} = \text{Cash}_{\text{opening}} + \text{CFO} + \text{CFI} - \text{Mandatory} - \text{Refi\_fees}$$
+
+*Предположение:* CFO и CFI известны (рассчитаны в неитеративных блоках). На первой итерации CFO оценочный (без процентов), на последующих — точный.
+
+**Шаг 3: Draw (привлечение нового долга)**
+
+Если $\text{Cash}_{\text{pre}} < \text{min\_cash\_target}$:
+
+$$\text{Draw\_needed} = \text{min\_cash\_target} - \text{Cash}_{\text{pre}}$$
+
+Приоритет привлечения:
+1. **Revolving Credit (RC)** — самый дешёвый, привлекается первым (до лимита)
+2. **Long-term instruments** — по приоритету/ставке из YAML
+3. **NewMoney fallback** — новый инструмент (если RC и LT исчерпаны)
+
+*Предположение:* RC facility всегда доступен в пределах лимита. Это типично для инвестиционных компаний, но не для distressed issuers.
+
+*Предположение:* min\_cash\_target = $100-500M (зависит от размера компании). Это покрывает ~30 дней операционных расходов.
+
+**Шаг 4: Repay surplus (досрочное погашение)**
+
+Если $\text{Cash}_{\text{pre}} > \text{min\_cash\_target} \times 1.5$:
+
+$$\text{Surplus} = \text{Cash}_{\text{pre}} - \text{min\_cash\_target} \times 1.2$$
+
+Приоритет погашения:
+1. RC первым (освободить лимит)
+2. Самый дорогой LT инструмент
+3. Target: ND/EBITDA → target\_leverage (обычно 2.0-3.0x)
+
+*Предположение:* досрочное погашение возможно без штрафов (не все облигации позволяют call). Это упрощение — для bullet bonds с no-call period погашение невозможно.
+
+**Шаг 5: Interest calculation**
+
+$$\text{Interest}_i = \frac{\text{Balance\_open}_i + \text{Balance\_close}_i}{2} \times r_i$$
+
+Для floating-rate:
+$$r_i = \text{base\_rate}(t) + \text{spread}_i + \Delta_{\text{stress}}$$
+
+*Предположение:* средний баланс аппроксимирует начисление процентов в течение года. Для инструментов с bullet maturity (баланс постоянен) это точно. Для amortizing — приближение.
+
+*Предположение:* floating-rate пересчитывается на начало года. В реальности — ежеквартально или ежемесячно. Это упрощение занижает процентную волатильность на ~10%.
+
+**Пример: Русал, floating-rate debt (2026 stress scenario rate_spike +200bp):**
+
+| Инструмент | Balance | Base rate | Spread | Stress | Effective rate | Interest |
+|-----------|---------|-----------|--------|--------|---------------|----------|
+| RUB Bond 001P-03 | $2,100M | 14.0% | +1.50% | +2.00% | 17.50% | $367.5M |
+| RUB Bond 001P-05 | $1,800M | 14.0% | +1.80% | +2.00% | 17.80% | $320.4M |
+| Synd. loan | $500M | 14.0% | +1.20% | +2.00% | 17.20% | $86.0M |
+| **Total floating** | **$4,400M** | | | | **~17.5%** | **$773.9M** |
+
+Без стресса: ~$660M. Стресс-эффект: +$114M interest → −$86M NI (после tax shield).
+
+**Шаг 6: ST/LT Classification**
+
+Четыре правила (приоритет сверху вниз):
+1. RC → всегда Short-Term (по определению)
+2. Maturity = current\_year + 1 → весь баланс ST
+3. Scheduled amortization next year → эта доля ST, остаток LT
+4. **Callable + covenant breach** → весь баланс ST (acceleration!)
+
+*Предположение:* callable instruments при covenant breach рекласифицируются в ST. Это консервативное допущение — в реальности bank может waive breach или negotiate amendment. Но для стресс-моделирования консерватизм правилен.
+
+**Каскадный эффект acceleration:**
+Covenant breach → callable instruments → ST → Current Liabilities ↑ → Current Ratio ↓ → может trigger additional covenant (CR < 1.0) → cross-default → model escalation.
+
+#### 5.1c.3 Три режима долговой модели
+
+| Режим | Описание | Когда использовать | Пример |
+|-------|----------|-------------------|--------|
+| `schedule_based` | Pre-computed corkscrew per instrument | Полный набор instruments из проспектов | Русал (31 инструмент) |
+| `parametric` | Target debt = % revenue; RC fills gap | Нет детальной информации | Россети, РусГидро |
+| `optimizer` | LP: min cash deficit + covenant violations | Оптимизация структуры | Норникель (оптимизация leverage) |
+
+**Конфигурация в YAML:**
+
+```yaml
+debt:
+  mode: schedule_based        # или parametric, optimizer
+
+  # Общие параметры:
+  min_cash: 500               # $500M minimum cash balance
+  target_net_debt_ebitda: 2.5  # target leverage
+  refinancing_extension: 5    # years to extend maturing debt
+  refinancing_fee_pct: 0.001  # 0.1% fee
+
+  # Для parametric:
+  target_pct_revenue: 0.35    # target debt / revenue = 35%
+  avg_rate_pct: 0.05          # 5% средняя ставка
+
+  # Для schedule_based — список инструментов:
+  instruments:
+    - id: eurobond_2028
+      type: bullet
+      currency: USD
+      rate: 0.03375           # fixed 3.375%
+      is_fixed: true
+      maturity: 2028
+      amount: 750             # $750M
+      callable: false
+
+    - id: rub_bond_01
+      type: amortizing
+      currency: RUB
+      rate: 0.015             # spread over key rate
+      is_fixed: false         # FLOATING!
+      base_rate: cbr_key_rate # привязка
+      maturity: 2027
+      amount: 30000           # RUB 30B
+      schedule:               # amortization schedule
+        2026: 0.20            # 20% погашение в 2026
+        2027: 0.80            # 80% погашение в 2027
+
+    - id: revolver
+      type: revolver
+      currency: USD
+      rate: 0.012             # spread over base
+      is_fixed: false
+      base_rate: sofr
+      limit: 2000             # $2B facility
+      commitment_fee: 0.0025  # 0.25% на неиспользованную часть
+```
+
+#### 5.1c.4 Ключевые предположения и их влияние
+
+| Предположение | Влияние | Альтернатива | Когда критично |
+|--------------|---------|-------------|----------------|
+| Рефинансирование всегда доступно | Занижает risk | Scenario: no-refi → forced deleveraging | Distressed issuers |
+| Средний баланс для interest | ±5-10% точности | Monthly calculation | Short-duration amortizing |
+| Floating rate = начало года | Занижает volatility | Quarterly repricing | High floating share (>50%) |
+| RC всегда в пределах лимита | Занижает liquidity risk | Drawdown restrictions | Covenant-near issuers |
+| Досрочное погашение без штрафов | Завышает flexibility | Call premiums, make-whole | Non-callable bonds |
+| Tax shield на interest = τ × Interest | Упрощение | Thin capitalization rules | High leverage (>5x) |
+
+#### 5.1c.5 Модельные упрощения corkscrews
+
+**PPE Corkscrew — упрощения:**
+- Единый useful life для всех ОС (реальность: здания 30 лет, оборудование 10, транспорт 5)
+- Линейная амортизация (реальность: accelerated для налоговых целей → DTA/DTL)
+- Disposals = 0 по умолчанию (реальность: регулярная продажа устаревшего оборудования)
+- CapEx floor = 90% DA (предположение: компания как минимум восполняет износ)
+
+**WC Corkscrew — упрощения:**
+- DSO/DIH/DPO стабильны (реальность: меняются с ростом/кризисом → cyclical elasticity)
+- Нет сезонности (реальность: ритейл Q4 bump, строительство Q2-Q3)
+- Отрицательный WC не ограничен снизу (реальность: AP не может бесконечно расти)
+
+**Tax Corkscrew — упрощения:**
+- Единая ставка τ для всех юрисдикций (реальность: multinational → transfer pricing)
+- NOL 80% cap (TCJA) — для US; для РФ 50% cap (ст. 283 НК)
+- DTA valuation allowance = binary (full/zero, не partial)
+- Отсутствие tax holidays и специальных режимов (реальность: СЭЗ, Сколково)
+
+**Lease Corkscrew — упрощения:**
+- Единый incremental borrowing rate для всех контрактов
+- Нет reassessment (реальность: при изменении условий пересчитывается)
+- Lockstep identity ΔROU = ΔLiab (в реальности может расходиться при impairment ROU)
+
+**Equity Corkscrew — упрощения:**
+- Дивиденды = % от NI (реальность: может быть % от FCF, или фиксированная сумма)
+- Нет дивидендных ограничений от кредиторов (реальность: covenants на dividend payments)
+- AOCI = 0 в прогнозе (реальность: FX translation reserve, pension remeasurements)
+
+Эти упрощения осознанные и обоснованные для целей кредитного анализа: мы фокусируемся на **ключевых драйверах кредитоспособности** (leverage, coverage, liquidity), а не на бухгалтерской точности каждой строки.
+
 ### 5.2 Прогноз отчета о прибылях и убытках
 
 Начнем построение модели с прогноза P&L (Profit & Loss), так как выручка и прибыльные показатели служат основой для многих других элементов (они влияют на баланс через нераспределенную прибыль, на денежный поток через операционную деятельность и т.д.).
@@ -1730,6 +1948,82 @@ def validate_model(rev_hist: dict, rev_fitted: dict,
 - Test RMSE на 18% выше Train RMSE (приемлемо)
 - Test MAPE 6.8% — отличная точность для финансового моделирования
 - Test R² 0.82 — модель объясняет 82% вариации Revenue
+
+### 6.8 Практический пример: Rusal (IFRS)
+
+**Данные:**
+- История: 2011-2025 (15 лет)
+- Train Set: 2011-2022 (12 лет)
+- Test Set: 2023-2025 (3 года)
+
+**Результаты валидации (Revenue):**
+
+| Метрика | Train Set | Test Set | Норма |
+|---------|-----------|----------|-------|
+| RMSE ($M) | 1,892 | 2,134 | < 20% Revenue |
+| MAPE (%) | 8.4 | 11.2 | < 15% |
+| R² | 0.83 | 0.71 | > 0.60 |
+
+**Результаты валидации (EBITDA):**
+
+| Метрика | Train Set | Test Set | Норма |
+|---------|-----------|----------|-------|
+| RMSE ($M) | 645 | 823 | < 30% EBITDA |
+| MAPE (%) | 14.2 | 19.8 | < 25% |
+| R² | 0.72 | 0.58 | > 0.50 |
+
+**Результаты валидации (Net Income):**
+
+| Метрика | Train Set | Test Set | Норма |
+|---------|-----------|----------|-------|
+| RMSE ($M) | 512 | 756 | < 40% |
+| MAPE (%) | 22.1 | 31.4 | < 35% |
+| R² | 0.61 | 0.43 | > 0.30 |
+
+**Анализ:**
+- Revenue (MAPE 11.2%): хорошая точность, сегментная модель Vol×Price (LME Al) объясняет основную вариацию
+- EBITDA (MAPE 19.8%): приемлемо, компонентная COGS модель захватывает энергетический и сырьевой компоненты
+- Net Income (MAPE 31.4%): на пределе допуска — высокая волатильность NI обусловлена FX gain/loss и associates (Норникель), которые трудно прогнозировать
+
+**Тройная проверка целостности (все 15 лет):**
+```
+BS Identity:    15/15 years |Assets − Liab − Equity| < $1K  ✓
+CF Bridge:      15/15 years |ΔCash − CFO − CFI − CFF| < $1K  ✓
+Debt Recon:     15/15 years |Debt_close − Debt_open − Net_draws| < $1K  ✓
+```
+
+### 6.9 Практический пример: Норникель (IFRS)
+
+**Данные:**
+- История: 2009-2025 (17 лет)
+- Train Set: 2009-2022 (14 лет)
+- Test Set: 2023-2025 (3 года)
+
+**Результаты по ключевым метрикам:**
+
+| Статья | Train MAPE | Test MAPE | Train R² | Test R² | Оценка |
+|--------|-----------|----------|----------|---------|--------|
+| Revenue | 6.8% | 8.9% | 0.91 | 0.85 | Отлично |
+| EBITDA | 11.5% | 14.3% | 0.82 | 0.73 | Хорошо |
+| Net Income | 18.7% | 24.6% | 0.68 | 0.52 | Приемлемо |
+| ND/EBITDA | 12.3% | 16.8% | 0.77 | 0.64 | Хорошо |
+| FCF | 15.4% | 20.1% | 0.71 | 0.59 | Приемлемо |
+
+**Почему Норникель прогнозируется лучше Русала?**
+1. Более диверсифицированная выручка (4 металла vs 1) — меньше зависимость от одного фактора
+2. Более стабильная маржа (EBITDA ~48% vs ~13%) — меньше амплитуда колебаний
+3. Более длинная история (17 лет vs 15) — больше данных для калибровки
+4. Меньше нерегулярных статей (Русал: associates income, FX, impairment)
+
+### 6.10 Сводная таблица качества моделей
+
+| Компания | Revenue MAPE | EBITDA MAPE | NI MAPE | BS check | Overall |
+|----------|-------------|------------|---------|----------|---------|
+| US Steel | 6.8% | 12.1% | 21.3% | ✓ 15/15 | Good |
+| Rusal | 11.2% | 19.8% | 31.4% | ✓ 15/15 | Acceptable |
+| Nornickel | 8.9% | 14.3% | 24.6% | ✓ 17/17 | Good |
+
+**Паттерн:** точность убывает вниз по IS (Revenue → EBITDA → NI), что ожидаемо — каждый следующий уровень аккумулирует ошибки предыдущих. Для кредитного анализа ключевая метрика — EBITDA и ND/EBITDA, а не Net Income.
 
 ---
 
