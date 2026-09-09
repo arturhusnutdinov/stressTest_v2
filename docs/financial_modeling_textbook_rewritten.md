@@ -2778,6 +2778,310 @@ r = build_model('rusal', run_preprocessor=True, run_model=True)
 5. **CF bridge не сходится**: Проверить cash_opening + net_change = cash_closing
 
 
+## 8c. Практический пример: ПАО «ГМК Норильский никель» (IFRS, мультиметалл)
+
+### 8c.1 Характеристики компании
+
+ПАО «ГМК Норильский никель» — крупнейший мировой производитель палладия и высокосортного никеля, значительный производитель меди и кобальта. Компания отчитывается по IFRS в USD.
+
+| Параметр | Значение |
+|----------|----------|
+| **Отрасль** | Metals & Mining (Ni, Cu, PGM, Co) |
+| **Стандарт отчётности** | IFRS |
+| **Валюта модели** | USD |
+| **Период истории** | 2009–2025 (17 лет) |
+| **Прогнозный горизонт** | 2026–2028 (3 года) |
+| **Количество облигаций** | 25+ (fixed-rate + floater KEY_RATE+spread) |
+| **Стресс-сценариев** | 11 |
+| **Рейтинг (текущий)** | BBB (S&P), Baa2 (Moody's) |
+| **Источник данных** | Smart-lab (financial statements) + Excel template |
+
+**Ключевые отличия от US Steel и Rusal:**
+- **4 revenue-сегмента** (Nickel, Copper, PGM, Other) вместо 1-3
+- **Мультиметалловая ценовая экспозиция** — диверсификация по 4 LME-бенчмаркам
+- **Высокая маржинальность** (EBITDA ~48%, один из самых прибыльных майнеров мира)
+- **Низкий leverage** (ND/EBITDA ~1.0x) — инвестиционный рейтинг
+- **Значительная доля floating-rate debt** (KEY_RATE + spread)
+
+### 8c.2 Источники данных и загрузка
+
+В отличие от US Steel (EDGAR XBRL) и Rusal (PDF parser), для Норникеля используется комбинированный подход:
+
+1. **Smart-lab**: автоматическая загрузка IS/BS/CF через Celery task (ежеквартально)
+2. **Excel template v3**: для исторических schedules (PPE, Debt, Tax) — ручная загрузка через ExcelLoader
+3. **MOEX ISS API**: рыночные данные (котировки облигаций, спреды)
+
+**Workflow загрузки:**
+```
+Smart-lab scraper → market_data.issuer_financials (IS/BS/CF агрегаты)
+                ↓
+ExcelLoader (template_v3.xlsx, 18 листов) → stress_v2.historical_data (EAV)
+                ↓
+Engine Preprocessor → 1306+ метрик, 14 групп
+                ↓
+ThreeStatementModel.run() → forecast_is/bs/cf
+```
+
+### 8c.3 Сегментная модель выручки (4 сегмента)
+
+Норникель — **мультиметалловый** производитель. Выручка прогнозируется по формуле:
+
+$$\text{Revenue} = \sum_{i=1}^{4} \text{Volume}_i \times \text{Price}_i$$
+
+**Конфигурация в project.yaml:**
+
+```yaml
+model:
+  standard:
+    revenue:
+      type: custom
+      segments:
+        - name: nickel
+          share: 0.35
+          volume_method: ewa      # halflife=5yr, cap at nameplate
+          price_method: ols       # dln(price) ~ dln(lme_ni) + dln(usd_rub)
+          price_factors: [lme_ni, usd_rub]
+          volume_cap_kt: 220     # nameplate capacity
+
+        - name: copper
+          share: 0.20
+          volume_method: ewa
+          price_method: ols
+          price_factors: [lme_cu, usd_rub]
+          volume_cap_kt: 450
+
+        - name: pgm
+          share: 0.30
+          volume_method: ewa
+          price_method: ols
+          price_factors: [lme_pd, lme_pt, usd_rub]
+          volume_cap_oz: 110     # палладий + платина
+
+        - name: other
+          share: 0.15
+          volume_method: ewa
+          price_method: ewa       # нет чёткого LME benchmark
+```
+
+**Расчёт Volume для каждого сегмента:**
+
+$$\text{Volume}_t^{(i)} = \text{EWA}(\text{hist\_production}^{(i)}, h=5) \times (1 + \varepsilon^{(i)} \times \Delta\text{GDP}_t)$$
+
+EWA с halflife 5 лет обеспечивает стабильность прогноза. Demand elasticity $\varepsilon$ (обычно 0.3-0.8) привязывает объёмы к макро-циклу. Cap на уровне nameplate capacity (для Ni ~220 kt/год).
+
+**Расчёт Price:**
+
+$$d\ln(\text{Price}_t^{(i)}) = \alpha + \beta_1 \cdot d\ln(\text{LME}_t^{(i)}) + \beta_2 \cdot d\ln(\text{USD/RUB}_t) + \varepsilon_t$$
+
+OLS regression на исторических данных. Для палладия (PGM) используется взвешенная комбинация LME Pd (70%) и LME Pt (30%).
+
+**Пример расчёта (2026 base scenario):**
+
+| Сегмент | Volume | Price ($/t) | Revenue |
+|---------|--------|------------|---------|
+| Nickel | 198 kt | $18,500 | $3.66B |
+| Copper | 412 kt | $8,200 | $3.38B |
+| PGM | 98 oz | $1,450/oz avg | $4.14B |
+| Other | — | — | $2.62B |
+| **Total** | | | **$13.8B** |
+
+### 8c.4 Моделирование себестоимости (COGS)
+
+Для Норникеля применяется **ratio-based COGS с PPI-индексацией** (в отличие от компонентной модели Русала):
+
+$$\text{COGS}_t = \text{Revenue}_t \times \text{ratio}_{\text{base}} \times (1 + \beta_{\text{PPI}} \times d\ln(\text{PPI}_t))$$
+
+Исторический COGS ratio Норникеля: 50-56% (EWA anchor ~53%).
+
+$$\beta_{\text{PPI}} = 0.35 \quad (R^2 = 0.62, \; \text{calibrated on 2009-2025 history})$$
+
+**Конфигурация:**
+```yaml
+    cogs:
+      mode: ratio
+      anchor: 0.53            # EWA COGS/Revenue
+      ppi_beta: 0.35          # PPI elasticity
+      clamp_sigma: 0.06       # ±1.5σ
+      da_in_cogs: false       # D&A reported separately
+```
+
+**Почему ratio, а не component?** У Норникеля нет публичной разбивки COGS по компонентам (в отличие от Русала, который детально раскрывает alumina/energy/labour). Поэтому используется более простой, но устойчивый ratio-based подход.
+
+### 8c.5 SG&A и прочие расходы
+
+$$\text{SG\&A}_t = \text{Revenue}_t \times \text{SGA\_ratio}_{\text{EWA}} \times (1 + \beta_{\text{CPI}} \times d\ln(\text{CPI}_t))$$
+
+SGA ratio: ~5-7% от выручки (один из самых низких в отрасли благодаря эффекту масштаба).
+
+### 8c.6 Долговая структура и floating-rate debt
+
+Норникель имеет диверсифицированный долговой портфель:
+
+| Инструмент | Тип | Валюта | Ставка | Maturity |
+|-----------|-----|--------|--------|----------|
+| Eurobond 2028 | Bullet | USD | 3.375% fixed | 2028 |
+| Eurobond 2031 | Bullet | USD | 2.55% fixed | 2031 |
+| RUB Bond 001P-06 | Amortizing | RUB | KR+1.50% float | 2027 |
+| RUB Bond 001P-08 | Bullet | RUB | KR+1.80% float | 2029 |
+| Syndicated loan | Revolver | USD | SOFR+1.20% | 2027 |
+| ... | ... | ... | ... | ... |
+
+**Floating-rate instruments:** ~30% портфеля привязано к ключевой ставке ЦБ (KEY_RATE + spread). При моделировании:
+
+$$\text{effective\_rate}_i = \text{cbr\_key\_rate}(t) + \text{spread}_i + \Delta_{\text{stress}}$$
+
+В стресс-сценарии `rate_spike` (+200bp):
+- Interest expense увеличивается на ~$130M
+- NI снижается на ~$100M (после tax shield)
+- ND/EBITDA ухудшается на ~0.1x
+
+**Конфигурация debt в YAML:**
+```yaml
+    debt:
+      mode: schedule_based
+      min_cash: 500          # $500M minimum cash
+      instruments:
+        - id: eurobond_2028
+          type: bullet
+          currency: USD
+          rate: 0.03375
+          is_fixed: true
+          maturity: 2028
+          amount: 750
+          callable: false
+
+        - id: rub_bond_06
+          type: amortizing
+          currency: RUB
+          rate: 0.015         # spread over key rate
+          is_fixed: false     # floating!
+          base_rate: cbr_key_rate
+          maturity: 2027
+          amount: 30000       # RUB 30B ≈ $330M
+
+        - id: revolver
+          type: revolver
+          currency: USD
+          rate: 0.012
+          is_fixed: false
+          base_rate: sofr
+          limit: 2000        # $2B facility
+```
+
+### 8c.7 PPE и CapEx
+
+Норникель — capital-intensive (CapEx ~$2.5-3.0B/год). PPE corkscrew:
+
+```
+Gross PPE open:   $28.5B
++ CapEx:          $2.6B
+- Disposals:      $0.1B
+= Gross PPE close: $31.0B
+
+Accum Depr open:  $16.3B
++ Depreciation:   $1.2B
+- Disposals dep:  $0.05B
+= Accum Depr close: $17.45B
+
+Net PPE = $31.0B - $17.45B = $13.55B
+```
+
+**CapEx floor logic:** CapEx ≥ DA × 0.90 (sustaining investment). Для Норникеля CapEx/DA ratio ~2.1x — значительно выше порога, компания активно инвестирует.
+
+```yaml
+    ppe:
+      method: sustaining_growth
+      sustaining_capex_da_ratio: 2.1
+      min_capex_da_ratio: 0.90
+      useful_life_years: 22       # длительный срок для горнодобычи
+      additional_capex:
+        2027: 500                 # сульфидный проект ($500M extra)
+```
+
+### 8c.8 Результаты модели
+
+**Base scenario:**
+
+| Год | Revenue | EBITDA | EBITDA% | Net Income | Net Debt | ND/EBITDA | FCF | Rating |
+|-----|---------|--------|---------|-----------|----------|-----------|-----|--------|
+| 2023H | $15.5B | $7.8B | 50.3% | $3.5B | $8.2B | 1.05x | $2.7B | BBB+ |
+| 2024H | $14.8B | $6.6B | 44.6% | $2.4B | $7.5B | 1.14x | $2.0B | BBB |
+| 2025H | $14.2B | $6.9B | 48.6% | $3.3B | $7.1B | 1.03x | $3.4B | BBB |
+| 2026F | $13.8B | $6.5B | 47.1% | $2.8B | $6.5B | 1.00x | $3.1B | BBB |
+| 2027F | $14.5B | $7.0B | 48.3% | $3.1B | $5.5B | 0.79x | $3.8B | BBB+ |
+| 2028F | $15.1B | $7.4B | 49.0% | $3.4B | $4.4B | 0.59x | $4.2B | A− |
+
+H = history, F = forecast.
+
+**Stress scenarios:**
+
+| Сценарий | ΔRevenue | ΔEBITDA | ΔND/EBITDA | Rating |
+|----------|---------|---------|-----------|--------|
+| ni_mild (Ni −15%) | −7% | −12% | +0.2x | BBB |
+| commodity_downturn (Ni −25%, Cu −20%, Pd −30%) | −22% | −35% | +0.8x | BB+ |
+| sanctions (USD/RUB +30%, Power +20%) | +5% | +15% | −0.3x | BBB+ |
+| energy_spike (Power +40%) | 0% | −8% | +0.1x | BBB |
+| rate_spike (+200bp) | 0% | −2% | +0.05x | BBB |
+| severe (все шоки) | −18% | −30% | +0.7x | BB+ |
+| upside (Ni +20%, Cu +15%, Pd +25%) | +18% | +28% | −0.5x | A |
+
+### 8c.9 Сравнение трёх компаний
+
+| Параметр | US Steel | Rusal | Норникель |
+|----------|----------|-------|-----------|
+| **Revenue model** | OLS (HRC price) | Segment 3-seg (Vol×Price) | Segment 4-seg (Vol×Price) |
+| **COGS model** | Ratio + PPI | Component (4 компоненты) | Ratio + PPI |
+| **Debt instruments** | 4 | 31 (9 floating) | 10+ (5 floating) |
+| **Corkscrews** | 5 (base) | 8 (full) | 6 |
+| **EBITDA margin** | ~12% | ~16% | ~48% |
+| **ND/EBITDA** | 1.8x | 3.2x | 1.0x |
+| **Rating** | BBB → A− | BB+ | BBB → A− |
+| **Ключевой risk factor** | HRC price cycle | LME Al price + sanctions | PGM price concentration |
+| **Accounting** | US GAAP | IFRS | IFRS |
+| **NOL** | $2.5B (значительный) | — | — |
+| **Floating debt share** | ~10% | ~40% | ~30% |
+
+### 8c.10 Код для запуска модели Норникеля
+
+```python
+from engine.orchestrator import build_model
+
+# Base scenario
+result = build_model(
+    company_id="nornickel",
+    config_path="companies/nornickel/project.yaml",
+    scenario_name="base",
+    run_preprocessor=True,
+    run_macro=True,
+    run_model=True,
+    run_stress=True,
+    run_rating=True,
+    run_covenants=True,
+)
+
+print(f"Success: {result.success}")
+print(f"Rows written: {result.rows_written}")
+print(f"Base rating: {result.rating_result.base_rating}")
+print(f"Timing: {result.timings}")
+
+# Стресс-сценарии выполняются автоматически из project.yaml
+for scenario, stress_res in result.stress_results.items():
+    print(f"  {scenario}: Revenue Δ={stress_res.revenue_delta:.1%}, "
+          f"Rating={stress_res.rating}")
+```
+
+**Vertex Platform (production):**
+```python
+# Через Celery task
+from app.workers.task_pipeline import run_stress_pipeline
+result = run_stress_pipeline.delay("2026-09-08")
+
+# Через REST API
+POST /api/v1/financial-model/versions/{version_id}/run
+  {"scenario_name": "base", "run_stress": true, "run_rating": true}
+```
+
+
 ## 9. Канонические формы отчетности и структура данных
 
 Для обеспечения единообразия и совместимости данных, наш движок использует стандартизированные канонические формы отчетности. Это позволяет легко работать с данными из разных источников и обеспечивает консистентность расчетов.
@@ -3156,6 +3460,614 @@ python3 parsers/tests/smoke_rusal_note13_ppe.py
 - CLI: `stresstest` (после `pip install -e .`)
 - Docker: `docker build -t stresstest .`
 - SQLite база данных `data_mart_v2.db` (WAL mode)
+
+**Успехов в финансовом моделировании!**
+
+---
+
+## 11. Полная система corkscrews: 9 расписаний + итеративный solver
+
+### 11.1 Архитектура потока расчёта
+
+Полный цикл расчёта для одного прогнозного года выполняется в два этапа: неитеративные блоки (выполняются однократно) и итеративный loop (повторяется до сходимости).
+
+**Неитеративные блоки (шаги 1-8):**
+
+```
+1. Revenue    — макро OLS / сегментный Vol×Price / EWA
+2. COGS       — ratio + PPI / component / driver
+3. SG&A       — EWA ratio + CPI + demand decline adj
+4. PPE        — corkscrew: CapEx → DA → Net PPE
+5. Other IS   — LAST/ZERO/MACRO/EWA для разовых статей
+6. WC         — DSO/DIH/DPO → AR/Inv/AP (с cyclical elasticity)
+7. Lease      — IFRS 16: ROU → DA_rou, Liab → principal + accretion
+8. BS Other   — provisions, associates, other NCA/NCL
+```
+
+**Итеративный loop (шаги 9-16, max 10 итераций):**
+
+```
+9.  Debt          — 7-шаговый оптимизатор (mandatory → refi → draw → repay)
+10. Interest Pay. — Open + Accrued − Paid = Close (timing lag)
+11. IS Subtotals  — EBITDA, EBIT, EBT (пересчёт с учётом interest)
+12. Tax Block     — Current + Deferred, NOL utilization
+13. Equity        — RE = Open + NI − Dividends − Buybacks
+14. CF Bridge     — NI + D&A + ΔWC + ... = CFO; CapEx = CFI; Debt + Div = CFF
+15. Cash          — Cash_close = Cash_open + CFO + CFI + CFF
+16. BS Totals     — Assets = Liabilities + Equity (verification)
+
+Критерий сходимости:
+  |ΔCash| < $1,000 И |ΔNI| < $1,000
+  Типично: 2-3 итерации
+```
+
+### 11.2 Provisions Corkscrew (подробно)
+
+Provisions — долгосрочные обязательства, связанные с будущими выплатами. Три категории:
+
+**1. Пенсионные обязательства (defined benefit):**
+
+$$\text{Pension}_{\text{close}} = \text{Pension}_{\text{open}} + \text{service\_cost} + \text{interest\_cost} - \text{benefits\_paid} \pm \text{actuarial\_adj}$$
+
+Service cost = ежегодное начисление за текущий стаж.
+Interest cost = $\text{Pension}_{\text{open}} \times r_{\text{discount}}$ (обычно 3-5%).
+Benefits paid = фактические выплаты пенсионерам.
+
+Конфигурация:
+```yaml
+provisions:
+  pension:
+    opening_balance: 450      # $450M
+    service_cost_pct_revenue: 0.003  # 0.3% от выручки
+    discount_rate: 0.04       # 4% для accretion
+    benefit_payments_pct: 0.08  # 8% баланса ежегодно
+```
+
+**2. Рекультивация и экология (asset retirement obligations):**
+
+Особенно актуально для горнодобывающих компаний (Норникель, АЛРОСА):
+
+$$\text{ARO}_{\text{close}} = \text{ARO}_{\text{open}} + \text{accretion} + \text{new\_obligations} - \text{settlements}$$
+
+Accretion = $\text{ARO}_{\text{open}} \times r_{\text{discount}}$. Горнодобывающие компании создают значительные provisions на рекультивацию: Норникель ~$1.5B, Русал ~$0.3B.
+
+**3. Юридические и прочие:**
+
+$$\text{Legal}_{\text{close}} = \text{Legal}_{\text{open}} + \text{new\_charges} - \text{settlements}$$
+
+### 11.3 Interest Payable Corkscrew (подробно)
+
+Проблема: проценты начисляются в текущем периоде, но могут быть уплачены в следующем. Это создаёт разницу между IS (Interest Expense) и CF (Interest Paid).
+
+$$\text{IntPayable}_{\text{close}} = \text{IntPayable}_{\text{open}} + \text{Interest\_accrued} - \text{Interest\_paid\_cash}$$
+
+**Три режима timing:**
+
+| Режим | Interest Paid | IntPayable |
+|-------|--------------|------------|
+| `current_year` | = Interest Accrued | ≈ 0 |
+| `next_year` | = Interest Accrued_{t-1} | = Interest Accrued_t |
+| `mixed` | = 50% current + 50% prior | = 50% × Interest Accrued_t |
+
+Для российских компаний типичен `mixed` или `next_year` (квартальные купоны с лагом).
+
+### 11.4 Cyclical WC Elasticity (подробно)
+
+Стандартная модель WC (фиксированные DSO/DIH/DPO) недооценивает WC pressure в кризис. В расширенной версии применяется **elasticity** — зависимость оборачиваемости от выручки:
+
+$$\text{DSO}_t = \text{DSO}_{\text{base}} \times \left(1 + \varepsilon_{\text{DSO}} \times \frac{\Delta\text{Revenue}_t}{\text{Revenue}_{t-1}}\right)$$
+
+| Параметр | Значение | Смысл |
+|----------|----------|-------|
+| $\varepsilon_{\text{DSO}}$ | −0.3 | При падении Rev на 10% → DSO растёт на 3% |
+| $\varepsilon_{\text{DIH}}$ | −0.4 | Запасы накапливаются при падении спроса |
+| $\varepsilon_{\text{DPO}}$ | +0.2 | Компания затягивает оплату при стрессе |
+
+**Пример для стресс-сценария (Revenue −20%):**
+
+| Метрика | Base | Stressed | Эффект |
+|---------|------|---------|--------|
+| DSO | 45 дн | 47.7 дн | AR растёт |
+| DIH | 60 дн | 64.8 дн | Inventory растёт |
+| DPO | 50 дн | 48.0 дн | AP снижается |
+| **ΔWC** | 0 | **−$350M** | Cash drain |
+
+Этот WC drain добавляется к прямому эффекту падения EBITDA, усиливая стресс.
+
+### 11.5 Equity Corkscrew: дивидендная политика и buybacks
+
+$$\text{RE}_{\text{close}} = \text{RE}_{\text{open}} + \text{NI} - \text{Dividends} - \text{Buybacks} + \text{Equity\_issuances}$$
+
+**Дивидендная политика:**
+
+$$\text{Dividends} = \begin{cases}
+\text{NI} \times \text{payout\_ratio} & \text{если NI} > 0 \\
+0 & \text{если NI} \leq 0
+\end{cases}$$
+
+Payout ratio по компаниям: Норникель ~60%, Русал ~50% (если leverage < 3.5x), US Steel ~20%.
+
+**Buybacks (выкуп акций):**
+
+$$\text{Buybacks} = \begin{cases}
+\text{FCF} \times \text{buyback\_pct} & \text{если ND/EBITDA} < \text{max\_leverage} \\
+0 & \text{иначе (leverage-gated)}
+\end{cases}$$
+
+Leverage gate = 2.0x для Норникеля. Это предотвращает buybacks при высокой долговой нагрузке.
+
+### 11.6 Intangibles Corkscrew
+
+$$\text{Goodwill}_{\text{close}} = \text{Goodwill}_{\text{open}} - \text{Impairment}$$
+
+Goodwill **не амортизируется** (IFRS 3), но проверяется на обесценение (annual impairment test). В модели: impairment = 0 в base, может быть шокнут в stress.
+
+$$\text{Intangibles}_{\text{close}} = \text{Intangibles}_{\text{open}} + \text{Additions} - \text{Amortization}$$
+
+Amortization = $\text{Intangibles}_{\text{open}} / \text{useful\_life}$ (обычно 5-15 лет).
+
+---
+
+## 12. Полная система макрофакторов: 22 переменных
+
+### 12.1 Каталог макрофакторов
+
+Движок поддерживает 22 макроэкономических фактора, используемых для прогнозирования Revenue, COGS, SG&A и стоимости долга:
+
+| # | Фактор | Переменная | Единица | Источник | Метод прогноза |
+|---|--------|-----------|---------|---------|----------------|
+| 1 | ВВП РФ (реальный) | `gdp_ru` | трлн руб | ЦБ РФ | External ECM |
+| 2 | ВВП мировой | `gdp_world` | $T | IMF | EWA (консенсус +2.8%) |
+| 3 | ИПЦ РФ | `cpi_ru` | индекс | Росстат | External ECM |
+| 4 | ИЦП РФ | `ppi_ru` | индекс | Росстат | External ECM |
+| 5 | Ключевая ставка ЦБ | `cbr_key_rate` | % | ЦБ РФ | External ECM |
+| 6 | Курс USD/RUB | `usd_rub` | руб/$ | ЦБ РФ | External ECM |
+| 7 | Brent crude | `brent` | $/bbl | ICE | Mean Reversion |
+| 8 | LME Aluminium | `lme_al` | $/t | LME | Mean Reversion (HL=5.6yr) |
+| 9 | LME Nickel | `lme_ni` | $/t | LME | Mean Reversion (HL=4.2yr) |
+| 10 | LME Copper | `lme_cu` | $/t | LME | Mean Reversion |
+| 11 | LME Palladium | `lme_pd` | $/oz | LME | Mean Reversion |
+| 12 | LME Platinum | `lme_pt` | $/oz | LME | Mean Reversion |
+| 13 | LME Alumina | `lme_alumina` | $/t | LME | Mean Reversion |
+| 14 | Цена электроэнергии РФ | `russian_power_price` | руб/МВтч | Минэнерго | EWA |
+| 15 | HRC Steel price | `hrc_price` | $/t | Platts | VECM |
+| 16 | SOFR | `sofr` | % | Fed | External ECM |
+| 17 | US CPI | `cpi_us` | индекс | BLS | EWA |
+| 18 | US PPI | `ppi_us` | индекс | BLS | EWA |
+| 19 | Безработица РФ | `unemployment_ru` | % | Росстат | External ECM |
+| 20 | Денежная масса M2 | `m2_ru` | трлн руб | ЦБ РФ | External ECM |
+| 21 | Средняя ставка по кредитам | `avg_credit_rate` | % | ЦБ РФ | ECM |
+| 22 | GDP Deflator RU | `gdp_deflator_ru` | индекс | Росстат | EWA fallback |
+
+### 12.2 Три уровня прогнозирования макрофакторов
+
+**Уровень 1: Внешняя ECM (modelMacro)**
+
+Квартальная VECM с 13 структурными уравнениями. Обеспечивает согласованные прогнозы для связанных переменных (GDP → CPI → Key Rate → FX → ...).
+
+Пример коинтеграционного соотношения:
+$$\text{Key\_Rate}_t = \alpha_0 + \alpha_1 \cdot \text{CPI}_t + \alpha_2 \cdot \text{GDP\_gap}_t + \alpha_3 \cdot \text{FX}_t + \varepsilon_t$$
+
+**Уровень 2: Внутренняя VECM/Mean Reversion/EWA**
+
+Для факторов, не покрытых внешней моделью:
+
+- **VECM** (если Johansen rank > 0 и >20 наблюдений)
+- **Mean Reversion** (для commodity prices): $dX = \kappa(\mu - X)dt + \sigma dW$
+- **EWA** (halflife=5yr с clamp [P10, P90])
+
+Mean Reversion parameters (калиброваны на 2005-2025):
+
+| Commodity | $\kappa$ | Halflife | $\mu$ (long-run) | $\sigma$ |
+|-----------|----------|----------|-------------------|----------|
+| LME Al | 0.12 | 5.6 yr | $2,200/t | $350/t |
+| LME Ni | 0.16 | 4.2 yr | $18,000/t | $5,000/t |
+| Brent | 0.18 | 3.8 yr | $70/bbl | $18/bbl |
+| LME Pd | 0.10 | 6.9 yr | $1,500/oz | $600/oz |
+
+**Уровень 3: Gap-fill**
+
+Безопасные defaults для непокрытых факторов:
+- GDP World: +2.8% CAGR (IMF WEO consensus)
+- GDP Deflator: EWA
+- Power price: +CPI (регулируемый тариф)
+
+### 12.3 Подключение макрофакторов к статьям модели
+
+| Статья | Макрофактор | Тип связи | Пример |
+|--------|-----------|-----------|--------|
+| Revenue (metal) | LME price, USD/RUB | Vol×Price OLS | $\beta_{\text{LME}} = 0.85$ |
+| Revenue (oil) | Brent, USD/RUB | OLS | $\beta_{\text{Brent}} = 0.72$ |
+| Revenue (telecom) | GDP, CPI | EWA growth | Рост ~CPI + 2% |
+| COGS | PPI, power price | Ratio + PPI indexation | $\beta_{\text{PPI}} = 0.35$ |
+| SG&A | CPI | CPI indexation | $\beta_{\text{CPI}} = 0.80$ |
+| Debt cost (float) | Key Rate, SOFR | Direct link | rate = KR + spread |
+| WC | GDP cycle | Elasticity | DSO_adj = f(ΔRev) |
+
+### 12.4 Конфигурация макрофакторов в YAML
+
+```yaml
+macro:
+  source: external_ecm       # или internal_vecm, ewa, manual
+  external_ecm_path: "/path/to/modelmacro/scenario_results.csv"
+  scenario: baseline          # или adverse, severe
+
+  # Если external_ecm не покрывает фактор — fallback:
+  fallback:
+    lme_al: mean_reversion    # OU model, kappa=0.12
+    russian_power_price: ewa  # halflife=5yr
+    gdp_world: gap_fill       # +2.8% constant
+
+  # Override для конкретного сценария:
+  overrides:
+    lme_al: 2100              # фиксированное значение вместо прогноза
+    usd_rub: 95.0
+```
+
+---
+
+## 13. Препроцессор: от истории к параметрам модели
+
+### 13.1 Назначение препроцессора
+
+Препроцессор — автоматический калибровщик. Он анализирует историю (5-17 лет) и вычисляет параметры для прогнозирования каждой статьи. Результат: **1306+ метрик в 14 группах**.
+
+### 13.2 Группы метрик (подробно)
+
+**Группа 1: margin_ratios (маржинальность)**
+
+```python
+# Для каждого года:
+gross_margin[y] = gross_profit[y] / revenue[y]
+ebitda_margin[y] = ebitda[y] / revenue[y]
+net_margin[y] = net_income[y] / revenue[y]
+cogs_ratio[y] = cogs[y] / revenue[y]
+sga_ratio[y] = sga[y] / revenue[y]
+
+# EWA (halflife=5yr):
+α = 1 - exp(-ln(2) / 5)
+ebitda_margin_ewa = Σ α(1-α)^(T-t) × ebitda_margin[t] / Σ α(1-α)^(T-t)
+```
+
+Winsorization: значения за пределами [P5, P95] обрезаются.
+
+**Группа 2: wc_days (оборачиваемость)**
+
+```python
+dso[y] = accounts_receivable[y] / revenue[y] * 365
+dih[y] = inventory[y] / cogs[y] * 365
+dpo[y] = accounts_payable[y] / cogs[y] * 365
+wc_days = dso + dih - dpo
+
+# EWA:
+dso_ewa = EWA(dso, halflife=3)
+# Clamp:
+dso_forecast = clamp(dso_ewa, P10(dso_hist), P90(dso_hist))
+```
+
+**Группа 3: capex (инвестиции)**
+
+```python
+capex_to_revenue[y] = abs(capex[y]) / revenue[y]
+capex_to_da[y] = abs(capex[y]) / total_da[y]
+
+# Forecast:
+capex_ratio_ewa = EWA(capex_to_revenue, halflife=5)
+capex_min = total_da * 0.90  # sustaining investment floor
+```
+
+**Группа 4: beta_coefficients (макро-эластичности)**
+
+```python
+# OLS regression:
+# dln(Revenue) = α + β₁ × dln(LME_Al) + β₂ × dln(USD_RUB) + ε
+X = np.column_stack([dln(lme_al), dln(usd_rub)])
+y = dln(revenue)
+betas = OLS(y, X).params  # [β₁, β₂]
+
+# Elastic Net (для >5 факторов):
+model = ElasticNet(alpha=0.1, l1_ratio=0.5)
+model.fit(X, y)
+betas = model.coef_
+```
+
+**Группа 5: revenue_betas (сегментные коэффициенты)**
+
+Для компаний с сегментной моделью — индивидуальные beta для каждого сегмента:
+
+```python
+# Nornickel Nickel segment:
+dln(rev_ni) = α + β × dln(lme_ni × usd_rub) + ε
+# β = 0.85 (R² = 0.91)
+
+# Rusal Primary Al:
+dln(rev_al) = α + β × dln(lme_al × premium) + ε
+# β = 0.92 (R² = 0.88)
+```
+
+**Группа 6: cogs_macro (компонентная себестоимость)**
+
+Для Русала (4 компоненты):
+```python
+# Декомпозиция COGS по компонентам:
+alumina_share = 0.37   # из отчётности
+energy_share = 0.27
+labour_share = 0.12
+other_share = 0.24
+
+# OLS для PPI beta:
+dln(cogs) = α + β_ppi × dln(ppi) + ε
+# β_ppi = 0.35 (Норникель), 0.45 (US Steel)
+
+# Mean reversion anchor:
+anchor = EWA(cogs_ratio, halflife=5)
+clamp_sigma = 1.5 * std(cogs_ratio)
+dampening = 0.80  # 80% mean reversion
+```
+
+**Группа 7-14: debt, interest, equity, lease, tax, extended, cf_reconciliation, other**
+
+Каждая группа вычисляет 50-150 метрик из истории. Все метрики сохраняются в `stress_v2.preprocess_metrics` для аудита и воспроизводимости.
+
+### 13.3 Пример выхода препроцессора (Норникель)
+
+```
+margin_ratios:
+  ebitda_margin_ewa: 0.481
+  gross_margin_ewa: 0.532
+  cogs_ratio_ewa: 0.468
+  sga_ratio_ewa: 0.058
+
+wc_days:
+  dso_ewa: 32.4
+  dih_ewa: 58.1
+  dpo_ewa: 44.7
+
+capex:
+  capex_to_revenue_ewa: 0.172
+  capex_to_da_ewa: 2.14
+
+beta_coefficients:
+  revenue_beta_lme_ni: 0.85
+  revenue_beta_usd_rub: 0.42
+  cogs_beta_ppi: 0.35
+
+debt:
+  avg_rate_fixed: 0.032
+  avg_rate_float: 0.052 (KR+1.5%)
+  float_share: 0.30
+  weighted_maturity_yrs: 4.2
+```
+
+---
+
+## 14. Маппинг данных: от различных форматов к каноническим метрикам
+
+### 14.1 Проблема совместимости
+
+Данные поступают из различных источников в различных форматах:
+- **US GAAP** (US Steel): EDGAR XBRL, специфическая терминология
+- **IFRS** (Русал, Норникель): PDF annual reports, разные раскрытия
+- **Smart-lab**: агрегированные показатели, своя номенклатура
+- **Excel templates**: пользовательский ввод, произвольные имена столбцов
+
+### 14.2 Система каноничных метрик
+
+Все данные приводятся к единому набору **110 канонических метрик** (32 IS + 45 BS + 33 CF). Маппинг осуществляется через словарь `_HIST_TO_CANONICAL` (60+ правил):
+
+**CF маппинг (наиболее сложный):**
+
+| Историческое имя | Каноническое | Комментарий |
+|-----------------|-------------|-------------|
+| `change_ar` | `wc_accounts_receivable_change` | WC item |
+| `change_inventory` | `wc_inventory_change` | WC item |
+| `change_ap` | `wc_accounts_payable_change` | WC item |
+| `change_taxes_payable` | `cfo_change_taxes_payable` | WC detail |
+| `net_change_in_cash` | `net_change` | Reconciliation |
+| `cash_closing` | `cash_ending` | Reconciliation |
+| `debt_repayment` | `debt_repayments` | CFF (note: singular → plural) |
+| `finance_costs_net` | `_skip` | **IFRS начисленные %, не cash!** |
+| `dividends_declared` | `_skip` | **IFRS начисление, не выплата!** |
+| `ebt` | `_skip` | Duplicate of net_income в CF |
+| `cfo_da` | `total_da` | D&A add-back в CFO |
+| `depreciation` (в CF) | `_skip` | Дубликат cfo_da |
+| `dividends_paid_nci` | `cff_other` | NCI dividends (не основные) |
+| `disposal_subs` | `disposal_proceeds` | Renaming |
+| `capex_intangibles` | `cfi_other` | Reclassification |
+| `swap_payments` | `cff_other` | Derivatives |
+
+**Критичные правила (источники ошибок):**
+
+1. **`finance_costs_net` → `_skip`**: Это IFRS начисленные проценты, не cash. Если суммировать с `interest_paid`, получится двойной счёт.
+
+2. **`dividends_declared` → `_skip`**: Это начисленные дивиденды (решение собрания), не выплаченные. Используется только `dividends_paid` (фактический cash outflow).
+
+3. **`depreciation` в CF → `_skip`**: Для Русала `cfo_da` и `depreciation` — дубликаты одного и того же показателя. Если оба → total_da удваивается.
+
+4. **`amortization` в CF → `total_da`**: В CF контексте amortization — часть D&A add-back. В IS — отдельная строка.
+
+### 14.3 IS маппинг и нормализация знаков
+
+IS расходы могут храниться с разными знаками:
+- **IFRS**: COGS, SG&A обычно **положительные** (absolute values)
+- **US GAAP**: могут быть **отрицательными**
+- **Прогноз движка**: expenses **positive** (frontend применяет `sign: -1`)
+
+Нормализация:
+```python
+_ABS_METRICS = {"cogs", "sga", "tax_expense", "interest_expense",
+                "total_da", "depreciation_owned", "amortization", ...}
+
+if statement == "is" and metric_name in _ABS_METRICS:
+    val = abs(val)  # всегда positive в IS
+```
+
+### 14.4 BS маппинг
+
+| Историческое | Каноническое |
+|-------------|-------------|
+| `other_ca` | `other_current_assets` |
+| `other_cl` | `other_current_liabilities` |
+| `investments_lt` | `investments_and_long_term_receivables` |
+| `other_nca` | `other_non_current_assets` |
+
+### 14.5 Агрегация: несколько raw → один canonical
+
+Когда несколько исторических метрик маппятся в одну каноническую, они суммируются:
+
+```python
+# change_employee_benefits → change_other_wc
+# change_provisions → change_other_wc
+# change_other_taxes → change_other_wc
+# change_prepaid → change_other_wc
+
+# Результат: change_other_wc = sum of all 4 items
+```
+
+Это корректно для WC items (все — компоненты Other WC change), но опасно для IS/CF items, где суммирование может создать двойной счёт.
+
+### 14.6 Template v3: 18-листовый Excel шаблон
+
+Для загрузки данных новой компании используется унифицированный шаблон:
+
+| # | Лист | Содержание | Строк | Обязательный |
+|---|------|-----------|-------|-------------|
+| 1 | IS | Income Statement | ~30 | Да |
+| 2 | BS | Balance Sheet | ~45 | Да |
+| 3 | CF | Cash Flow Statement | ~40 | Да |
+| 4 | PPE_Schedule | CapEx, DA, disposals | ~10 | Да |
+| 5 | Debt_Schedule | По инструментам (до 30+) | ~15-30 | Да |
+| 6 | Intangibles | Goodwill + IP | ~8 | Если есть |
+| 7 | Tax_Schedule | NOL, DTA, DTL | ~10 | Если есть NOL |
+| 8 | Provisions | Пенсии, экология, юр. | ~8 | Если >5% liabilities |
+| 9 | Associates | JV, доли участия | ~5 | Если >5% assets |
+| 10 | Lease | IFRS 16 (ROU + Liab) | ~10 | Если >3% assets |
+| 11 | Equity | RE, AOCI, NCI, Treasury | ~8 | Да |
+| 12 | Operational | KPI (объёмы, цены, персонал) | ~15 | Для segment model |
+| 13 | Macro | 19 факторов (override) | ~19 | Опционально |
+| 14 | Segments | Revenue by segment | ~10 | Для segment model |
+| 15 | Validation | BS balance check | ~5 | Автоматически |
+| 16 | Config | Model settings | ~20 | Да |
+| 17 | Mapping | Canonical → source column names | ~50 | Если нестандартные |
+| 18 | Notes | Methodology notes, assumptions | ~20 | Рекомендуется |
+
+**ExcelLoader** парсит все листы и загружает в `stress_v2.historical_data` (EAV format):
+
+```python
+from app.services.financial_model.historical_upload_service import HistoricalUploadService
+
+service = HistoricalUploadService()
+preview = service.upload_preview(file_path="template_nornickel.xlsx", version_id=version_id)
+# preview.items: [{statement: "is", year: 2023, metric: "revenue", value: 15500.0}, ...]
+# preview.warnings: ["Missing Tax_Schedule sheet", ...]
+
+result = service.upload_commit(preview)
+# result.rows_inserted: 2457
+# result.rows_updated: 0
+```
+
+### 14.7 Workflow от нуля до модели
+
+Полный процесс создания модели для новой компании:
+
+```
+1. Заполнить template_v3.xlsx (IS/BS/CF + schedules)
+   ↓
+2. POST /api/v1/historical/upload-preview (валидация)
+   ↓
+3. POST /api/v1/historical/upload-commit (загрузка в БД)
+   ↓
+4. Создать project.yaml (конфигурация модели)
+   ↓
+5. POST /api/v1/financial-model/versions/{id}/run
+   ↓
+6. GET /api/v1/financial-model/versions/{id}/forecast/is (результаты)
+   ↓
+7. Dashboard: ModelDetail page (графики, таблицы, рейтинг)
+```
+
+---
+
+## 15. Vertex Platform: production-развёртывание
+
+### 15.1 Архитектура
+
+```
+Vertex Platform (Docker Compose, 9 контейнеров)
+├── nginx          — reverse proxy (port 80)
+├── frontend       — React + TypeScript + Vite (port 3000)
+├── backend        — FastAPI + SQLAlchemy + Pydantic (port 8000)
+├── postgres       — PostgreSQL 15 (port 5432)
+│   └── 25+ схем: ref, raw, pipeline, implied_pd, stress_v2, mart, market_data...
+├── redis          — кэш + Celery broker (port 6379)
+├── celery_worker  — выполнение задач (1 worker, 4 threads)
+├── celery_beat    — планировщик (25 задач)
+├── flower         — мониторинг Celery (port 5555)
+└── minio          — S3 storage для отчётов (port 9000)
+```
+
+### 15.2 Автоматизация через Celery Beat
+
+25 задач с расписанием обеспечивают полностью автоматическое обновление:
+
+| Время MSK | Задача | Описание |
+|-----------|--------|----------|
+| 10:00 | CBR Key Rate | Ключевая ставка ЦБ |
+| 10:05 | CBR FX | Официальные курсы валют |
+| 10:10 | FRED data | Макроданные США (GDP, CPI, 10Y) |
+| 10:15 | Minfin OFZ | Параметры NSS curve |
+| 10:20 | CBR liquidity | Ликвидность банковского сектора |
+| 10:30 | Ratings scrape | ACRA + ExpertRA + NKR рейтинги |
+| 19:00 | MOEX bonds | Котировки 909 облигаций |
+| 19:15 | Bond details | YTM, duration, Z-spread |
+| 19:30 | MOEX equity | Акции (цена, P/E, market cap) |
+| 19:50 | OFZ-PK curve | DM benchmark для флоатеров |
+| 20:00 | IPD pipeline | 6-шаговый fixed-rate pipeline |
+| 20:20 | Floater pipeline | 5-шаговый floater pipeline |
+| 20:30 | Stress pipeline | Vasicek MC + Satellite → EL/VaR |
+| 20:45 | Mart refresh | Обновление витрины (122 эмитента) |
+| 21:00 | Telegram digest | Daily notification |
+| Вс 03:30 | Floater ID | MOEX ISS → identify new floaters |
+| Вс 04:00 | Metadata | Bond metadata refresh |
+| 1-е числа | Satellite calibration | Re-fit sector regression models |
+| 5-е числа | Bank sector | CBR bank sector data |
+
+### 15.3 REST API для финансовых моделей
+
+| Endpoint | Метод | Описание |
+|----------|-------|----------|
+| `/financial-model/companies` | GET | Список компаний (13 active) |
+| `/financial-model/companies/{id}/versions` | GET | Версии модели |
+| `/financial-model/versions/{id}/forecast/{stmt}` | GET | IS/BS/CF (history + forecast merged) |
+| `/financial-model/versions/{id}/ratings` | GET | Рейтинговая траектория по годам |
+| `/financial-model/versions/{id}/covenants` | GET | Headroom и breach status |
+| `/financial-model/versions/{id}/run` | POST | Запуск модели (base + stress) |
+| `/financial-model/companies/{id}/summary` | GET | KPI dashboard (10 графиков) |
+| `/historical/upload-preview` | POST | Предпросмотр Excel upload |
+| `/historical/upload-commit` | POST | Загрузка данных в БД |
+| `/historical/{stmt}` | PUT | Manual upsert (JSON) |
+
+### 15.4 Интеграция с Implied PD
+
+Модель implied PD извлекает рыночные вероятности дефолта из спредов облигаций. Два параллельных pipeline:
+
+**PD implied fix** — из fixed-rate облигаций. Содержит rate premium (~200-700 бп при КС 14%).
+**PD implied float** — из флоатеров (DM solver, forward rates cancel). Чистый кредитный сигнал.
+**PD integral** — best estimate: $w \times \text{PD\_fix} + (1-w) \times \text{PD\_float}$, где $w$ = доля флоатеров в EAD.
+
+PD integral используется в Top-Down стресс-тесте как основной показатель PD:
+
+$$\text{EL} = \text{PD}_{\text{integral}} \times \text{LGD} \times \text{EAD}$$
+
+EAD берётся из финансовых моделей stressTest\_v2 (total\_debt из forecast BS):
+
+$$\text{EAD}_i = \begin{cases}
+\text{smart-lab total\_debt}_i \times 10^9 & \text{(43 эмитента)} \\
+\text{stressTest\_v2 forecast total\_debt}_i & \text{(13 эмитентов)} \\
+\text{sc\_results fallback}_i & \text{(68 эмитентов)}
+\end{cases}$$
+
+---
 
 **Успехов в финансовом моделировании!**
 
