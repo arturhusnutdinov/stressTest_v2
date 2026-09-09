@@ -41,7 +41,18 @@
 
 ## Введение
 
-Настоящее руководство предназначено для практикующих аналитиков, в особенности кредитных аналитиков, у которых нет глубокого опыта в финансовом моделировании. Предполагается лишь базовое знакомство с финансовой отчетностью компаний. Мы начнем с основ и постепенно перейдем к продвинутым темам, чтобы читатель обрёл целостное понимание процесса.
+Настоящее учебное пособие представляет собой систематическое изложение методологии построения интегрированных финансовых моделей трёх отчётов (Income Statement, Balance Sheet, Cash Flow Statement) с применением макроэкономического прогнозирования, стресс-тестирования и кредитного рейтингования.
+
+Пособие предназначено для практикующих аналитиков, в особенности кредитных аналитиков, а также студентов магистратуры финансовых и экономических специальностей. Предполагается базовое знакомство с финансовой отчетностью компаний и основами статистики. Мы начнем с основ и постепенно перейдем к продвинутым темам, чтобы читатель обрёл целостное понимание полного цикла финансового моделирования.
+
+**Актуальность.** Финансовое моделирование — основа кредитного анализа, инвестиционных решений и корпоративного планирования. В условиях макроэкономической волатильности (высокие процентные ставки, геополитические шоки, сырьевые циклы) особенно важна способность строить модели, интегрирующие макро-среду, отраслевую специфику и финансовую отчётность компании в единый согласованный прогноз. Именно такой подход реализован в данном пособии.
+
+**Особенности пособия.** В отличие от типовых учебников по финмоделированию, данное пособие:
+- Основано на **production-реализации** — все описываемые методы реализованы в работающей системе (stressTest Engine v2, 9000+ строк Python кода, 13 действующих моделей компаний)
+- Покрывает полный цикл: от загрузки данных до автоматического кредитного рейтинга и стресс-тестирования
+- Использует **реальные данные** трёх компаний (US Steel, Русал, Норникель) с разными стандартами отчётности (US GAAP, IFRS), валютами (USD, RUB) и отраслями (сталь, алюминий, мультиметалл)
+- Описывает **интеграцию** с макроэконометрической моделью (VECM, 13 уравнений) и моделью рыночных вероятностей дефолта (Implied PD из 909 облигаций)
+- Включает **автоматизацию** через production-платформу (Vertex: FastAPI + PostgreSQL + Celery, 25 ежедневных задач)
 
 **Цель учебника:** Дать последовательное, подробное описание построения финансовых моделей, охватывая полный цикл – от изучения основных финансовых отчетов до внедрения макроэкономических и отраслевых факторов в модель компании. Шаг за шагом мы рассмотрим, как подготовить данные, загрузить их в витрину, протестировать и экспортировать в единый Excel-шаблон для дальнейшей работы:
 
@@ -86,6 +97,221 @@
 **Оборотный капитал:** Изменения оборотных активов и пассивов (запасы, дебиторка, кредиторка и пр.) влияют на денежный поток. Модель должна рассчитывать изменения Net Working Capital для корректировки прибыли до реального денежного потока. Например, рост дебиторской задолженности – это прибыль, не подкрепленная деньгами, поэтому вычитается из cash flow.
 
 **Лучшие практики:** При создании финансовой модели важно соблюдать аккуратность и единообразие. Рекомендуется отделять вводные допущения от расчетных ячеек, четко помечать их (например, входные данные – синим цветом, формулы – черным). Это облегчает чтение и проверку модели. Также, пользуясь Excel или программным кодом, необходимо документировать расчеты, делать сноски или комментарии, чтобы любой проверяющий понял вашу логику. Мы будем следовать этим принципам на протяжении всего учебника.
+
+### 1.3 Структура отчёта о прибылях и убытках (Income Statement)
+
+Отчёт о прибылях и убытках отражает финансовый результат деятельности компании за период. Каноническая структура, используемая в нашей модели (32 метрики):
+
+```
+Revenue (Выручка)
+− COGS (Себестоимость)
+= Gross Profit (Валовая прибыль)
+− SG&A (Коммерческие и административные расходы)
+− D&A (Амортизация основных средств и НМА)
+    в т.ч. Depreciation of owned PPE
+    в т.ч. Depreciation of ROU assets (IFRS 16)
+    в т.ч. Amortization of intangibles
+= EBITDA (Операц. прибыль до амортизации) ← Ключевая метрика для кредитного анализа
+= EBIT (Операционная прибыль)
+± Other income/expense
+± Associates income (доля в прибыли ассоциированных компаний)
+− Interest expense (Процентные расходы)
++ Interest income (Процентные доходы)
+= EBT (Прибыль до налогообложения)
+− Tax expense (Расход по налогу на прибыль)
+    в т.ч. Current tax (Текущий налог)
+    в т.ч. Deferred tax (Отложенный налог)
+= Net Income (Чистая прибыль)
+```
+
+**Пример: Норникель 2023 (IFRS, USD млн)**
+
+| Статья | Значение | % от Revenue |
+|--------|---------|-------------|
+| Revenue | $15,541 | 100.0% |
+| COGS | ($7,813) | 50.3% |
+| Gross Profit | $7,728 | 49.7% |
+| SG&A | ($892) | 5.7% |
+| D&A | ($1,165) | 7.5% |
+| EBITDA | $7,835 | 50.4% |
+| EBIT | $6,670 | 42.9% |
+| Interest expense | ($567) | 3.6% |
+| EBT | $4,457 | 28.7% |
+| Tax | ($923) | 5.9% |
+| **Net Income** | **$3,534** | **22.7%** |
+
+Обратите внимание: EBITDA margin Норникеля (~50%) — один из самых высоких в мировой металлургии, что объясняется уникальной ресурсной базой (высокосортный никель, палладий) и вертикальной интеграцией.
+
+**Пример: Русал 2023 (IFRS, USD млн)**
+
+| Статья | Значение | % от Revenue |
+|--------|---------|-------------|
+| Revenue | $12,206 | 100.0% |
+| COGS | ($10,124) | 82.9% |
+| Gross Profit | $2,082 | 17.1% |
+| SG&A | ($601) | 4.9% |
+| D&A | ($540) | 4.4% |
+| EBITDA | $1,581 | 13.0% |
+| Net Income | $282 | 2.3% |
+
+Контраст с Норникелем: EBITDA margin Русала (~13%) значительно ниже из-за высокой доли энергозатрат в себестоимости алюминия (27% COGS) и зависимости от цены глинозёма (37% COGS).
+
+### 1.4 Структура баланса (Balance Sheet)
+
+Баланс показывает финансовое положение компании на определённую дату. Фундаментальное тождество:
+
+$$\text{Assets} = \text{Liabilities} + \text{Equity}$$
+
+В нашей модели используется 45 канонических метрик:
+
+**Активы:**
+```
+Current Assets (Оборотные активы):
+  Cash and cash equivalents       ← plug (балансирующая статья)
+  Accounts receivable (AR)        ← f(Revenue, DSO)
+  Inventory                       ← f(COGS, DIH)
+  Other current assets
+
+Non-Current Assets (Внеоборотные активы):
+  PP&E gross                      ← PPE corkscrew (CapEx − disposals)
+  Accumulated depreciation        ← PPE corkscrew (−DA + disposal dep)
+  PP&E net = Gross − AccDep
+  Right-of-Use assets (ROU)       ← Lease corkscrew (IFRS 16)
+  Goodwill                        ← Intangibles corkscrew (no amort, impairment)
+  Intangible assets               ← Intangibles corkscrew (−amortization)
+  Deferred Tax Asset (DTA)        ← Tax corkscrew (NOL × τ)
+  Investments and LT receivables
+  Other non-current assets
+
+Total Assets = Current + Non-Current
+```
+
+**Обязательства и капитал:**
+```
+Current Liabilities (Краткосрочные обязательства):
+  Short-term debt                 ← Debt corkscrew (ST portion)
+  Accounts payable (AP)           ← f(COGS, DPO)
+  Accrued liabilities
+  Current lease liabilities       ← Lease corkscrew
+  Other current liabilities
+
+Non-Current Liabilities (Долгосрочные обязательства):
+  Long-term debt                  ← Debt corkscrew (LT portion)
+  Non-current lease liabilities   ← Lease corkscrew
+  Deferred Tax Liability (DTL)    ← Tax corkscrew
+  Provisions                      ← Provisions corkscrew (пенсии, ARO, юр.)
+  Other non-current liabilities
+
+Total Liabilities = Current + Non-Current
+
+Equity (Собственный капитал):
+  Share capital
+  Additional paid-in capital
+  Retained earnings               ← Equity corkscrew (NI − Div − Buybacks)
+  AOCI (прочий совокупный доход)
+  Treasury stock                  ← Buybacks
+  Non-controlling interests (NCI)
+
+Total Equity
+Total Liabilities + Equity = Total Assets  ← ОБЯЗАТЕЛЬНО ПРОВЕРЯТЬ!
+```
+
+**Пример: Норникель BS 2023 (USD млн)**
+
+| Актив | Значение | | Пассив | Значение |
+|-------|---------|---|--------|---------|
+| Cash | $2,139 | | ST Debt | $2,847 |
+| AR | $1,312 | | AP | $1,589 |
+| Inventory | $3,457 | | LT Debt | $7,492 |
+| PPE net | $13,241 | | Provisions | $1,524 |
+| Other | $5,892 | | Equity | $12,589 |
+| **Total Assets** | **$26,041** | | **Total L+E** | **$26,041** |
+
+### 1.5 Структура отчёта о движении денежных средств (Cash Flow)
+
+CF Statement reconciles прибыль (accrual basis) с денежными потоками (cash basis):
+
+```
+OPERATING (CFO):
+  Net Income (отправная точка)
+  + D&A (не денежный расход — add-back)
+  + Impairment (не денежный)
+  ± Deferred tax (не денежный)
+  ± Associates income reversal (не денежный)
+  ± FX non-cash
+  ± Other non-cash adjustments
+  ± Change in Working Capital:
+      Change in AR (рост AR = cash drain)
+      Change in Inventory
+      Change in AP (рост AP = cash source)
+      Change in Other WC
+  − Interest paid (cash, не accrued!)
+  − Taxes paid (cash, не current tax expense!)
+  − Lease payments (operating, IFRS 16)
+  = CFO Total
+
+INVESTING (CFI):
+  − CapEx (денежные инвестиции в PPE)
+  + Disposal proceeds (продажа активов)
+  − Acquisitions (M&A)
+  ± Other investing
+  = CFI Total
+
+FINANCING (CFF):
+  + Debt issuance (привлечение займов)
+  − Debt repayments (погашение)
+  − Dividends paid (денежные дивиденды)
+  − Share repurchases (buybacks)
+  − Finance lease principal (IFRS 16)
+  ± Other financing
+  = CFF Total
+
+Net Change = CFO + CFI + CFF
+± FX effect on cash
+Cash Opening + Net Change + FX = Cash Closing  ← ОБЯЗАТЕЛЬНО ПРОВЕРЯТЬ!
+```
+
+**Критическое различие: начисленное vs уплаченное**
+
+В CF Statement используются **фактические денежные** суммы, а не начисленные:
+- `Interest paid` (CF) ≠ `Interest expense` (IS) — разница = изменение Interest Payable
+- `Taxes paid` (CF) ≠ `Tax expense` (IS) — разница = изменение DTA/DTL + Tax Payable lag
+- `Dividends paid` (CF) ≠ `Dividends declared` — разница = timing (объявленные vs выплаченные)
+
+**Пример: Норникель CFO 2023 (USD млн)**
+
+| Статья | Значение |
+|--------|---------|
+| Net Income | $3,534 |
+| + D&A | $1,165 |
+| + Impairment | $179 |
+| ± WC changes | ($138) |
+| − Interest paid | ($791) |
+| − Taxes paid | ($1,164) |
+| − Lease payments | ($45) |
+| + Other adjustments | $2,988 |
+| **CFO Total** | **$5,728** |
+| CapEx | ($2,988) |
+| **CFI Total** | **($3,042)** |
+| Debt net | ($1,073) |
+| Dividends | ($30) |
+| **CFF Total** | **($2,404)** |
+| **Net Change** | **$282** |
+
+### 1.6 Ключевые финансовые метрики для кредитного анализа
+
+| Метрика | Формула | Норникель 2023 | Русал 2023 | US Steel 2023 |
+|---------|---------|---------------|------------|---------------|
+| EBITDA margin | EBITDA / Revenue | 50.4% | 13.0% | 11.8% |
+| Net Debt | Total Debt − Cash | $8,200M | $6,900M | $3,200M |
+| ND/EBITDA | Net Debt / EBITDA | 1.05x | 4.36x | 1.82x |
+| ICR | EBITDA / Interest | 13.8x | 3.75x | 5.2x |
+| FCF | CFO − CapEx | $2,740M | $738M | $1,100M |
+| FCF Yield | FCF / Revenue | 17.6% | 6.0% | 6.4% |
+| Current Ratio | CA / CL | 1.32x | 1.15x | 1.89x |
+| ROE | NI / Equity | 28.1% | 3.2% | 12.4% |
+
+Эти метрики — основа кредитного скоринга (см. Главу 7.3.4). ND/EBITDA и ICR — два наиболее важных показателя для определения кредитного рейтинга.
 
 ---
 
@@ -137,6 +363,62 @@
 
 В следующих главах мы увидим, как макроэкономический и отраслевой анализ переплетаются с финансовым моделированием: макропоказатели зачастую служат входами для прогнозирования роста, ставок, инфляции и т.д., а результаты отраслевого анализа позволяют уточнить допущения модели (темпы роста продаж, целевые маржи, необходимый уровень инвестиций и пр.).
 
+### 2.3 Макрофакторы в нашей модели: 22 переменных
+
+В нашем движке финансового моделирования используется **22 макроэкономических фактора**. Каждый фактор привязан к конкретным статьям модели через OLS-коэффициенты (бета):
+
+| Фактор | Переменная | Влияет на | Пример связи |
+|--------|-----------|----------|--------------|
+| ВВП РФ | `gdp_ru` | Revenue (спрос) | β=0.6 для телекома |
+| ВВП мировой | `gdp_world` | Revenue (экспорт) | β=0.3 для металлов |
+| ИПЦ РФ | `cpi_ru` | SG&A, тарифы | SG&A × (1 + β×dlnCPI) |
+| ИЦП РФ | `ppi_ru` | COGS | COGS × (1 + β×dlnPPI) |
+| Ключевая ставка ЦБ | `cbr_key_rate` | Floating debt cost | rate = KR + spread |
+| USD/RUB | `usd_rub` | Revenue, COGS (USD) | Прямая трансляция |
+| Brent crude | `brent` | Revenue (нефтегаз) | β=0.72 для Газпрома |
+| LME Aluminium | `lme_al` | Revenue (Русал) | β=0.92 для Primary Al |
+| LME Nickel | `lme_ni` | Revenue (Норникель) | β=0.85 для Ni segment |
+| LME Copper | `lme_cu` | Revenue (Норникель) | β=0.78 для Cu segment |
+| LME Palladium | `lme_pd` | Revenue (Норникель) | β=0.65 для PGM segment |
+| Electricity price | `russian_power_price` | COGS (энергоёмкие) | Компонент energy в Русале |
+
+**Иерархия прогнозирования макрофакторов:**
+
+```
+Приоритет 1: Внешняя ECM (modelMacro)
+  → 13 структурных уравнений, квартальная VECM
+  → Покрывает: GDP, CPI, PPI, Key Rate, FX, Brent, Unemployment, M2
+  → Согласованные прогнозы (shock в одной переменной каскадирует в остальные)
+
+Приоритет 2: Внутренняя VECM / Mean Reversion / EWA
+  → Для commodity prices: Mean Reversion (Ornstein-Uhlenbeck)
+    LME Al: halflife = 5.6 лет, μ = $2,200/t
+    LME Ni: halflife = 4.2 года, μ = $18,000/t
+  → Для прочих: EWA с halflife 5 лет и clamp [P10, P90]
+
+Приоритет 3: Gap-fill (безопасные defaults)
+  → GDP World: +2.8% CAGR (IMF WEO consensus)
+  → Power price: +CPI (регулируемый тариф)
+```
+
+### 2.4 Отраслевые параметры: 22 калиброванных сектора
+
+Для каждого сектора калиброваны параметры, влияющие на кредитный анализ:
+
+| Сектор | β (cyclicality) | Recovery Rate | Satellite coeff. | Пример |
+|--------|-----------------|---------------|-------------------|--------|
+| metals | 1.68 | 0.40 | GDP 0.8, LME 1.2 | Норникель, Русал |
+| oil_gas | 1.45 | 0.50 | Brent 0.9, GDP 0.5 | Газпром |
+| telecom | 0.46 | 0.45 | GDP 0.3, CPI 0.2 | МТС |
+| energy | 0.65 | 0.45 | GDP 0.4, tariff 0.6 | РусГидро |
+| tech | 1.20 | 0.35 | GDP 0.5, R&D 0.8 | Яндекс |
+| consumer | 0.80 | 0.40 | GDP 0.6, CPI 0.4 | ИКС 5 |
+| finance | 0.90 | 0.30 | Key Rate 0.7 | ВТБ |
+
+β (cyclicality) > 1.0 означает, что сектор более волатилен, чем экономика в целом. Metals (1.68) — наиболее циклический: при падении GDP на 1% PD металлургов растёт на 1.68%.
+
+Recovery Rate — ожидаемая доля возврата при дефолте. Oil&Gas (0.50) выше среднего из-за ликвидных активов (месторождения, запасы). Finance (0.30) — ниже из-за сложной структуры обязательств.
+
 ---
 
 ## 3. Введение в анализ временных рядов
@@ -170,6 +452,46 @@
 **Сезонность:** Многие показатели имеют сезонные колебания (ежемесячные, ежеквартальные). Например, розничные продажи скачут в декабре, урожайные показатели – по сезонам года. При моделировании важно учитывать сезонность, либо десеонировать ряд (удалить сезонный компонент), либо использовать модели, умеющие с ней работать (например, SARIMA – сезонный ARIMA). В нашем проекте, если присутствовала сезонность, мы либо вводили сезонные лаги в модель, либо рассматривали годовые изменения (что устраняет сезонные эффекты). Это решение зависит от доступности данных и требований к точности.
 
 **Вывод:** Перед тем как строить прогнозную модель для какого-либо показателя, необходимо проанализировать его график, проверить на тренд, сезонность, при необходимости выполнить преобразования (лог, разности), чтобы обеспечить стационарность. Только после этого имеет смысл переходить к выбору и оценке модели. В следующей главе мы подробно рассмотрим различные модели временных рядов, которые мы использовали для прогнозирования макроэкономических (и не только) показателей.
+
+### 3.3 Практический пример: анализ ряда LME Aluminium
+
+Рассмотрим реальный временной ряд — цену алюминия на LME (основной ценовой фактор для Русала):
+
+**Шаг 1: Визуальный анализ**
+
+Ряд LME Al (2005-2025, ежедневные данные) демонстрирует:
+- Нестационарность: долгосрочный тренд (рост с $1,400 до $2,600)
+- Кластеризацию волатильности: кризис 2008 (σ = $400/мес), COVID-2020 (σ = $350/мес)
+- Отсутствие чёткой сезонности (commodity cycles ≠ calendar seasonality)
+- Mean reversion: цена возвращается к долгосрочному среднему ($2,200 ± $500)
+
+**Шаг 2: Проверка стационарности**
+
+ADF тест на уровнях: p-value = 0.42 → не отвергаем H₀ (нестационарен).
+ADF тест на log-returns: p-value < 0.001 → стационарен.
+
+Вывод: работаем с $d\ln(\text{LME\_Al}_t)$, а не с уровнями.
+
+**Шаг 3: ACF/PACF анализ**
+
+ACF log-returns: значимая автокорреляция на лагах 1, 5, 21 (торговые дни).
+PACF: значимые лаги 1, 2 → предполагает AR(2) или ARIMA(2,0,0).
+
+Однако для прогнозирования на 3-5 лет вперёд (горизонт финансовой модели) ARIMA неоптимален — лучше Mean Reversion (Ornstein-Uhlenbeck), который учитывает притяжение к долгосрочному среднему.
+
+**Шаг 4: Выбор модели**
+
+Mean Reversion: $dX_t = \kappa(\mu - X_t)dt + \sigma dW_t$
+
+Калиброванные параметры (OLS на 2005-2025):
+- $\kappa = 0.12$ (скорость возврата)
+- $\mu = \$2{,}200/\text{t}$ (долгосрочное равновесие)
+- $\sigma = \$350/\text{t}$ (годовая волатильность)
+- Halflife = $\ln 2 / \kappa = 5.6$ лет
+
+Интерпретация: если цена отклонилась от $2,200, она вернётся на 50% к среднему за 5.6 лет. При текущей цене $2,500: прогноз через 3 года ≈ $2,500 × e^{-0.12×3} + $2,200 × (1 - e^{-0.12×3}) = $2,339.
+
+Этот прогноз используется в Revenue модели Русала: Volume × Price = 4,100 kt × $2,339/t × 0.92 (OLS β) ≈ $8.8B для сегмента Primary Al.
 
 ---
 
@@ -3292,13 +3614,128 @@ balance_sheet:
 
 ## 9b. Загрузка данных и тестирование
 
-### Workflow
+### 9b.1 Обзор workflow загрузки
 
-PDF Parser → Excel (21 лист) → 01_Data_Loading.ipynb → data_mart_v2.db
+Существуют три пути загрузки исторических данных в систему:
 
-**ExcelLoader:** 2,280 строк (IS/BS/CF + PPE + canonical)
-**Schedule Loader:** 177 строк (Intangibles, Tax, Provisions, Associates, Operational)
-**Итого:** 2,457 строк → DB
+**Путь 1: PDF Parser (для Русала и компаний с PDF-отчётностью)**
+```
+PDF annual report → PDF Parser (5 режимов) → structured data
+  → Excel template (21 лист) → Jupyter Notebook → SQLite DB
+  → (при миграции на Vertex) → PostgreSQL via ExcelLoader
+```
+
+**Путь 2: Smart-lab scraper (для 43 публичных компаний)**
+```
+Smart-lab.ru → Celery task (weekly) → market_data.issuer_financials
+  → IS/BS/CF агрегаты (annual)
+  → Дополнительно: Excel template для schedules (PPE, Debt, Tax)
+```
+
+**Путь 3: Excel template v3 (универсальный)**
+```
+Аналитик заполняет template_v3.xlsx (18 листов)
+  → POST /api/v1/historical/upload-preview (валидация, preview)
+  → POST /api/v1/historical/upload-commit (загрузка в stress_v2.historical_data)
+  → Engine ready to run
+```
+
+### 9b.1a Детали ExcelLoader
+
+ExcelLoader парсит 18 листов Excel-шаблона и загружает данные в EAV-формат (Entity-Attribute-Value):
+
+```python
+# Таблица: stress_v2.historical_data
+# Columns: version_id, statement, year, metric, value, source, is_corrected
+
+# Пример загрузки Норникеля:
+POST /api/v1/historical/upload-preview
+  Body: file=template_nornickel.xlsx, version_id=8b278956-...
+
+# Response (preview):
+{
+  "items": [
+    {"statement": "is", "year": 2023, "metric": "revenue", "value": 15541.0},
+    {"statement": "is", "year": 2023, "metric": "cogs", "value": 7813.0},
+    {"statement": "bs", "year": 2023, "metric": "cash", "value": 2139.0},
+    {"statement": "cf", "year": 2023, "metric": "capex", "value": -2988.0},
+    ...
+  ],
+  "summary": {
+    "is_rows": 384, "bs_rows": 612, "cf_rows": 544,
+    "ppe_rows": 170, "debt_rows": 85, "tax_rows": 40,
+    "total": 2457
+  },
+  "warnings": ["Tax_Schedule: NOL not found, defaulting to 0"],
+  "errors": []
+}
+
+# Если нет ошибок — commit:
+POST /api/v1/historical/upload-commit
+  Body: {"preview_id": "abc123"}
+# → 2457 rows inserted into stress_v2.historical_data
+```
+
+**Canonical metric normalization при загрузке:**
+
+ExcelLoader автоматически приводит имена метрик к каноническим через `_METRIC_CANONICAL` (120+ правил):
+
+```python
+# Примеры нормализации:
+"Выручка" → "revenue"
+"Себестоимость" → "cogs"
+"Accounts Receivable" → "accounts_receivable"
+"Net PPE" → "ppe_net"
+"cfo_da" → "total_da"  # alias в CF
+"change_ar" → "wc_accounts_receivable_change"
+```
+
+**Schedule Loader** (для PPE, Debt, Tax, Lease, Intangibles, Provisions):
+
+```python
+# PPE Schedule (лист PPE_Schedule):
+# Columns: year, cost_opening, capex, disposals, cost_closing,
+#           dep_opening, depreciation, dep_disposals, dep_closing, nbv
+
+# Debt Schedule (лист Debt_Schedule):
+# Columns: instrument_id, type, currency, rate, is_fixed,
+#           maturity, amount, schedule (JSON)
+```
+
+**ExcelLoader:** ~2,280 строк (IS/BS/CF + PPE + canonical)
+**Schedule Loader:** ~177 строк (Intangibles, Tax, Provisions, Associates, Operational)
+**Итого:** ~2,457 строк → DB
+
+### 9b.1b Маппинг метрик при загрузке: типичные проблемы
+
+При загрузке данных из разных источников возникают проблемы маппинга, которые необходимо решать:
+
+**Проблема 1: Дублирование метрик в CF**
+
+В отчётности Русала присутствуют одновременно:
+- `cfo_da` = 521M (D&A add-back в CFO)
+- `depreciation` = 521M (дубликат того же показателя)
+- `amortization` = 19M (отдельная статья)
+
+Если все три попадут в `total_da`, получим: 521 + 521 + 19 = 1,061M (двойной счёт!).
+
+**Решение:** `depreciation` в CF → `_skip`, `amortization` в CF → `total_da`, `cfo_da` → `total_da`.
+Результат: 521 + 19 = 540M (корректно).
+
+**Проблема 2: Начисленные vs денежные показатели**
+
+`finance_costs_net` (IFRS начисленные проценты) ≠ `interest_paid` (денежные проценты).
+Если обе метрики маппятся в одну, возникает двойной счёт.
+
+**Решение:** `finance_costs_net` → `_skip`, используется только `interest_paid`.
+
+**Проблема 3: Знаки расходов**
+
+IFRS: COGS = 7,813 (положительное число).
+US GAAP: COGS = −7,813 (отрицательное).
+Прогноз движка: COGS = 7,813 (positive, frontend применяет sign: −1).
+
+**Решение:** Нормализация abs() для IS expenses при загрузке.
 
 ### Тестовый стенд (tests/integration/)
 
