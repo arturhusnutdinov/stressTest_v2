@@ -4863,7 +4863,45 @@ balance_sheet:
 
 Это позволяет автоматически обрабатывать данные из разных источников (EDGAR, компании, Excel) и приводить их к единому формату.
 
----
+### 9.6 Практический пример: различия US GAAP vs IFRS в каноническом маппинге
+
+При объединении данных из разных стандартов возникают фундаментальные различия:
+
+**Income Statement:**
+
+| Статья | US Steel (US GAAP) | Русал (IFRS) | Каноническое |
+|--------|-------------------|-------------|-------------|
+| Выручка | "Net sales" | "Revenue" | `revenue` |
+| Себестоимость | "Cost of sales" (incl. D&A) | "Cost of revenue" (excl. D&A) | `cogs` |
+| D&A в COGS? | **Да** (US GAAP convention) | **Нет** (IFRS отдельно) | `da_in_cogs: true/false` |
+| Amortization | In COGS | Separate line "Amortization" | `amortization` |
+| Impairment | "Goodwill impairment" | "Impairment of assets" | `asset_impairment_charges` |
+| Associates | — | "Share of profit of associates" | `associates_income` |
+
+**Ключевая проблема: D&A in COGS.**
+
+US Steel включает D&A в COGS → reported COGS = $14,060M (2024).
+Русал отражает D&A отдельно → reported COGS = $12,254M (2025).
+
+Для корректного сравнения модель извлекает D&A из COGS (US Steel):
+
+```python
+variable_cogs = reported_cogs - depreciation_in_cogs
+# US Steel: variable_cogs = $14,060M - $913M = $13,147M
+# Then COGS/Revenue = $13,147M / $15,640M = 84.1%
+# vs Русал: COGS/Revenue = $12,254M / $14,812M = 82.7% (comparable)
+```
+
+**Cash Flow Statement:**
+
+| Статья | US Steel (US GAAP) | Русал (IFRS) | Каноническое |
+|--------|-------------------|-------------|-------------|
+| Interest | "Interest paid" | "Interest paid" + "cfo_interest_paid" (дубликат!) | `interest_paid` (only cash) |
+| Dividends | "Dividends paid" | "Dividends paid" + "cff_dividends" + "dividends_declared" | `dividends_paid` (only cash) |
+| CapEx | "Capital expenditures" | "Acquisitions of PPE" | `capex` |
+| D&A add-back | "Depreciation" | "cfo_da" + "depreciation" (дубликат!) | `total_da` |
+
+*Урок:* IFRS отчётность часто содержит дублирующие строки (начисленные + денежные). При маппинге необходимо использовать `_skip` для начисленных версий и оставлять только cash versions.
 
 ---
 
@@ -5370,6 +5408,49 @@ $$\text{IntPayable}_{\text{close}} = \text{IntPayable}_{\text{open}} + \text{Int
 
 Для российских компаний типичен `mixed` или `next_year` (квартальные купоны с лагом).
 
+### 11.3b Практический пример: Debt Corkscrew для одного инструмента Русала
+
+Рассмотрим пошаговый расчёт для инструмента `RUB Bond 001P-03`:
+
+**Характеристики:**
+- Тип: Amortizing (с графиком погашения)
+- Валюта: RUB (конвертируется в USD по прогнозному курсу)
+- Номинал: RUB 20 млрд (~$222M at 90 RUB/USD)
+- Ставка: floating, CBR Key Rate + 1.50%
+- Погашение: 2027 (20% в 2026, 80% в 2027)
+
+**Расчёт по годам (base scenario):**
+
+| Шаг | 2026 | 2027 |
+|-----|------|------|
+| **Opening balance** | $222M | $178M |
+| **Step 0: Mandatory** | $44M (20% amort) | $178M (80% final) |
+| **Step 1: Refinancing** | — | — (final year) |
+| **Step 5: Interest** | | |
+| CBR Key Rate | 12.0% | 10.0% |
+| + Spread | 1.50% | 1.50% |
+| = Effective rate | 13.50% | 11.50% |
+| Avg balance | ($222M+$178M)/2 = $200M | ($178M+$0)/2 = $89M |
+| **Interest** | $200M × 13.5% = **$27.0M** | $89M × 11.5% = **$10.2M** |
+| **Step 6: ST/LT split** | | |
+| ST (next year mandatory) | $178M (80% due 2027) | $0 |
+| LT | $0 | $0 |
+| **Closing balance** | **$178M** | **$0** |
+
+**Эффект снижения ставки:** Interest снижается с $27M (2026, KR=12%) до $10M (2027, KR=10%) — 63% reduction за счёт двух факторов: ставка↓ и principal↓.
+
+**Stress scenario (rate_spike +200bp):**
+
+| | 2026 base | 2026 stress |
+|-|----------|------------|
+| Effective rate | 13.50% | 15.50% |
+| Interest | $27.0M | $31.0M |
+| **ΔInterest** | — | **+$4.0M** |
+
+Для одного инструмента из 31 эффект = +$4M. Для всего floating portfolio (~$4.4B): ~+$88M interest.
+
+*Этот расчёт повторяется для каждого из 31 инструмента на каждой итерации solver'а. Суммарный interest expense → IS → EBT → Tax → NI → Cash → Debt (new draw?) → следующая итерация.*
+
 ### 11.4 Cyclical WC Elasticity (подробно)
 
 Стандартная модель WC (фиксированные DSO/DIH/DPO) недооценивает WC pressure в кризис. В расширенной версии применяется **elasticity** — зависимость оборачиваемости от выручки:
@@ -5523,6 +5604,74 @@ macro:
     usd_rub: 95.0
 ```
 
+### 12.5 Практический пример: макропрогноз для Русала (2026-2030)
+
+Русал зависит от 8 макрофакторов. Вот как формируется прогноз для base scenario:
+
+| Фактор | 2025 (факт) | 2026F | 2027F | 2028F | Метод | Источник |
+|--------|-----------|-------|-------|-------|-------|---------|
+| LME Al ($/t) | 2,450 | 2,350 | 2,280 | 2,230 | Mean Reversion (μ=$2,200) | Internal |
+| LME Alumina ($/t) | 340 | 320 | 310 | 305 | Mean Reversion | Internal |
+| USD/RUB | 88.5 | 92.0 | 95.0 | 96.0 | External ECM | modelMacro |
+| Brent ($/bbl) | 72 | 70 | 68 | 70 | Mean Reversion (μ=$70) | Internal |
+| CBR Key Rate (%) | 14.0 | 12.0 | 10.0 | 8.5 | External ECM | modelMacro |
+| CPI RU (% yoy) | 8.2 | 6.5 | 5.0 | 4.5 | External ECM | modelMacro |
+| PPI RU (% yoy) | 5.5 | 4.0 | 3.5 | 3.0 | External ECM | modelMacro |
+| Power price (руб/МВтч) | 4,200 | 4,500 | 4,750 | 5,000 | EWA + CPI | Internal |
+
+**Каскад влияния на модель:**
+
+```
+LME Al $2,350 × Vol 4,000kt × β 0.92 → Revenue(Primary Al) = $8,648M
+Power 4,500 руб/МВтч × Energy share 27% → COGS(Energy) = $2,920M
+CBR 12.0% + spread 1.5-3.0% → Float interest ~$570M (vs $820M at 14%)
+CPI 6.5% × β 0.80 → SGA growth = +5.2%
+USD/RUB 92 → Revenue translation, FX on costs
+```
+
+**Stress scenario override (aluminium_downturn):**
+
+```yaml
+stress_scenarios:
+  - name: aluminium_downturn
+    macro_shocks:
+      lme_al: -0.25     # LME Al −25%: $2,350 → $1,763
+      lme_alumina: -0.15 # Alumina −15%: $320 → $272
+    driver_shocks:
+      dso_days: 15       # DSO +15 дней (buyers delay payments)
+      dih_days: 20       # DIH +20 дней (inventory buildup)
+```
+
+Результат стресса: Revenue $11,281M (−15.7%), EBITDA $1,307M (+3.4% — парадоксально из-за mean reversion в COGS), NI $688M (+3.9%).
+
+*Предположение:* макрофакторы независимы в прогнозе. В реальности LME Al коррелирует с GDP, Brent, FX. External ECM учитывает эти корреляции, internal Mean Reversion — нет.
+
+*Предположение:* stress shocks мгновенны (applied to all forecast years equally). В реальности recovery pattern: Year 1 = full shock, Year 2 = partial recovery, Year 3+ = new equilibrium. Модель можно настроить через `shock_decay_rate` в YAML.
+
+### 12.6 Связь внешней ECM (modelMacro) с движком
+
+Внешняя макроэконометрическая модель (modelMacro) — квартальная VECM с 13 структурными уравнениями:
+
+| Уравнение | Зависимая переменная | Ключевые факторы |
+|-----------|---------------------|-----------------|
+| 1 | GDP RU | GDP_world, oil_price, sanctions_dummy |
+| 2 | CPI RU | GDP_gap, money_supply, FX, food_prices |
+| 3 | Key Rate | CPI, GDP_gap, FX (Taylor rule) |
+| 4 | USD/RUB | Interest rate differential, oil, CA/GDP |
+| 5 | Unemployment | GDP_gap, labour_force |
+| 6-13 | GVA sectors × 8 | GDP, sector-specific factors |
+
+**Интеграция:** modelMacro генерирует `scenario_results.csv` (130+ переменных × Q+12 кварталов × 5-7 сценариев). Движок stressTest_v2 агрегирует квартальные данные в годовые и подставляет в macro_forecasts:
+
+```python
+# Загрузка из ECM
+ecm_data = pd.read_csv(config.macro.external_ecm_path)
+for factor in ['gdp_ru', 'cpi_ru', 'cbr_key_rate', 'usd_rub', ...]:
+    quarterly = ecm_data[ecm_data.variable == factor]
+    annual = quarterly.groupby(quarterly.period.dt.year).mean()
+    macro_forecasts[factor] = annual.value.to_dict()
+```
+
 ---
 
 ## 13. Препроцессор: от истории к параметрам модели
@@ -5657,6 +5806,71 @@ debt:
   float_share: 0.30
   weighted_maturity_yrs: 4.2
 ```
+
+### 13.4 Пример выхода препроцессора (Русал)
+
+```
+margin_ratios:
+  ebitda_margin_ewa: 0.094          # 9.4% — значительно ниже Норникеля
+  gross_margin_ewa: 0.187           # 18.7%
+  cogs_ratio_ewa: 0.813             # 81.3% — высокая доля COGS
+  sga_ratio_ewa: 0.216              # 21.6% — выше из-за вертикальной интеграции
+
+wc_days:
+  dso_ewa: 38.2                     # выше Норникеля (32.4)
+  dih_ewa: 132.5                    # значительно выше (58.1) — длинный production cycle
+  dpo_ewa: 40.1
+
+capex:
+  capex_to_revenue_ewa: 0.098       # ниже Норникеля (0.172) — менее capital-intensive
+  capex_to_da_ewa: 1.82
+
+beta_coefficients:
+  revenue_beta_lme_al: 0.92         # высокая чувствительность к LME Al
+  revenue_beta_usd_rub: 0.38
+  cogs_beta_ppi: 0.45               # выше Норникеля (0.35) — больше PPI exposure
+
+debt:
+  avg_rate_fixed: 0.045
+  avg_rate_float: 0.155 (KR+1.5%)   # 15.5% при КС 14% — дорогой долг!
+  float_share: 0.40                  # 40% floating — major rate risk
+  weighted_maturity_yrs: 3.1         # короче Норникеля (4.2)
+
+cogs_components:
+  alumina_share: 0.37
+  energy_share: 0.27
+  labour_share: 0.12
+  other_share: 0.24
+  mean_reversion_anchor: 0.813
+  dampening: 0.80
+  clamp_sigma: 0.06
+```
+
+### 13.5 Сравнение препроцессоров трёх компаний
+
+| Метрика | US Steel | Русал | Норникель | Комментарий |
+|---------|----------|-------|-----------|-------------|
+| EBITDA margin EWA | 12.1% | 9.4% | 48.1% | Маржинальность определяет всё |
+| COGS/Revenue | 87.9% | 81.3% | 46.8% | US Steel — самый высокий COGS |
+| SGA/Revenue | 3.2% | 21.6% | 5.8% | Русал — вертикальная интеграция |
+| DSO (дни) | 31 | 38 | 32 | Сопоставимы |
+| DIH (дни) | 53 | 133 | 58 | Русал: длинный production cycle |
+| DPO (дни) | 68 | 40 | 45 | US Steel: high bargaining power |
+| CCC (дни) | 16 | 131 | 45 | Русал: огромный WC requirement |
+| CapEx/Revenue | 7.8% | 9.8% | 17.2% | Норникель: масштабная инвестпрограмма |
+| CapEx/DA | 1.45x | 1.82x | 2.14x | Норникель: growth CapEx |
+| Float debt share | 10% | 40% | 30% | Русал: max rate risk exposure |
+| Avg float rate | — | 15.5% | 15.2% | При КС 14%: дорогой долг |
+| Revenue β (main) | HRC: 0.78 | LME Al: 0.92 | LME Ni: 0.85 | Русал: max commodity sensitivity |
+| COGS β (PPI) | 0.45 | 0.45 | 0.35 | Норникель: менее PPI-sensitive |
+
+**Ключевые выводы для моделирования:**
+
+1. **US Steel** — high COGS, low SGA, short CCC → простая ratio-based model, key driver = HRC price
+2. **Русал** — moderate COGS, high SGA, extremely long CCC → component COGS model обязателен, WC = critical cash drain
+3. **Норникель** — low COGS, moderate SGA, moderate CCC → segment revenue model, high CapEx determines long-term PPE growth
+
+*Предположение:* preprocessor использует одинаковый halflife (5yr для margins, 3yr для WC) для всех компаний. В теории optimal halflife зависит от volatility: для Русала (volatile) лучше h=3, для Норникеля (stable) h=7. Настройка через `ewa_halflife` в YAML.
 
 ---
 
