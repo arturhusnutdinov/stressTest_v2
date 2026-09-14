@@ -14,7 +14,7 @@
 - **Единственная БД:** `data_mart_v2.db` (39 таблиц, SQLite WAL)
 - **INSERT OR REPLACE** — upsert семантика для идемпотентности
 - **YAML конфиги:** только policy/parameters, не числа модели (числа через preprocessor)
-- **После любых изменений:** `python3 -m pytest tests/ -v` → 45/45, BS diff ≈ 0
+- **После любых изменений:** `python3 -m pytest tests/ -v` → 7 test files (unit + integration), BS diff ≈ 0
 
 ## Запуск моделей
 ```python
@@ -166,7 +166,7 @@ Provisions:   open + charge - utilization + accretion = close (3 categories)
 - External ECM: enabled (19 факторов из modelMacro)
 - CPI/PPI: modelMacro chain index scale (99-150), NOT Rosstat YoY
 - Features: use_ppe/wc_days/tax/intangibles/interest_payable/provisions corkscrew (все true)
-- **Vertex replication**: sibmetal 0.0% match on Revenue→EBITDA (PG vs SQLite)
+- **Vertex replication**: sibmetal experimental (0.0% match, не production)
 - PDFs: `/Users/arturhusnutdinov/Documents/IT Development/Docker/rusalFinStates/`
 - **Кредитный отчёт:** `UnionMethodology/reports/credit_report_rusal_Q3_2026.html` (9 разделов, 24 SVG, 190KB)
 
@@ -220,9 +220,28 @@ Payment: US Steel=next_year, Rusal=current_year
 | `tools/init_company.py` | Инициализация новой компании |
 | `templates/excel_loader_template.yaml` | Маппинг 31 лист → DB |
 | `templates/scenario_template.yaml` | Шаблон стресс-сценариев |
-| `data_mart_v2.db` | Единственная БД |
+| `data_mart_v2.db` | Standalone SQLite (Rusal + US Steel only) |
 | `docs/Financial-Modeling-Guidelines.pdf` | CFI benchmark (94 стр.) |
 | `companies/nornickel/PROJECT_DIARY.md` | Дневник Норникеля |
+
+## Состояние данных (Sep 2026)
+
+### Standalone SQLite (data_mart_v2.db)
+Только **2 компании** с полными данными (history + forecast):
+- **Rusal**: 385 history IS rows (2011-2025), 160 forecast (2026-2028)
+- **US Steel**: 329 history IS rows (2010-2024), 420 forecast (2025-2029)
+
+### Vertex PostgreSQL (production, 13 компаний)
+Все 13 компаний с history + forecast + stress + rating:
+Норникель, Русал, Газпром, Газпром нефть, МТС, Ростелеком, Полюс, РусГидро, Россети, Яндекс, ИКС 5, АЛРОСА, US Steel.
+
+Данные загружаются через:
+- Smart-lab scraper → `stress_v2.historical_data` (EAV)
+- Excel template v3 → ExcelLoader → PostgreSQL
+- Синхронизация: `tools/sync_sv2_to_vertex.py`
+
+### Company directories (19 dirs, scaffolded)
+Все 19 директорий в `companies/` имеют project.yaml, но только Rusal и US Steel имеют данные в SQLite. Остальные — шаблоны для будущей загрузки или используются только через Vertex PG.
 
 ## Калибровка моделей (v2.3, July 2026)
 
