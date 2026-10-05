@@ -1153,18 +1153,60 @@ def build_checks(wb, cfg):
         r = REG.get(f"CK.{key}", 7)
         label_row(ws, r, label, "mln", "Должно быть 0")
 
-    # BS check formula
+    # All check formulas for forecast years
     n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
-        # BS check = direct reference from 20_BS
+        prev = get_column_letter(c_idx - 1)
+
+        # 1. BS check = TA - TL - TE (from 20_BS)
         ref_cell(ws, REG["CK.bs_check"], c_idx,
                  f"='{NAME['BS']}'!{cl}${REG['BS.check']}", FMT_RATIO)
 
-    # Error count
+        # 2. CF bridge = ΔCash(BS) - (CFO + CFI + CFF)
+        # ΔCash = Cash_close - Cash_open in BS
+        cash_delta = (f"'{NAME['BS']}'!{cl}${REG['BS.cash']}"
+                      f"-'{NAME['BS']}'!{prev}${REG['BS.cash']}")
+        cf_sum = (f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}"
+                  f"+'{NAME['CF']}'!{cl}${REG['CF.cfi']}"
+                  f"+'{NAME['CF']}'!{cl}${REG['CF.cff']}")
+        formula_cell(ws, REG["CK.cf_check"], c_idx,
+                     f"=IFERROR(({cash_delta})-({cf_sum}),0)", FMT_RATIO)
+
+        # 3. PPE roll = net_close - (gross_close - dep_close)
+        formula_cell(ws, REG["CK.ppe_roll"], c_idx,
+                     f"='{NAME['PP']}'!{cl}${REG['PP.net_close']}"
+                     f"-({cl}'{NAME['PP']}'!{cl}${REG['PP.gross_close']}"
+                     f"-'{NAME['PP']}'!{cl}${REG['PP.dep_close']})",
+                     FMT_RATIO)
+
+        # 4. Debt roll = open + draw - mandatory - voluntary - close
+        formula_cell(ws, REG["CK.debt_roll"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.open']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.draw']}"
+                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.mandatory']})"
+                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary']})"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.close']}",
+                     FMT_RATIO)
+
+        # 5. Equity roll = RE_open + NI - Div - RE_close
+        formula_cell(ws, REG["CK.equity_roll"], c_idx,
+                     f"='{NAME['EQ']}'!{cl}${REG['EQ.re_open']}"
+                     f"+'{NAME['EQ']}'!{cl}${REG['EQ.ni']}"
+                     f"-ABS('{NAME['EQ']}'!{cl}${REG['EQ.div']})"
+                     f"-'{NAME['EQ']}'!{cl}${REG['EQ.re_close']}",
+                     FMT_RATIO)
+
+    # Error count: count checks where ABS > 1 (tolerance $1M)
     r_err = REG["CK.error_count"]
-    label_row(ws, r_err, "ОШИБОК ВСЕГО", "", "Должно быть = 0")
+    label_row(ws, r_err, "ОШИБОК ВСЕГО", "", "Должно быть 0")
     ws.cell(r_err, 1).font = F_LABEL_B
+    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c_idx)
+        check_rows = [REG["CK.bs_check"], REG["CK.cf_check"], REG["CK.ppe_roll"],
+                      REG["CK.debt_roll"], REG["CK.equity_roll"]]
+        parts = [f"IF(ABS({cl}{r})>1,1,0)" for r in check_rows]
+        formula_cell(ws, r_err, c_idx, "=" + "+".join(parts), FMT_INT, bold=True)
 
 
 def build_cogs(wb, cfg):
