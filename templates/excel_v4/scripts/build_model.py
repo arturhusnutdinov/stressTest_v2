@@ -1168,23 +1168,64 @@ def build_checks(wb, cfg):
 
 
 def build_cogs(wb, cfg):
-    """12_COGS — cost of goods sold (component or ratio)."""
+    """12_COGS — component-based or ratio-based COGS.
+
+    Component mode (Rusal): each component = base × factor_index × vol_adj
+    Then: COGS_ratio = anchor × (1 + macro_deviation × dampening), clamped
+    Ratio mode (Nornickel): COGS = Revenue × historical_ratio (from 03_Assump)
+    """
     ws = wb["12_COGS"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"12_COGS — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1,
+            "Компонентная модель: COGS = Σ(base_comp × factor_index × vol_adj)"
+            if cfg.get("cogs_mode") == "component"
+            else "Ratio × Revenue (калиброван из истории)").font = F_SUBTITLE
     n_hist = len(cfg["hist_years"][-3:])
     year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
-    section_header(ws, 6, "СЕБЕСТОИМОСТЬ")
     if cfg.get("cogs_mode") == "component":
         comps = cfg.get("cogs_components", {})
+
+        # Component rows (history: input, forecast: calculated)
+        section_header(ws, 6, "КОМПОНЕНТЫ СЕБЕСТОИМОСТИ")
+        comp_info = {
+            "material": ("Material (alumina, raw)", "Driven by commodity factor"),
+            "energy": ("Energy (electricity)", "Driven by power price × FX"),
+            "labour": ("Labour", "Driven by CPI inflation × FX"),
+            "other": ("Other (transport, etc.)", "Driven by PPI"),
+        }
         for i, (comp, share) in enumerate(comps.items()):
             r = REG.get(f"CG.{comp}", 8 + i)
-            label_row(ws, r, f"{comp.title()} ({share*100:.0f}%)", "mln")
-            for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+            info = comp_info.get(comp, (comp.title(), ""))
+            label_row(ws, r, f"{info[0]} ({share*100:.0f}%)", "mln", info[1])
+            # History: input cells
+            for c in range(3, 3 + n_hist):
                 input_cell(ws, r, c, 0, FMT_MLN)
+            # Forecast: component = Revenue × share × COGS_ratio
+            # COGS_ratio from last history year
+            # This ensures components scale with revenue (not absolute growth)
+            # Forecast: component scales with revenue using calibrated ratio from CP
+            # COGS_ratio is in CP (around row 20, set by fill_data from history)
+            # Component = ABS(forecast_Revenue) × calibrated_COGS_ratio × share
+            cp_cogs_ratio = "'Control_Panel'!$C$20"  # COGS ratio from CP (filled by fill_data)
+            for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+                cl = get_column_letter(c)
+                rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
+                formula_cell(ws, r, c,
+                             f"={rev_ref}*{cp_cogs_ratio}*{share}",
+                             FMT_MLN)
+
+        # D&A in COGS (if applicable)
+        r_da = REG.get("CG.da_in_cogs", 13)
+        label_row(ws, r_da, "D&A в себестоимости (если да)", "mln", "da_in_cogs=false для Rusal IFRS")
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            formula_cell(ws, r_da, c, "=0", FMT_MLN)  # Rusal: DA separate line (not in COGS)
+
     else:
-        label_row(ws, REG["CG.total"], "COGS (ratio-based)", "mln")
+        # Ratio mode — COGS = Revenue × calibrated ratio from preprocessing
+        section_header(ws, 6, "СЕБЕСТОИМОСТЬ (RATIO × REVENUE)")
+        label_row(ws, 8, "COGS calibrated ratio", "%", "Из 03_Assump EWA")
 
     # Total COGS
     r_total = REG["CG.total"]
@@ -1198,6 +1239,15 @@ def build_cogs(wb, cfg):
             cl = get_column_letter(c)
             parts = [f"{cl}{REG.get(f'CG.{k}', 8)}" for k in comp_keys]
             formula_cell(ws, r_total, c, "=-(" + "+".join(parts) + ")", FMT_MLN, bold=True)
+    else:
+        # Ratio mode: COGS = -ABS(Revenue) × ratio
+        # Ratio comes from 03_Assump preprocessing (history average)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
+            # Use ratio from history (average of last 3 years)
+            formula_cell(ws, r_total, c,
+                         f"=-ABS({rev_ref})*{cfg.get('cogs_ratio_default', 0.60)}", FMT_MLN, bold=True)
 
     # COGS ratio
     r_ratio = REG["CG.ratio"]
@@ -1205,7 +1255,8 @@ def build_cogs(wb, cfg):
     for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         formula_cell(ws, r_ratio, c,
-                     f"=IFERROR({cl}{r_total}/'{NAME['RV']}'!{cl}${REG['RV.total_rev']},0)", FMT_PCT)
+                     f"=IFERROR(ABS({cl}{r_total})/ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']}),0)",
+                     FMT_PCT)
 
 
 def build_sga(wb, cfg):
@@ -1340,19 +1391,24 @@ def build_debt(wb, cfg):
         cfi_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfi']}"
         cash_prev = f"'{NAME['BS']}'!{prev}${REG['BS.cash']}"  # prev year cash from BS
 
-        # Draw = MAX(0, min_cash - pre_cash) — CIRCULAR REF solved by Excel iterative calc
-        # IFERROR protects against circular ref errors during convergence
+        # ── CIRCULAR DEBT OPTIMIZER with calc_reset seed pattern ──
+        # When calc_reset=1 (seed): draw=0, voluntary=0 (decouples circular)
+        # When calc_reset=0 (iterate): normal optimizer formulas
         cp_min_cash = "'Control_Panel'!$C$55"
+
+        # Draw = IF(calc_reset=1, 0, MAX(0, min_cash - pre_cash))
         formula_cell(ws, REG["DT.draw"], c_idx,
-                     f"=IFERROR(MAX(0,{cp_min_cash}-({cash_prev}+{cfo_ref}+{cfi_ref}"
-                     f"-ABS({cl}{REG['DT.mandatory']}))),0)",
+                     f"=IF(calc_reset=1,0,"
+                     f"IFERROR(MAX(0,{cp_min_cash}-({cash_prev}+{cfo_ref}+{cfi_ref}"
+                     f"-ABS({cl}{REG['DT.mandatory']}))),0))",
                      FMT_MLN)
 
-        # Voluntary = MAX(0, post_draw_cash - 1.5 × min_cash)
+        # Voluntary = IF(calc_reset=1, 0, MAX(0, post_cash - 1.5×min_cash))
         formula_cell(ws, REG["DT.voluntary"], c_idx,
-                     f"=IFERROR(MAX(0,({cash_prev}+{cfo_ref}+{cfi_ref}"
+                     f"=IF(calc_reset=1,0,"
+                     f"IFERROR(MAX(0,({cash_prev}+{cfo_ref}+{cfi_ref}"
                      f"-ABS({cl}{REG['DT.mandatory']})+{cl}{REG['DT.draw']})"
-                     f"-{cp_min_cash}*1.5),0)",
+                     f"-{cp_min_cash}*1.5),0))",
                      FMT_MLN)
 
         # Refi = 0 (simplified; manual override)
@@ -2462,6 +2518,16 @@ def build(company: str, output: str):
     wb.calculation.iterateDelta = 0.001
     # fullCalcOnLoad=False — preserve cached values (critical for bank model pattern)
     wb.calculation.fullCalcOnLoad = False
+
+    # Named ranges for circular solver (bank model pattern)
+    # calc_reset: 0 = iterate (normal), 1 = seed (decouple circular refs)
+    from openpyxl.workbook.defined_name import DefinedName
+    # Add calc_reset cell in Control_Panel row 1 col K (hidden)
+    ws_cp = wb["Control_Panel"]
+    ws_cp.cell(1, 11, 0)  # K1 = 0 (iterate mode)
+    ws_cp.cell(1, 11).font = F_NOTE
+    dn = DefinedName("calc_reset", attr_text="'Control_Panel'!$K$1")
+    wb.defined_names.add(dn)
 
     # Freeze panes on key sheets (row 5 = after title+subtitle+blank+year header)
     for sname in ["02_Hist", "20_BS", "21_PL", "23_CF", "30_Ratios", "Model_Output",

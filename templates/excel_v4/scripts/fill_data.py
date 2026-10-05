@@ -972,29 +972,57 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
     sga_hist = is_d.get("sga", {})
     dist_hist = is_d.get("distribution_expenses", {})
 
-    # Fill COGS total in historical columns
+    # Fill COGS: component mode fills individual components, ratio mode fills total
     ws_cg = wb["12_COGS"]
-    for year in hist_years:
-        col = 3 + hist_years.index(year)
-        cogs = cogs_hist.get(year, 0)
-        if cogs != 0:
-            # Write total COGS as negative (convention)
-            ws_cg.cell(REG["CG.total"], col, round(cogs, 1)).font = F_INPUT
-            ws_cg.cell(REG["CG.total"], col).number_format = FMT_MLN
 
-    # Forecast COGS: use last historical ratio × forecast revenue
-    last_cogs = cogs_hist.get(hist_years[-1], 0)
-    last_rev = rev_hist.get(hist_years[-1], 1)
-    cogs_ratio = abs(last_cogs) / abs(last_rev) if last_rev else 0.80
-    for i, yr in enumerate(fc_years):
-        c = 3 + len(hist_years) + i
-        # COGS forecast = ratio × Revenue (link to 10_Revenue)
-        cl = get_column_letter(c)
-        rev_ref = f"'{wb['10_Revenue'].title}'!{cl}${REG['RV.total_rev']}"
-        formula_cell(ws_cg, REG["CG.total"], c,
-                     f"=-ABS({rev_ref})*{round(cogs_ratio, 4)}", FMT_MLN)
+    # Check if component mode
+    import yaml
+    yaml_path = SV2_ROOT / f"companies/{company}/configs/project.yaml"
+    cogs_mode = "ratio"
+    cogs_components = {}
+    if yaml_path.exists():
+        proj = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        custom_cogs = proj.get("model", {}).get("custom", {}).get("cogs", {})
+        if custom_cogs.get("mode") == "component":
+            cogs_mode = "component"
+            cogs_components = {
+                "material": custom_cogs.get("alumina_share", 0.37),
+                "energy": custom_cogs.get("energy_share", 0.27),
+                "labour": custom_cogs.get("labour_share", 0.12),
+                "other": custom_cogs.get("other_share", 0.24),
+            }
 
-    print(f"    COGS: history filled, forecast ratio={cogs_ratio:.1%}")
+    if cogs_mode == "component" and cogs_components:
+        # Fill each component for history years
+        for year in hist_years:
+            col = COL_START + hist_years.index(year)
+            total_cogs = abs(cogs_hist.get(year, 0))
+            if total_cogs > 0:
+                for comp, share in cogs_components.items():
+                    r = REG.get(f"CG.{comp}", 8)
+                    ws_cg.cell(r, col, round(total_cogs * share, 1)).font = F_INPUT
+                    ws_cg.cell(r, col).number_format = FMT_MLN
+        print(f"    COGS: component mode, {len(cogs_components)} components filled")
+    else:
+        # Ratio mode: fill total COGS
+        for year in hist_years:
+            col = COL_START + hist_years.index(year)
+            cogs = cogs_hist.get(year, 0)
+            if cogs != 0:
+                ws_cg.cell(REG["CG.total"], col, round(cogs, 1)).font = F_INPUT
+                ws_cg.cell(REG["CG.total"], col).number_format = FMT_MLN
+
+    last_cogs = abs(cogs_hist.get(hist_years[-1], 0))
+    last_rev = abs(rev_hist.get(hist_years[-1], 1))
+    cogs_ratio = last_cogs / last_rev if last_rev else 0.80
+
+    # Write calibrated COGS ratio to Control_Panel row 20 for use by forecast formulas
+    ws_cp = wb["Control_Panel"]
+    ws_cp.cell(20, 3, round(cogs_ratio, 4)).font = F_INPUT
+    ws_cp.cell(20, 3).number_format = FMT_PCT
+    ws_cp.cell(20, 1, "COGS ratio (калиброванный)").font = F_LABEL
+
+    print(f"    COGS: ratio={cogs_ratio:.1%} → CP!C20")
 
     # Fill SGA
     ws_sa = wb["13_SGA"]
