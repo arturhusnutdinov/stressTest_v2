@@ -57,4 +57,10 @@
 ## Неточности и доработки
 | # | Проблема | Статус | Дата |
 |---|----------|--------|------|
-| 1 | — | — | — |
+| 1 | Nornickel: Revenue segments (Ni/Cu/Pd) volumes/prices не заполняются из unified.xlsx — формат отличается | OPEN | 2026-10-05 |
+| 2 | Nornickel: Debt instruments = 0 — нет в unified.xlsx, нужно из project.yaml или DB | OPEN | 2026-10-05 |
+| 3 | 02_Hist year columns hardcoded (C=first year) — нужна гибкость для разной глубины истории | OPEN | 2026-10-05 |
+| 4 | IFRS cross-check: сверить Revenue/NI/TA с опубликованной отчётностью (Databook) | OPEN | 2026-10-05 |
+| 5 | CF metric mapping: cfo_total/cfi_total may have different names in sources | OPEN | 2026-10-05 |
+| 6 | Заполнить IFRS Raw_IFRS лист (167+ ключей) из statements/ | OPEN | 2026-10-05 |
+| 7 | Macro factors: только 4 из 22 для Норникель (остальные в отдельных CSV) | OPEN | 2026-10-05 |

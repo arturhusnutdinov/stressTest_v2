@@ -1124,6 +1124,324 @@ def build_covenants(wb, cfg):
         ws.cell(r, 12, f"Порог: {threshold}").font = F_NOTE
 
 
+def build_control_panel(wb, cfg):
+    """Control_Panel — единая точка ввода 130+ параметров."""
+    ws = wb["Control_Panel"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, "ПАНЕЛЬ УПРАВЛЕНИЯ МОДЕЛЬЮ").font = F_TITLE
+    ws.cell(2, 1, "Единственное место ввода. Синие = ввод. Зелёные = формулы (не редактировать).").font = F_SUBTITLE
+
+    r = 4
+    # ── A. МАКРОСЦЕНАРИЙ ──
+    section_header(ws, r, "A. МАКРОСЦЕНАРИЙ"); r += 1
+    label_row(ws, r, "Активный сценарий (1/2/3)", "", "1=Базовый, 2=Стресс, 3=Рецессия")
+    input_cell(ws, r, 3, 1, FMT_INT); r += 2
+
+    for i, factor in enumerate(cfg["macro_factors"]):
+        label_row(ws, r, factor)
+        for c in range(7, 7 + len(cfg["fc_years"])):
+            input_cell(ws, r, c, 0, FMT_RATIO1)
+        r += 1
+    r += 1
+
+    # ── B. ОПЕРАЦИОННЫЕ ПОКАЗАТЕЛИ ──
+    section_header(ws, r, "B. ОПЕРАЦИОННЫЕ ПОКАЗАТЕЛИ"); r += 1
+    for seg in cfg["segments"]:
+        label_row(ws, r, f"{seg['name']}: объём (kt)")
+        for c in range(7, 7 + len(cfg["fc_years"])):
+            input_cell(ws, r, c, 0, FMT_INT)
+        r += 1
+        label_row(ws, r, f"{seg['name']}: рост цены (%)", "", f"Driver: {seg['driver']}")
+        for c in range(7, 7 + len(cfg["fc_years"])):
+            input_cell(ws, r, c, 0, FMT_PCT)
+        r += 1
+    r += 1
+
+    # ── C. ВЫРУЧКА ──
+    section_header(ws, r, "C. ВЫРУЧКА"); r += 1
+    label_row(ws, r, "Revenue method (1=segment, 2=macro_ols, 3=ewa)")
+    input_cell(ws, r, 3, 1, FMT_INT); r += 1
+    label_row(ws, r, "Эластичность Revenue к macro-фактору", "", "β × Δln(factor)")
+    input_cell(ws, r, 3, 1.0, FMT_RATIO); r += 1
+    label_row(ws, r, "R² (коэфф. детерминации)")
+    ref_cell(ws, r, 3, f"='{NAME['MA']}'!$C${REG.get('MA.econ_r2', 53)}", FMT_PCT2); r += 2
+
+    # ── D. СЕБЕСТОИМОСТЬ ──
+    section_header(ws, r, "D. СЕБЕСТОИМОСТЬ"); r += 1
+    cogs_method = 2 if cfg.get("cogs_mode") == "component" else 1
+    label_row(ws, r, "COGS method (1=ratio, 2=component, 3=ppi_uplift)")
+    input_cell(ws, r, 3, cogs_method, FMT_INT); r += 1
+    if cfg.get("cogs_mode") == "component":
+        for comp, share in cfg.get("cogs_components", {}).items():
+            label_row(ws, r, f"Доля {comp.title()}", "%")
+            input_cell(ws, r, 3, share, FMT_PCT); r += 1
+    else:
+        label_row(ws, r, "COGS ratio (default)")
+        input_cell(ws, r, 3, cfg.get("cogs_ratio_default", 0.60), FMT_PCT); r += 1
+    label_row(ws, r, "PPI beta (COGS ~ PPI)")
+    input_cell(ws, r, 3, 0.85, FMT_RATIO); r += 1
+    label_row(ws, r, "Mean reversion dampening")
+    input_cell(ws, r, 3, 0.30, FMT_RATIO); r += 2
+
+    # ── E. SGA / ОПЕКС ──
+    section_header(ws, r, "E. SGA / ОПЕРАЦИОННЫЕ РАСХОДЫ"); r += 1
+    label_row(ws, r, "SGA ratio (EWA)")
+    input_cell(ws, r, 3, 0.08, FMT_PCT); r += 1
+    label_row(ws, r, "EWA halflife (лет)")
+    input_cell(ws, r, 3, 5, FMT_INT); r += 2
+
+    # ── F. CAPEX / PP&E ──
+    cp_da_rate_row = r + 1  # save for ref from PPE sheet
+    section_header(ws, r, "F. КАПИТАЛЬНЫЕ ЗАТРАТЫ / PP&E"); r += 1
+    label_row(ws, r, "DA rate (амортизация / ОС нетто)", "%")
+    input_cell(ws, r, 3, 0.07, FMT_PCT)
+    # Store this row for cross-ref — we'll update reg.json
+    REG["CP.da_rate"] = r
+    r += 1
+    label_row(ws, r, "Sustaining CapEx / DA ratio")
+    input_cell(ws, r, 3, 1.8, FMT_RATIO); r += 1
+    label_row(ws, r, "Expansion CapEx (% rev growth)")
+    input_cell(ws, r, 3, 0.05, FMT_PCT); r += 1
+    label_row(ws, r, "Useful life (лет)")
+    input_cell(ws, r, 3, 16, FMT_INT); r += 1
+    label_row(ws, r, "Disposal % of CapEx")
+    input_cell(ws, r, 3, 0.0, FMT_PCT); r += 2
+
+    # ── G. ОБОРОТНЫЙ КАПИТАЛ ──
+    section_header(ws, r, "G. ОБОРОТНЫЙ КАПИТАЛ"); r += 1
+    label_row(ws, r, "WC method (1=days, 2=ratio)")
+    input_cell(ws, r, 3, 1, FMT_INT); r += 1
+    for d, default in [("DSO (дни)", 30), ("DIH (дни)", 80), ("DPO (дни)", 40)]:
+        label_row(ws, r, d)
+        input_cell(ws, r, 3, default, FMT_DAYS); r += 1
+    r += 1
+
+    # ── H. ДОЛГ ──
+    section_header(ws, r, "H. ДОЛГ"); r += 1
+    label_row(ws, r, "Target ND/EBITDA")
+    input_cell(ws, r, 3, cfg.get("debt_target_nd_ebitda", 2.0), FMT_MULT); r += 1
+    label_row(ws, r, "Min cash target", "mln")
+    input_cell(ws, r, 3, 500, FMT_MLN0); r += 1
+    label_row(ws, r, "Max voluntary prepay (% FCF)")
+    input_cell(ws, r, 3, 0.30, FMT_PCT); r += 2
+
+    # ── I. НАЛОГИ ──
+    section_header(ws, r, "I. НАЛОГИ"); r += 1
+    label_row(ws, r, "Statutory tax rate")
+    input_cell(ws, r, 3, 0.25, FMT_PCT); r += 1
+    label_row(ws, r, "NOL opening balance", "mln")
+    input_cell(ws, r, 3, 0, FMT_MLN0); r += 1
+    label_row(ws, r, "NOL max utilization (%)")
+    input_cell(ws, r, 3, 0.80, FMT_PCT); r += 2
+
+    # ── J. ДИВИДЕНДЫ И КАПИТАЛ ──
+    section_header(ws, r, "J. ДИВИДЕНДЫ И КАПИТАЛ"); r += 1
+    payout = 0.0 if "RUSAL" in cfg["name"] else 0.60
+    label_row(ws, r, "Dividend payout ratio")
+    input_cell(ws, r, 3, payout, FMT_PCT); r += 1
+    label_row(ws, r, "Buyback (% FCF)")
+    input_cell(ws, r, 3, 0.0, FMT_PCT); r += 2
+
+    # ── K. ОЦЕНКА (DCF) ──
+    section_header(ws, r, "K. ОЦЕНКА (DCF)"); r += 1
+    for param, val, fmt in [
+        ("Risk-free rate (Rf)", 0.10, FMT_PCT),
+        ("Beta", 1.1, FMT_RATIO),
+        ("Equity Risk Premium", 0.07, FMT_PCT),
+        ("Country Risk Premium", 0.04, FMT_PCT),
+        ("Size Premium", 0.01, FMT_PCT),
+        ("Terminal growth (g)", 0.03, FMT_PCT),
+        ("Terminal EV/EBITDA", 6.0, FMT_MULT),
+    ]:
+        label_row(ws, r, param)
+        input_cell(ws, r, 3, val, fmt); r += 1
+    r += 1
+
+    # ── L. СКОРКАРТА ──
+    section_header(ws, r, "L. СКОРКАРТА (S&P 4-FACTOR)"); r += 1
+    for param, val in [
+        ("Leverage weight", 0.35), ("Coverage weight", 0.30),
+        ("Profitability weight", 0.20), ("Liquidity weight", 0.15),
+        ("Industry adjustment", cfg.get("rating_ind_adj", -6)),
+        ("Size adjustment", cfg.get("rating_size_adj", 2)),
+        ("Cycle avg EBITDA margin", cfg.get("rating_cycle_margin", 0.20)),
+    ]:
+        label_row(ws, r, param)
+        fmt = FMT_PCT if "weight" in param or "margin" in param else FMT_RATIO1
+        input_cell(ws, r, 3, val, fmt); r += 1
+
+    # ── РЕЗУЛЬТАТ: СВОДКА ──
+    r += 1
+    section_header(ws, r, "СВОДКА КЛЮЧЕВЫХ ПОКАЗАТЕЛЕЙ"); r += 1
+    year_headers(ws, r, cfg["hist_years"][-1:], cfg["fc_years"]); r += 1
+    for label, code, key, fmt in [
+        ("Revenue", "PL", "revenue", FMT_MLN),
+        ("EBITDA", "PL", "ebitda", FMT_MLN),
+        ("Net Income", "PL", "ni", FMT_MLN),
+        ("EBITDA margin", "RA", "ebitda_margin", FMT_PCT),
+        ("ND/EBITDA", "RA", "nd_ebitda", FMT_MULT),
+        ("ICR", "RA", "icr", FMT_MULT),
+        ("ROE", "RA", "roe", FMT_PCT),
+    ]:
+        label_row(ws, r, label)
+        for c in range(4, 4 + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            row_src = REG.get(f"{code}.{key}")
+            if row_src:
+                ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+        r += 1
+
+
+def build_guide(wb, cfg):
+    """00_Guide — navigation with hyperlinks."""
+    ws = wb["00_Guide"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, "РУКОВОДСТВО ПО МОДЕЛИ").font = F_TITLE
+    ws.cell(2, 1, f"Финансовая модель {cfg['name']} · v4 · Excel-driven").font = F_SUBTITLE
+
+    steps = [
+        ("ЭТАП 1: ПОДГОТОВКА ДАННЫХ", [
+            ("02_Hist", "Загрузить историческую отчётность МСФО (IS/BS/CF)"),
+            ("Raw_IFRS", "Детальные раскрытия МСФО (ноты)"),
+            ("11_Segments", "Операционные показатели по сегментам"),
+            ("01_Macro", "Макро-факторы и сценарии"),
+        ]),
+        ("ЭТАП 2: КАЛИБРОВКА", [
+            ("Control_Panel", "Настроить все 130+ параметров модели"),
+            ("90_Checks", "Проверить калибровочные значения"),
+        ]),
+        ("ЭТАП 3: РАСЧЁТНЫЕ ЛИСТЫ (автоматически)", [
+            ("10_Revenue", "Выручка = Σ(Volume × Price) по сегментам"),
+            ("12_COGS", "Себестоимость (компонентная или ratio)"),
+            ("15_PPE", "PP&E corkscrew (CapEx → Dep → Net)"),
+            ("16_WC", "Оборотный капитал (DSO/DIO/DPO)"),
+            ("17_Debt", "Долговой портфель (instrument-level)"),
+            ("19_Tax", "Налоги (IAS 12, NOL, DTA/DTL)"),
+        ]),
+        ("ЭТАП 4: ФИНАНСОВЫЕ ОТЧЁТЫ", [
+            ("21_PL", "P&L: Revenue → EBITDA → EBIT → NI"),
+            ("20_BS", "Баланс: A = L + E (проверка)"),
+            ("23_CF", "ОДДС (косвенный метод)"),
+        ]),
+        ("ЭТАП 5: АНАЛИЗ", [
+            ("30_Ratios", "Ключевые коэффициенты (25+ метрик)"),
+            ("31_Score", "Кредитный рейтинг (S&P 4-factor)"),
+            ("32_Covenants", "Мониторинг ковенантов"),
+            ("35_Valuation", "Оценка (DCF + SOTP + Sensitivity)"),
+            ("Model_Output", "Сводный дашборд"),
+        ]),
+    ]
+
+    r = 4
+    for stage_title, items in steps:
+        section_header(ws, r, stage_title); r += 1
+        for sheet_name, description in items:
+            ws.cell(r, 1).value = f'=HYPERLINK("#\'{sheet_name}\'!A1", "{sheet_name}")'
+            ws.cell(r, 1).font = F_GUIDE_LINK
+            ws.cell(r, 2, description).font = F_LABEL
+            r += 1
+        r += 1
+
+
+def build_model_output(wb, cfg):
+    """Model_Output — 12-section summary dashboard."""
+    ws = wb["Model_Output"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"Model_Output — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Сводный вывод модели (все ссылки — зелёные)").font = F_SUBTITLE
+
+    n_hist = 1
+    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+
+    r = 6
+    sections = [
+        ("1. ДОХОДЫ И РАСХОДЫ (PL)", [
+            ("Выручка", "PL", "revenue", FMT_MLN),
+            ("COGS", "PL", "cogs", FMT_MLN),
+            ("Валовая прибыль", "PL", "gp", FMT_MLN),
+            ("EBITDA", "PL", "ebitda", FMT_MLN),
+            ("EBIT", "PL", "ebit", FMT_MLN),
+            ("Чистая прибыль", "PL", "ni", FMT_MLN),
+        ]),
+        ("2. БАЛАНС (BS)", [
+            ("Итого активы", "BS", "ta", FMT_MLN),
+            ("Денежные средства", "BS", "cash", FMT_MLN),
+            ("ОС нетто", "BS", "ppe", FMT_MLN),
+            ("Итого обязательства", "BS", "tl", FMT_MLN),
+            ("Собственный капитал", "BS", "te", FMT_MLN),
+            ("Контроль BS", "BS", "check", FMT_RATIO),
+        ]),
+        ("3. ДЕНЕЖНЫЕ ПОТОКИ (CF)", [
+            ("CFO", "CF", "cfo", FMT_MLN),
+            ("CFI", "CF", "cfi", FMT_MLN),
+            ("CFF", "CF", "cff", FMT_MLN),
+            ("ДС на конец", "CF", "cash_close", FMT_MLN),
+        ]),
+        ("4. КЛЮЧЕВЫЕ КОЭФФИЦИЕНТЫ", [
+            ("ND/EBITDA", "RA", "nd_ebitda", FMT_MULT),
+            ("ICR", "RA", "icr", FMT_MULT),
+            ("EBITDA margin", "RA", "ebitda_margin", FMT_PCT),
+            ("Net margin", "RA", "net_margin", FMT_PCT),
+            ("ROE", "RA", "roe", FMT_PCT),
+            ("Current ratio", "RA", "current", FMT_MULT),
+        ]),
+        ("5. PP&E CORKSCREW", [
+            ("ОС нетто, начало", "PP", "net_open", FMT_MLN),
+            ("CapEx", "PP", "capex", FMT_MLN),
+            ("Амортизация", "PP", "dep_charge", FMT_MLN),
+            ("ОС нетто, конец", "PP", "net_close", FMT_MLN),
+        ]),
+        ("6. ОБОРОТНЫЙ КАПИТАЛ", [
+            ("DSO", "WC", "dso", FMT_DAYS),
+            ("DIH", "WC", "dio", FMT_DAYS),
+            ("DPO", "WC", "dpo", FMT_DAYS),
+            ("NWC", "WC", "nwc", FMT_MLN),
+            ("ΔNWC", "WC", "delta_nwc", FMT_MLN),
+        ]),
+        ("7. ДОЛГ", [
+            ("Долг, итого", "DT", "close", FMT_MLN),
+            ("Процентные расходы", "DT", "interest", FMT_MLN),
+            ("ND/EBITDA", "DT", "nd_ebitda", FMT_MULT),
+        ]),
+        ("8. НАЛОГИ", [
+            ("EBT", "TX", "ebt", FMT_MLN),
+            ("Текущий налог", "TX", "current", FMT_MLN),
+            ("Эффективная ставка", "TX", "eff_rate", FMT_PCT),
+            ("NOL", "TX", "nol_close", FMT_MLN),
+        ]),
+        ("9. ДИВИДЕНДЫ", [
+            ("Чистая прибыль", "EQ", "ni", FMT_MLN),
+            ("Дивиденды", "EQ", "div", FMT_MLN),
+            ("Payout", "EQ", "payout", FMT_PCT),
+        ]),
+        ("10. РЕЙТИНГ", [
+            ("Итоговый балл", "SC", "final", FMT_RATIO1),
+            ("Рейтинг", "SC", "rating", FMT_TEXT),
+        ]),
+        ("11. ОЦЕНКА", [
+            ("WACC", "VL", "wacc", FMT_PCT),
+            ("Enterprise Value", "VL", "ev", FMT_MLN),
+            ("Equity Value", "VL", "eq_value", FMT_MLN),
+        ]),
+        ("12. ПРОВЕРКИ", [
+            ("BS Check", "CK", "bs_check", FMT_RATIO),
+            ("Ошибок всего", "CK", "error_count", FMT_INT),
+        ]),
+    ]
+
+    for sec_title, items in sections:
+        section_header(ws, r, sec_title); r += 1
+        for label, code, key, fmt in items:
+            label_row(ws, r, label)
+            row_src = REG.get(f"{code}.{key}")
+            if row_src:
+                for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+                    cl = get_column_letter(c)
+                    ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+            r += 1
+        r += 1  # gap between sections
+
+
 def build_changelog(wb, cfg):
     """Changelog — version history."""
     ws = wb["Changelog"]
@@ -1160,25 +1478,28 @@ def build(company: str, output: str):
 
     # Build each sheet
     builders = [
-        ("00_Cover",      build_cover),
-        ("01_Macro",      build_macro),
-        ("02_Hist",       build_hist),
-        ("10_Revenue",    build_revenue),
-        ("12_COGS",       build_cogs),
-        ("13_SGA",        build_sga),
-        ("15_PPE",        build_ppe),
-        ("16_WC",         build_wc),
-        ("19_Tax",        build_tax),
-        ("20_BS",         build_bs),
-        ("21_PL",         build_pl),
-        ("23_CF",         build_cf),
-        ("24_Equity",     build_equity),
-        ("30_Ratios",     build_ratios),
-        ("31_Score",      build_score),
-        ("32_Covenants",  build_covenants),
-        ("35_Valuation",  build_valuation),
-        ("90_Checks",     build_checks),
-        ("Changelog",     build_changelog),
+        ("00_Guide",        build_guide),
+        ("00_Cover",        build_cover),
+        ("Control_Panel",   build_control_panel),
+        ("01_Macro",        build_macro),
+        ("02_Hist",         build_hist),
+        ("10_Revenue",      build_revenue),
+        ("12_COGS",         build_cogs),
+        ("13_SGA",          build_sga),
+        ("15_PPE",          build_ppe),
+        ("16_WC",           build_wc),
+        ("19_Tax",          build_tax),
+        ("20_BS",           build_bs),
+        ("21_PL",           build_pl),
+        ("23_CF",           build_cf),
+        ("24_Equity",       build_equity),
+        ("30_Ratios",       build_ratios),
+        ("31_Score",        build_score),
+        ("32_Covenants",    build_covenants),
+        ("35_Valuation",    build_valuation),
+        ("90_Checks",       build_checks),
+        ("Model_Output",    build_model_output),
+        ("Changelog",       build_changelog),
     ]
     for name, builder in builders:
         print(f"  {name}...")
