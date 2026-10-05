@@ -540,6 +540,20 @@ def build_ppe(wb, cfg):
     label_row(ws, REG["PP.net_open"], "ОС нетто, начало", "mln")
     label_row(ws, REG["PP.net_close"], "ОС нетто, конец", "mln")
 
+    # Additional rows for CapEx breakdown and DA rate
+    r_capex_rev = REG.get("PP.capex_rev", 20)
+    r_da_rate = REG.get("PP.da_rate", 21)
+    label_row(ws, r_capex_rev, "CapEx / Revenue", "%")
+    label_row(ws, r_da_rate, "DA / ОС нетто (rate)", "%")
+
+    # CP references for CapEx parameters
+    # CP.da_rate = DA rate, CP row 42 = sustaining ratio, CP row 43 = expansion %
+    cp_da_rate = ref('CP', 'da_rate', '$C')
+    # Sustaining ratio and expansion % are in CP nearby
+    # We'll use $C$42 for sustaining_da_ratio and $C$43 for expansion_pct
+    cp_sustaining = "'Control_Panel'!$C$42"
+    cp_expansion = "'Control_Panel'!$C$43"
+
     # Formulas for forecast columns
     n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
@@ -548,6 +562,25 @@ def build_ppe(wb, cfg):
 
         # Gross: open = prev close
         formula_cell(ws, REG["PP.gross_open"], c_idx, f"={prev}{REG['PP.gross_close']}", FMT_MLN)
+
+        # ── CapEx = MAX(sustaining + expansion, revenue × capex_pct × 0.5) ──
+        # sustaining = prev_DA × sustaining_ratio (1.8x)
+        # expansion = MAX(0, revenue_growth) × expansion_pct (5%)
+        # Python: capex = max(sustaining_capex + growth_capex, raw_capex * 0.5)
+        rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
+        prev_rev_ref = f"'{NAME['RV']}'!{prev}${REG['RV.total_rev']}"
+        formula_cell(ws, REG["PP.capex"], c_idx,
+                     f"=MAX("
+                     f"{prev}{REG['PP.dep_charge']}*{cp_sustaining}"  # sustaining
+                     f"+MAX(0,{rev_ref}-{prev_rev_ref})*{cp_expansion}"  # expansion
+                     f","
+                     f"ABS({rev_ref})*{cp_da_rate}*0.5"  # floor: 50% of rev-based
+                     f")",
+                     FMT_MLN)
+
+        # Disposals = 0 (simplified; disposal_ratio from CP if needed)
+        formula_cell(ws, REG["PP.disp_gross"], c_idx, "=0", FMT_MLN)
+
         # Gross close = open + capex - disposals
         formula_cell(ws, REG["PP.gross_close"], c_idx,
                      f"={cl}{REG['PP.gross_open']}+{cl}{REG['PP.capex']}-{cl}{REG['PP.disp_gross']}",
@@ -555,10 +588,12 @@ def build_ppe(wb, cfg):
 
         # Dep: open = prev close
         formula_cell(ws, REG["PP.dep_open"], c_idx, f"={prev}{REG['PP.dep_close']}", FMT_MLN)
-        # Dep charge = net_open × DA_rate (from Control_Panel)
+        # Dep charge = net_open × DA_rate
         formula_cell(ws, REG["PP.dep_charge"], c_idx,
-                     f"={cl}{REG['PP.net_open']}*{ref('CP', 'da_rate', '$C')}",
+                     f"={cl}{REG['PP.net_open']}*{cp_da_rate}",
                      FMT_MLN)
+        # Dep on disposals = 0
+        formula_cell(ws, REG["PP.dep_disp"], c_idx, "=0", FMT_MLN)
         # Dep close = open + charge - disposals dep
         formula_cell(ws, REG["PP.dep_close"], c_idx,
                      f"={cl}{REG['PP.dep_open']}+{cl}{REG['PP.dep_charge']}-{cl}{REG['PP.dep_disp']}",

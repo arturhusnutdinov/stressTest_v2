@@ -611,9 +611,19 @@ def fill_debt_hist(wb, data: dict, company: str):
         if ppe_net > 0:
             ws_p.cell(REG["PP.gross_open"], hc, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
             ws_p.cell(REG["PP.gross_open"], hc).number_format = FMT_MLN
+            ws_p.cell(REG["PP.gross_close"], hc, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
             ws_p.cell(REG["PP.dep_open"], hc, round(accdep or ppe_net, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.dep_close"], hc, round(accdep or ppe_net, 1)).font = F_INPUT
             ws_p.cell(REG["PP.net_open"], hc, round(ppe_net, 1)).font = F_INPUT
             ws_p.cell(REG["PP.net_close"], hc, round(ppe_net, 1)).font = F_INPUT
+            # Fill DA history for sustaining CapEx calculation
+            da_hist = is_data.get("total_da", is_data.get("dep_ppe", {}))
+            for yr_offset, yr in enumerate(hist_years[-N_HIST_DISPLAY:]):
+                da_val = da_hist.get(yr, 0)
+                if da_val:
+                    col_pp = COL_START + yr_offset
+                    ws_p.cell(REG["PP.dep_charge"], col_pp, round(abs(da_val), 1)).font = F_INPUT
+                    ws_p.cell(REG["PP.dep_charge"], col_pp).number_format = FMT_MLN
             print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f}")
 
     # Fill Equity opening
@@ -734,19 +744,20 @@ def fill_bs_history(wb, data: dict, company: str):
         "total_cl": "tcl", "total_ncl": "tncl",
     }
 
-    # Determine BS history column = last of 3 hist years (col E = index 5)
-    hist_3 = src["hist_years"][-3:]
-    bs_col = 3 + len(hist_3) - 1  # E = col 5 for 3 hist years
+    # Fill BS for ALL 3 history years (C=2023, D=2024, E=2025)
+    hist_3 = src["hist_years"][-N_HIST_DISPLAY:]
 
     filled = 0
-    for src_key, bs_key in bs_map.items():
-        val = bs.get(src_key, {}).get(last_yr)
-        if val is not None and isinstance(val, (int, float)):
-            r = REG.get(f"BS.{bs_key}")
-            if r:
-                ws.cell(r, bs_col, round(val, 1)).font = F_INPUT
-                ws.cell(r, bs_col).number_format = FMT_MLN
-                filled += 1
+    for yr_idx, yr in enumerate(hist_3):
+        col = COL_START + yr_idx
+        for src_key, bs_key in bs_map.items():
+            val = bs.get(src_key, {}).get(yr)
+            if val is not None and isinstance(val, (int, float)):
+                r = REG.get(f"BS.{bs_key}")
+                if r:
+                    ws.cell(r, col, round(val, 1)).font = F_INPUT
+                    ws.cell(r, col).number_format = FMT_MLN
+                    filled += 1
 
     # Also compute missing totals
     # Other CA = TCA - cash - ar - inv (if available)
