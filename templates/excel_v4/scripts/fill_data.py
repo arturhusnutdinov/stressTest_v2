@@ -311,6 +311,33 @@ def fill_hist_sheet(wb, data: dict, company: str):
                 cell.font = F_INPUT
                 cell.number_format = FMT_MLN
 
+    # Compute EBITDA where missing: EBITDA = GP - SGA + DA (all absolute)
+    is_d = data.get("is", {})
+    ebitda_hist = is_d.get("ebitda", {})
+    gp_hist = is_d.get("gross_profit", {})
+    sga_hist = is_d.get("sga", {})
+    da_hist = is_d.get("total_da", is_d.get("dep_ppe", {}))
+    dist_hist = is_d.get("distribution_expenses", {})
+    r_ebitda = REG.get("HI.ebitda")
+    if r_ebitda:
+        computed = 0
+        for year in hist_years:
+            col = 3 + hist_years.index(year)
+            existing = ws.cell(r_ebitda, col).value
+            if (existing is None or existing == 0) and year in gp_hist:
+                gp = gp_hist.get(year, 0)
+                sga = sga_hist.get(year, 0)
+                da = da_hist.get(year, 0)
+                dist = dist_hist.get(year, 0)
+                ebitda = abs(gp) + sga + dist + abs(da)  # SGA/dist are negative
+                if ebitda != 0:
+                    cell = ws.cell(r_ebitda, col, round(ebitda, 1))
+                    cell.font = F_INPUT
+                    cell.number_format = FMT_MLN
+                    computed += 1
+        if computed > 0:
+            print(f"    EBITDA: computed {computed} missing years (GP+SGA+DA)")
+
     # Fill CF
     print(f"    CF: {len(data.get('cf', {}))} metrics")
     for metric, years_data in sorted(data.get("cf", {}).items()):
