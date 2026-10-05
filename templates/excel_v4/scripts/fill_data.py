@@ -802,10 +802,10 @@ def fill_bs_history(wb, data: dict, company: str):
 
 
 def fill_wc_days(wb, data: dict, company: str):
-    """Compute DSO/DIO/DPO from historical AR/INV/AP/Rev/COGS."""
+    """Compute DSO/DIO/DPO from historical AR/INV/AP/Rev/COGS + fill WC balances."""
     ws = wb["16_WC"]
     src = SOURCES[company]
-    hist_years = src["hist_years"][-N_HIST_DISPLAY:]  # last 3 years (match model layout)
+    hist_years = src["hist_years"][-N_HIST_DISPLAY:]
 
     is_d = data.get("is", {})
     bs_d = data.get("bs", {})
@@ -849,7 +849,25 @@ def fill_wc_days(wb, data: dict, company: str):
                 ws.cell(REG[f"WC.{metric_key}"], c, last_val).font = F_INPUT
                 ws.cell(REG[f"WC.{metric_key}"], c).number_format = FMT_DAYS
 
+    # Fill WC balances (AR, INV, AP) for history years
+    bs_d = data.get("bs", {})
+    for yr_idx, year in enumerate(hist_years):
+        col = COL_START + yr_idx
+        ar_v = abs(bs_d.get("accounts_receivable", {}).get(year, 0))
+        inv_v = abs(bs_d.get("inventory", {}).get(year, 0))
+        ap_v = abs(bs_d.get("accounts_payable", {}).get(year, 0))
+        if ar_v:
+            ws.cell(REG["WC.ar"], col, round(ar_v, 1)).font = F_INPUT
+            ws.cell(REG["WC.ar"], col).number_format = FMT_MLN
+        if inv_v:
+            ws.cell(REG["WC.inv"], col, round(inv_v, 1)).font = F_INPUT
+            ws.cell(REG["WC.inv"], col).number_format = FMT_MLN
+        if ap_v:
+            ws.cell(REG["WC.ap"], col, round(-ap_v, 1)).font = F_INPUT
+            ws.cell(REG["WC.ap"], col).number_format = FMT_MLN
+
     print(f"    WC days: {computed} historical years computed, forecast carry-forwarded")
+    print(f"    WC balances: AR/INV/AP filled for {len(hist_years)} hist years")
 
 
 def fill_cogs_sga_from_history(wb, data: dict, company: str):
