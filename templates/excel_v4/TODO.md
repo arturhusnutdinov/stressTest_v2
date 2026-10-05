@@ -65,10 +65,15 @@
 ## Неточности и доработки
 | # | Проблема | Статус | Дата |
 |---|----------|--------|------|
-| 1 | Nornickel: Revenue segments (Ni/Cu/Pd) volumes/prices не заполняются из unified.xlsx — формат отличается | OPEN | 2026-10-05 |
+| 1 | Nornickel: Revenue segments (Ni/Cu/Pd) volumes/prices не заполняются — формат unified отличается | OPEN | 2026-10-05 |
 | 2 | Nornickel: Debt instruments = 0 — нет в unified.xlsx, нужно из project.yaml или DB | OPEN | 2026-10-05 |
-| 3 | 02_Hist year columns hardcoded (C=first year) — нужна гибкость для разной глубины истории | OPEN | 2026-10-05 |
-| 4 | IFRS cross-check: сверить Revenue/NI/TA с опубликованной отчётностью (Databook) | OPEN | 2026-10-05 |
-| 5 | CF metric mapping: cfo_total/cfi_total may have different names in sources | OPEN | 2026-10-05 |
-| 6 | Заполнить IFRS Raw_IFRS лист (167+ ключей) из statements/ | OPEN | 2026-10-05 |
-| 7 | Macro factors: только 4 из 22 для Норникель (остальные в отдельных CSV) | OPEN | 2026-10-05 |
+| 3 | 02_Hist year columns hardcoded (C=first year) — нужна гибкость для разной глубины истории | LOW | 2026-10-05 |
+| 4 | IFRS cross-check: сверить Revenue/NI/TA с Databook | LOW | 2026-10-05 |
+| 5 | CF metric mapping: cfo_total may have different names | LOW | 2026-10-05 |
+| 6 | Raw_IFRS: template создан, нужно заполнить из statements/ | OPEN | 2026-10-05 |
+| 7 | Macro factors: только 4 из 22 для Норникель (остальные в CSV файлах) | OPEN | 2026-10-05 |
+| 8 | EBITDA 2011-2014 Rusal: вычислен как GP+SGA+DA (не из source) — проверить | FIXED | 2026-10-05 |
+| 9 | 14_OtherIS: пустой лист — нужен builder | LOW | 2026-10-05 |
+| 10 | Nornickel PPE_gross=0: unified не имеет gross/accum_dep, только net | INFO | 2026-10-05 |
+| 11 | Circular solver (Debt↔Cash) не реализован — нужен seed/relax pattern | OPEN | 2026-10-05 |
+| 12 | Forecast columns в COGS/SGA — формулы ratio, но нужны input или forecast-method | OPEN | 2026-10-05 |
