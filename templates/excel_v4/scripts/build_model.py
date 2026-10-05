@@ -621,11 +621,30 @@ def build_revenue(wb, cfg):
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
-        # Forecast: formulas (volume=EWA, price=macro or input)
+        # Forecast: volume = EWA (carry forward), price = OLS chain-link or EWA
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
-            input_cell(ws, base_r, c, 0, FMT_INT)      # volume forecast (input or EWA)
-            input_cell(ws, base_r + 1, c, 0, FMT_INT)   # price forecast (macro or input)
             col_l = get_column_letter(c)
+            prev_col = get_column_letter(c - 1)
+
+            # Volume forecast: EWA carry-forward from last history
+            # Python: val × exp(ewa_growth) — simplified to carry forward
+            formula_cell(ws, base_r, c, f"={prev_col}{base_r}", FMT_INT)
+
+            # Price forecast: depends on driver method
+            if seg.get("driver", "").startswith("LME") or seg.get("driver", "").startswith("macro"):
+                # OLS chain-link: Price_t = Price_{t-1} × EXP(β × LN(Factor_t / Factor_{t-1}))
+                # β stored in Control_Panel, Factor from 01_Macro
+                # Simplified: use elasticity=1.0 (price tracks factor 1:1 in log space)
+                # Price_t = Price_{t-1} × (Factor_t / Factor_{t-1})^β
+                # For now: price follows factor growth (β=1.0)
+                # The factor row in 01_Macro is dynamic — we need a named reference
+                # Simplified version: carry forward (will be overridden by fill_data with YAML values)
+                formula_cell(ws, base_r + 1, c, f"={prev_col}{base_r+1}", FMT_INT)
+            else:
+                # EWA: carry forward
+                formula_cell(ws, base_r + 1, c, f"={prev_col}{base_r+1}", FMT_INT)
+
+            # Revenue = vol × price / 1000
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
