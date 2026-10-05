@@ -193,6 +193,158 @@ def build_macro(wb, cfg):
         label_row(ws, r, label)
 
 
+def build_assump(wb, cfg):
+    """03_Assump — expanded assumptions linked to Control_Panel."""
+    ws = wb["03_Assump"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"03_Assump — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Развёрнутые предположения (зелёные = ← Control_Panel)").font = F_SUBTITLE
+
+    fc = cfg["fc_years"]
+    year_headers(ws, 4, [], fc)
+
+    r = 6
+    # Revenue assumptions
+    section_header(ws, r, "ВЫРУЧКА"); r += 1
+    label_row(ws, r, "Revenue method")
+    ref_cell(ws, r, 3, "='Control_Panel'!$C$12", FMT_INT); r += 1
+    label_row(ws, r, "Эластичность (β)")
+    ref_cell(ws, r, 3, "='Control_Panel'!$C$13", FMT_RATIO); r += 2
+
+    # Margins / COGS
+    section_header(ws, r, "СЕБЕСТОИМОСТЬ"); r += 1
+    label_row(ws, r, "COGS method")
+    ref_cell(ws, r, 3, "='Control_Panel'!$C$18", FMT_INT); r += 1
+    if cfg.get("cogs_mode") == "component":
+        for comp, share in cfg.get("cogs_components", {}).items():
+            label_row(ws, r, f"Доля {comp.title()}")
+            ref_cell(ws, r, 3, f"='Control_Panel'!$C${19 + list(cfg['cogs_components'].keys()).index(comp)}", FMT_PCT)
+            r += 1
+    label_row(ws, r, "PPI beta")
+    ref_cell(ws, r, 3, f"='Control_Panel'!$C${24}", FMT_RATIO); r += 2
+
+    # PP&E
+    section_header(ws, r, "ОСНОВНЫЕ СРЕДСТВА"); r += 1
+    ppe_params = [
+        ("DA rate", "FMT_PCT"),
+        ("Sustaining CapEx / DA", "FMT_RATIO"),
+        ("Expansion CapEx (% rev growth)", "FMT_PCT"),
+        ("Useful life (лет)", "FMT_INT"),
+    ]
+    for i, (label, _) in enumerate(ppe_params):
+        label_row(ws, r, label)
+        # Reference CP rows (approximate — CP da_rate starts around row 30)
+        ref_cell(ws, r, 3, f"='Control_Panel'!$C${31 + i}", FMT_PCT if "%" in label else FMT_RATIO)
+        r += 1
+    r += 1
+
+    # WC
+    section_header(ws, r, "ОБОРОТНЫЙ КАПИТАЛ"); r += 1
+    for d in ["DSO (дни)", "DIH (дни)", "DPO (дни)"]:
+        label_row(ws, r, d)
+        ref_cell(ws, r, 3, f"='Control_Panel'!$C${38 + ['DSO', 'DIH', 'DPO'].index(d[:3])}", FMT_DAYS)
+        r += 1
+    r += 1
+
+    # Debt
+    section_header(ws, r, "ДОЛГ"); r += 1
+    for label in ["Target ND/EBITDA", "Min cash", "Max prepay (% FCF)"]:
+        label_row(ws, r, label)
+        r += 1
+    r += 1
+
+    # Tax
+    section_header(ws, r, "НАЛОГИ"); r += 1
+    for label in ["Statutory rate", "NOL opening", "NOL max utilization"]:
+        label_row(ws, r, label)
+        r += 1
+    r += 1
+
+    # Dividends
+    section_header(ws, r, "ДИВИДЕНДЫ"); r += 1
+    for label in ["Payout ratio", "Buyback (% FCF)"]:
+        label_row(ws, r, label)
+        r += 1
+    r += 1
+
+    # Forecast schedule summary (years as columns)
+    section_header(ws, r, "ПРОГНОЗНЫЕ ПРЕДПОЛОЖЕНИЯ ПО ГОДАМ"); r += 1
+    year_headers(ws, r, [], fc); r += 1
+    summary_items = [
+        ("Revenue growth", "RV", "rev_growth", FMT_PCT),
+        ("COGS ratio", "CG", "ratio", FMT_PCT),
+        ("SGA ratio", "SA", "sga_ratio", FMT_PCT),
+        ("EBITDA margin", "PL", "ebitda_margin", FMT_PCT),
+        ("CapEx / Revenue", "PP", "capex_rev", FMT_PCT),
+        ("DA rate", "PP", "da_rate", FMT_PCT),
+        ("ND/EBITDA", "DT", "nd_ebitda", FMT_MULT),
+        ("Interest rate", "DT", "avg_rate", FMT_PCT),
+        ("Tax rate (effective)", "TX", "eff_rate", FMT_PCT),
+        ("Payout ratio", "EQ", "payout", FMT_PCT),
+    ]
+    for label, code, key, fmt in summary_items:
+        label_row(ws, r, label)
+        row_src = REG.get(f"{code}.{key}")
+        if row_src:
+            for i, yr in enumerate(fc):
+                c = 7 + i
+                cl = get_column_letter(c)
+                ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+        r += 1
+
+
+def build_raw_ifrs(wb, cfg):
+    """Raw_IFRS — template for detailed IFRS data (167+ keys)."""
+    ws = wb["Raw_IFRS"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"Raw_IFRS — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Детальные данные из раскрытий МСФО (заполняется вручную из нот)").font = F_SUBTITLE
+
+    year_headers(ws, 4, cfg["hist_years"][-4:], [])
+
+    r = 6
+    sections = {
+        "BS — ДЕТАЛИ": [
+            "ppe_gross", "ppe_accum_dep", "ppe_net",
+            "ppe_land", "ppe_buildings", "ppe_machinery", "ppe_construction_in_progress",
+            "goodwill", "intangibles_gross", "intangibles_accum_amort",
+            "investments_in_associates", "other_investments",
+            "dta_nol", "dta_provisions", "dta_other",
+            "dtl_ppe", "dtl_inventory", "dtl_other",
+            "provisions_pension", "provisions_restoration", "provisions_legal",
+        ],
+        "IS — ДЕТАЛИ": [
+            "revenue_segment_1", "revenue_segment_2", "revenue_segment_3",
+            "cogs_materials", "cogs_energy", "cogs_labour", "cogs_transport",
+            "dep_ppe", "dep_rou", "amort_intangibles",
+            "current_tax", "deferred_tax",
+            "interest_expense_debt", "interest_expense_lease", "interest_income",
+        ],
+        "CF — ДЕТАЛИ": [
+            "cfo_net_income", "cfo_da", "cfo_deferred_tax", "cfo_wc_change",
+            "cfo_interest_paid", "cfo_tax_paid",
+            "capex", "disposal_proceeds",
+            "debt_issuance", "debt_repayment", "dividends_paid",
+            "lease_payments_principal",
+        ],
+        "CAPITAL — ДЕТАЛИ": [
+            "shares_outstanding_mln", "share_price_usd",
+            "market_cap", "book_value_per_share",
+            "dividends_per_share",
+        ],
+    }
+
+    for section_name, keys in sections.items():
+        section_header(ws, r, section_name); r += 1
+        for key in keys:
+            label_row(ws, r, key, "mln")
+            # Yellow input cells for last 4 historical years
+            for c in range(3, 3 + len(cfg["hist_years"][-4:])):
+                input_cell(ws, r, c, None, FMT_MLN)
+            r += 1
+        r += 1
+
+
 def build_hist(wb, cfg):
     """02_Hist — historical IS/BS/CF."""
     ws = wb["02_Hist"]
@@ -2013,6 +2165,8 @@ def build(company: str, output: str):
         ("00_Cover",        build_cover),
         ("Control_Panel",   build_control_panel),
         ("01_Macro",        build_macro),
+        ("03_Assump",       build_assump),
+        ("Raw_IFRS",        build_raw_ifrs),
         ("02_Hist",         build_hist),
         ("10_Revenue",      build_revenue),
         ("12_COGS",         build_cogs),

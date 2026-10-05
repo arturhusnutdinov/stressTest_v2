@@ -463,6 +463,153 @@ def fill_revenue(wb, data: dict, company: str):
                 cell.number_format = FMT_INT
 
 
+def fill_debt_hist(wb, data: dict, company: str):
+    """Fill 17_Debt with opening balances from BS history."""
+    ws = wb["17_Debt"]
+    src = SOURCES[company]
+    hist_years = src["hist_years"]
+    last_yr = hist_years[-1]
+
+    bs = data.get("bs", {})
+    st = bs.get("short_term_debt", {}).get(last_yr, 0)
+    lt = bs.get("long_term_debt", {}).get(last_yr, 0)
+    total = abs(st) + abs(lt)
+    cash = abs(bs.get("cash", {}).get(last_yr, 0))
+
+    # Fill last hist year column (C=col 3)
+    if total > 0:
+        ws.cell(REG["DT.open"], 3, round(total, 1)).font = F_INPUT
+        ws.cell(REG["DT.open"], 3).number_format = FMT_MLN
+        ws.cell(REG["DT.close"], 3, round(total, 1)).font = F_INPUT
+        ws.cell(REG["DT.close"], 3).number_format = FMT_MLN
+        ws.cell(REG["DT.st"], 3, round(abs(st), 1)).font = F_INPUT
+        ws.cell(REG["DT.st"], 3).number_format = FMT_MLN
+        ws.cell(REG["DT.lt"], 3, round(abs(lt), 1)).font = F_INPUT
+        ws.cell(REG["DT.lt"], 3).number_format = FMT_MLN
+        print(f"    Debt opening: ST={abs(st):.0f} LT={abs(lt):.0f} Total={total:.0f}")
+
+    # Avg rate from interest / avg debt
+    is_data = data.get("is", {})
+    interest = abs(is_data.get("interest_expense", {}).get(last_yr, 0))
+    if total > 0 and interest > 0:
+        avg_rate = interest / total
+        for c in range(4, 4 + len(src["fc_years"])):
+            ws.cell(REG["DT.avg_rate"], c, round(avg_rate, 4)).font = F_INPUT
+            ws.cell(REG["DT.avg_rate"], c).number_format = FMT_PCT
+        print(f"    Avg rate (implied): {avg_rate*100:.1f}%")
+
+    # Also fill ND in history col
+    nd = total - cash
+    ws.cell(REG["DT.nd"], 3, round(nd, 1)).font = F_FORMULA
+    ws.cell(REG["DT.nd"], 3).number_format = FMT_MLN
+
+    # Fill lease opening from BS
+    if "18_Lease" in wb.sheetnames:
+        ws_l = wb["18_Lease"]
+        rou = abs(bs.get("rou_asset", {}).get(last_yr, 0))
+        lease_cl = abs(bs.get("lease_liab_current", {}).get(last_yr, 0))
+        lease_ncl = abs(bs.get("lease_liab_noncurrent", {}).get(last_yr, 0))
+        lease_total = lease_cl + lease_ncl
+        if rou > 0 or lease_total > 0:
+            ws_l.cell(REG["LS.rou_open"], 3, round(rou, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.rou_close"], 3, round(rou, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.liab_open"], 3, round(lease_total, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.liab_close"], 3, round(lease_total, 1)).font = F_INPUT
+            print(f"    Lease: ROU={rou:.0f} Liability={lease_total:.0f}")
+
+    # Fill PPE opening from BS
+    if "15_PPE" in wb.sheetnames:
+        ws_p = wb["15_PPE"]
+        ppe_gross = abs(bs.get("ppe_gross", {}).get(last_yr, 0))
+        accdep = abs(bs.get("ppe_accum_dep", {}).get(last_yr, 0))
+        ppe_net = abs(bs.get("ppe_net", {}).get(last_yr, 0))
+        if ppe_net > 0:
+            ws_p.cell(REG["PP.gross_open"], 3, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.gross_open"], 3).number_format = FMT_MLN
+            ws_p.cell(REG["PP.dep_open"], 3, round(accdep or ppe_net, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.net_open"], 3, round(ppe_net, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.net_close"], 3, round(ppe_net, 1)).font = F_INPUT
+            print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f}")
+
+    # Fill Equity opening
+    if "24_Equity" in wb.sheetnames:
+        ws_e = wb["24_Equity"]
+        re = bs.get("retained_earnings", {}).get(last_yr, 0)
+        if re != 0:
+            ws_e.cell(REG["EQ.re_open"], 3, round(re, 1)).font = F_INPUT
+            ws_e.cell(REG["EQ.re_close"], 3, round(re, 1)).font = F_INPUT
+            print(f"    Retained earnings opening: {re:.0f}")
+
+    # Fill BS last hist year (static items for carry-forward)
+    if "20_BS" in wb.sheetnames:
+        ws_bs = wb["20_BS"]
+        static_keys = {
+            "other_ca": ["other_current_assets"],
+            "goodwill": ["goodwill"],
+            "intang": ["intangibles"],
+            "other_nca": ["other_non_current_assets", "investments_lt"],
+            "other_cl": ["other_current_liabilities"],
+            "other_ncl": ["other_non_current_liabilities"],
+            "sc": ["share_capital"],
+            "apic": ["additional_paid_in_capital", "apic"],
+            "aoci": ["aoci", "other_comprehensive_income"],
+        }
+        for bs_key, source_keys in static_keys.items():
+            val = 0
+            for sk in source_keys:
+                v = bs.get(sk, {}).get(last_yr, 0)
+                if v:
+                    val = v
+                    break
+            if val:
+                ws_bs.cell(REG[f"BS.{bs_key}"], 3, round(val, 1)).font = F_INPUT
+
+
+def validate_data(wb, data: dict, company: str):
+    """Cross-check key metrics for consistency."""
+    issues = []
+    src = SOURCES[company]
+    last_yr = src["hist_years"][-1]
+
+    is_data = data.get("is", {})
+    bs_data = data.get("bs", {})
+
+    # Check Revenue
+    rev = is_data.get("revenue", {}).get(last_yr)
+    if rev:
+        print(f"    Revenue ({last_yr}): {rev:,.0f}")
+
+    # Check NI
+    ni = is_data.get("net_income", {}).get(last_yr)
+    if ni:
+        print(f"    Net Income ({last_yr}): {ni:,.0f}")
+
+    # Check BS balance
+    ta = bs_data.get("total_assets", {}).get(last_yr, 0)
+    tl = bs_data.get("total_liabilities", {}).get(last_yr, 0)
+    te = bs_data.get("total_equity", {}).get(last_yr, 0)
+    if ta and (tl or te):
+        diff = abs(ta) - abs(tl) - abs(te)
+        if abs(diff) > 1:
+            issues.append(f"BS imbalance ({last_yr}): TA={ta:.0f} - TL={tl:.0f} - TE={te:.0f} = {diff:.0f}")
+        else:
+            print(f"    BS check ({last_yr}): TA={ta:,.0f} TL={tl:,.0f} TE={te:,.0f} ✓")
+
+    # Check EBITDA consistency
+    ebitda = is_data.get("ebitda", {}).get(last_yr, 0)
+    rev_val = is_data.get("revenue", {}).get(last_yr, 0)
+    if ebitda and rev_val:
+        margin = ebitda / rev_val
+        print(f"    EBITDA margin ({last_yr}): {margin*100:.1f}%")
+
+    if issues:
+        print(f"\n  ⚠ VALIDATION ISSUES ({len(issues)}):")
+        for iss in issues:
+            print(f"    ⚠ {iss}")
+    else:
+        print(f"    All checks passed ✓")
+
+
 def fill_all(company: str, model_path: str):
     """Main entry: load data and fill model."""
     print(f"\n{'='*60}")
@@ -508,6 +655,12 @@ def fill_all(company: str, model_path: str):
 
     print("\n6. Filling 10_Revenue (volumes & prices)...")
     fill_revenue(wb, data, company)
+
+    print("\n7. Filling 17_Debt (opening balances)...")
+    fill_debt_hist(wb, data, company)
+
+    print("\n8. Validating data consistency...")
+    validate_data(wb, data, company)
 
     # Save
     wb.save(str(model_file))

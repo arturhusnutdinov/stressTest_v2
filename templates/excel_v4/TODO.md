@@ -34,17 +34,25 @@
 - [ ] Норникель: Debt instruments
 - [ ] Норникель: Macro factors
 
-### Фаза 3: Полные формулы — TODO
-- [ ] Control_Panel — 130+ параметров
-- [ ] 03_Assump — expanded (← Control_Panel)
-- [ ] 17_Debt — instrument-level с circular solver
-- [ ] 18_Lease — IFRS 16 ROU corkscrew
-- [ ] Cross-sheet links: BS ← corkscrews
-- [ ] Circular solver (Excel Iterative Calc)
-- [ ] 33_RevStress — reverse stress + tornado
-- [ ] 40_Scen — scenario comparison
-- [ ] Model_Output — 12-section dashboard
-- [ ] 00_Guide — navigation with hyperlinks
+### Фаза 3: Полные формулы — DONE
+- [x] Control_Panel — 130+ params, 12 sections (A-L)
+- [x] 17_Debt — aggregate corkscrew + interest + ND/EBITDA
+- [x] 18_Lease — IFRS 16 ROU + liability corkscrew
+- [x] Cross-sheet links: BS ← corkscrews (cash, AR, INV, AP, PPE, debt, DTA/DTL, RE)
+- [x] PL ← engine sheets (Revenue, COGS, SGA, DA, Interest, Tax)
+- [x] CF ← sources (NI, DA, WC, CapEx, Div, Interest)
+- [x] 33_RevStress — reverse stress + tornado (8 vars)
+- [x] 40_Scen — scenario comparison (7 scenarios × 6 KPIs)
+- [x] Model_Output — 12-section dashboard (144 refs)
+- [x] 00_Guide — 18-step navigation with hyperlinks
+- [x] 35_Valuation — DCF (FCFF+Terminal+PV) + SOTP + 5×5 Sensitivity
+- [x] 31_Score — S&P 4-factor with scoring formulas + rating lookup
+- [x] 32_Covenants — actual vs threshold + headroom + breach count
+
+### Фаза 3.5: Circular solver — TODO
+- [ ] Excel Iterative Calc setup (Debt ↔ Interest ↔ Cash ↔ NI)
+- [ ] Seed/relax/converge pattern (from bank model 15_Funding)
+- [ ] 03_Assump — expanded assumptions (← Control_Panel refs)
 
 ### Фаза 4: Валидация — TODO
 - [ ] BS Identity: A - L - E = 0 для всех лет
