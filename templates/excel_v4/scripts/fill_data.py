@@ -592,6 +592,117 @@ def fill_debt_hist(wb, data: dict, company: str):
                 ws_bs.cell(REG[f"BS.{bs_key}"], 3, round(val, 1)).font = F_INPUT
 
 
+def fill_wc_days(wb, data: dict, company: str):
+    """Compute DSO/DIO/DPO from historical AR/INV/AP/Rev/COGS."""
+    ws = wb["16_WC"]
+    src = SOURCES[company]
+    hist_years = src["hist_years"][-6:]  # last 6 years for WC display
+
+    is_d = data.get("is", {})
+    bs_d = data.get("bs", {})
+
+    rev_hist = is_d.get("revenue", {})
+    cogs_hist = is_d.get("cogs", {})
+    ar_hist = bs_d.get("accounts_receivable", {})
+    inv_hist = bs_d.get("inventory", {})
+    ap_hist = bs_d.get("accounts_payable", {})
+
+    computed = 0
+    for year in hist_years:
+        col = 3 + hist_years.index(year)
+        rev = abs(rev_hist.get(year, 0))
+        cogs = abs(cogs_hist.get(year, 0))
+        ar = abs(ar_hist.get(year, 0))
+        inv_ = abs(inv_hist.get(year, 0))
+        ap = abs(ap_hist.get(year, 0))
+
+        if rev > 0:
+            dso = ar / rev * 365
+            ws.cell(REG["WC.dso"], col, round(dso, 0)).font = F_INPUT
+            ws.cell(REG["WC.dso"], col).number_format = FMT_DAYS
+        if cogs > 0:
+            dio = inv_ / cogs * 365
+            dpo = ap / cogs * 365
+            ws.cell(REG["WC.dio"], col, round(dio, 0)).font = F_INPUT
+            ws.cell(REG["WC.dio"], col).number_format = FMT_DAYS
+            ws.cell(REG["WC.dpo"], col, round(dpo, 0)).font = F_INPUT
+            ws.cell(REG["WC.dpo"], col).number_format = FMT_DAYS
+        computed += 1
+
+    # Forecast: carry forward last historical values
+    fc_years = src["fc_years"]
+    last_yr = hist_years[-1]
+    for metric_key in ["dso", "dio", "dpo"]:
+        last_val = ws.cell(REG[f"WC.{metric_key}"], 3 + len(hist_years) - 1).value
+        if last_val and isinstance(last_val, (int, float)):
+            for i, yr in enumerate(fc_years):
+                c = 3 + len(hist_years) + i
+                ws.cell(REG[f"WC.{metric_key}"], c, last_val).font = F_INPUT
+                ws.cell(REG[f"WC.{metric_key}"], c).number_format = FMT_DAYS
+
+    print(f"    WC days: {computed} historical years computed, forecast carry-forwarded")
+
+
+def fill_cogs_sga_from_history(wb, data: dict, company: str):
+    """Fill 12_COGS and 13_SGA with historical ratios from IS data."""
+    src = SOURCES[company]
+    hist_years = src["hist_years"][-6:]
+    fc_years = src["fc_years"]
+
+    is_d = data.get("is", {})
+    rev_hist = is_d.get("revenue", {})
+    cogs_hist = is_d.get("cogs", {})
+    sga_hist = is_d.get("sga", {})
+    dist_hist = is_d.get("distribution_expenses", {})
+
+    # Fill COGS total in historical columns
+    ws_cg = wb["12_COGS"]
+    for year in hist_years:
+        col = 3 + hist_years.index(year)
+        cogs = cogs_hist.get(year, 0)
+        if cogs != 0:
+            # Write total COGS as negative (convention)
+            ws_cg.cell(REG["CG.total"], col, round(cogs, 1)).font = F_INPUT
+            ws_cg.cell(REG["CG.total"], col).number_format = FMT_MLN
+
+    # Forecast COGS: use last historical ratio × forecast revenue
+    last_cogs = cogs_hist.get(hist_years[-1], 0)
+    last_rev = rev_hist.get(hist_years[-1], 1)
+    cogs_ratio = abs(last_cogs) / abs(last_rev) if last_rev else 0.80
+    for i, yr in enumerate(fc_years):
+        c = 3 + len(hist_years) + i
+        # COGS forecast = ratio × Revenue (link to 10_Revenue)
+        cl = get_column_letter(c)
+        rev_ref = f"'{wb['10_Revenue'].title}'!{cl}${REG['RV.total_rev']}"
+        formula_cell(ws_cg, REG["CG.total"], c,
+                     f"=-ABS({rev_ref})*{round(cogs_ratio, 4)}", FMT_MLN)
+
+    print(f"    COGS: history filled, forecast ratio={cogs_ratio:.1%}")
+
+    # Fill SGA
+    ws_sa = wb["13_SGA"]
+    for year in hist_years:
+        col = 3 + hist_years.index(year)
+        sga = sga_hist.get(year, 0)
+        dist = dist_hist.get(year, 0)
+        total_sga = sga + dist  # both negative
+        if total_sga != 0:
+            ws_sa.cell(REG["SA.sga_total"], col, round(total_sga, 1)).font = F_INPUT
+            ws_sa.cell(REG["SA.sga_total"], col).number_format = FMT_MLN
+
+    # Forecast SGA: ratio × Revenue
+    last_sga = (sga_hist.get(hist_years[-1], 0) + dist_hist.get(hist_years[-1], 0))
+    sga_ratio = abs(last_sga) / abs(last_rev) if last_rev else 0.08
+    for i, yr in enumerate(fc_years):
+        c = 3 + len(hist_years) + i
+        cl = get_column_letter(c)
+        rev_ref = f"'{wb['10_Revenue'].title}'!{cl}${REG['RV.total_rev']}"
+        formula_cell(ws_sa, REG["SA.sga_total"], c,
+                     f"=-ABS({rev_ref})*{round(sga_ratio, 4)}", FMT_MLN)
+
+    print(f"    SGA: history filled, forecast ratio={sga_ratio:.1%}")
+
+
 def validate_data(wb, data: dict, company: str):
     """Cross-check key metrics for consistency."""
     issues = []
@@ -686,7 +797,11 @@ def fill_all(company: str, model_path: str):
     print("\n7. Filling 17_Debt (opening balances)...")
     fill_debt_hist(wb, data, company)
 
-    print("\n8. Validating data consistency...")
+    print("\n8. Computing WC days + filling COGS/SGA from history...")
+    fill_wc_days(wb, data, company)
+    fill_cogs_sga_from_history(wb, data, company)
+
+    print("\n9. Validating data consistency...")
     validate_data(wb, data, company)
 
     # Save
