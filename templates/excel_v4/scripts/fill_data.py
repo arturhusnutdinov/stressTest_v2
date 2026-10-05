@@ -470,6 +470,8 @@ def fill_revenue(wb, data: dict, company: str):
                 "nickel": "Nickel",
                 "copper": "Copper",
                 "pgm": "PGM",
+                "palladium": "PGM",  # palladium maps to PGM segment
+                "platinum": "Platinum",
             }
             display_name = name_map.get(seg_key, seg_key.title())
             vol_hist = seg_cfg.get("volume_history", {})
