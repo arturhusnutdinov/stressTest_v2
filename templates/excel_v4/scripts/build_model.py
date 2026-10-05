@@ -68,6 +68,21 @@ SHEETS = [
 NAME = {code: name for code, name, _ in SHEETS}
 
 
+def col_layout(cfg):
+    """Return unified column layout: hist_cols + fc_cols indices.
+
+    ALL sheets use same layout:
+      C=2023, D=2024, E=2025, F=2026E, G=2027E, H=2028E
+
+    Returns (hist_col_start, fc_col_start, hist_years_display, fc_years)
+    """
+    hist_yrs = cfg["hist_years"][-3:]  # last 3 history years
+    fc_yrs = cfg["fc_years"]
+    h_start = 3  # col C
+    f_start = 3 + len(hist_yrs)  # col F (index 6)
+    return h_start, f_start, hist_yrs, fc_yrs
+
+
 def ref(code: str, key: str, col: str = "$C") -> str:
     """Build cross-sheet reference formula: ='sheet'!$C$row."""
     row = REG.get(f"{code}.{key}")
@@ -497,7 +512,7 @@ def build_ppe(wb, cfg):
     ws.cell(1, 1, f"15_PPE — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "PP&E Corkscrew: Gross → CapEx → Disposals → Dep → Net").font = F_SUBTITLE
 
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "PP&E GROSS")
     labels = [
@@ -565,7 +580,7 @@ def build_bs(wb, cfg):
     ws.cell(1, 1, f"20_BS — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Баланс: Активы = Обязательства + Капитал").font = F_SUBTITLE
 
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "АКТИВЫ")
     assets = [
@@ -754,7 +769,7 @@ def build_pl(wb, cfg):
     ws.cell(1, 1, f"21_PL — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Отчёт о прибылях и убытках").font = F_SUBTITLE
 
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "ДОХОДЫ И РАСХОДЫ")
     pl_items = [
@@ -844,7 +859,7 @@ def build_ratios(wb, cfg):
     ws.cell(1, 1, f"30_Ratios — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Ключевые финансовые коэффициенты").font = F_SUBTITLE
 
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "LEVERAGE")
     ratios = [
@@ -920,7 +935,7 @@ def build_checks(wb, cfg):
     ws.cell(1, 1, f"90_Checks — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Проверки целостности модели").font = F_SUBTITLE
 
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "ПРОВЕРКИ (все должны = 0)")
     checks = [
@@ -1285,6 +1300,16 @@ def build_cf(wb, cfg):
         # CapEx ← PPE
         ref_cell(ws, REG["CF.capex"], c_idx,
                  f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
+        # Debt draw ← Debt
+        ref_cell(ws, REG["CF.debt_draw"], c_idx,
+                 f"='{NAME['DT']}'!{cl}${REG['DT.draw']}", FMT_MLN)
+        # Debt repay ← Debt (mandatory + voluntary)
+        formula_cell(ws, REG["CF.debt_repay"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.mandatory']}+'{NAME['DT']}'!{cl}${REG['DT.voluntary']}",
+                     FMT_MLN)
+        # Lease pay ← Lease
+        ref_cell(ws, REG["CF.lease_pay"], c_idx,
+                 f"='{NAME['LS']}'!{cl}${REG['LS.liab_pay']}", FMT_MLN)
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)

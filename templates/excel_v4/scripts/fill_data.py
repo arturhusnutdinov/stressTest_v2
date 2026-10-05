@@ -27,6 +27,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SV2_ROOT = BASE_DIR.parent.parent  # stressTest_v2 root
 REG = json.loads((BASE_DIR / "reg.json").read_text(encoding="utf-8"))
 
+# ── Unified column layout (must match build_model.py) ────────────────────────
+# ALL sheets: C-E = 3 hist years (2023-2025), F-H = 3 forecast years (2026E-2028E)
+N_HIST_DISPLAY = 3   # last 3 years shown in model sheets
+COL_START = 3        # col C = first year
+
 # ── Source data paths ────────────────────────────────────────────────────────
 
 SOURCES = {
@@ -263,13 +268,16 @@ def load_source_data(company: str) -> Dict[str, Any]:
 
 
 def fill_hist_sheet(wb, data: dict, company: str):
-    """Fill 02_Hist with IS/BS/CF data."""
+    """Fill 02_Hist with IS/BS/CF data.
+
+    02_Hist uses FULL history (all years, cols C onwards).
+    Other sheets use only last 3 years.
+    """
     ws = wb["02_Hist"]
     src = SOURCES[company]
-    hist_years = src["hist_years"]
+    hist_years = src["hist_years"]  # FULL history for 02_Hist
 
-    # Determine year columns (C onwards)
-    # Write year headers
+    # Write year headers for full history
     year_headers(ws, 4, hist_years, [])
 
     # Fill IS
@@ -358,13 +366,13 @@ def fill_hist_sheet(wb, data: dict, company: str):
 
 
 def fill_segments(wb, data: dict, company: str):
-    """Fill 11_Segments with operational data."""
+    """Fill 11_Segments with operational data (uses wider history for context)."""
     ws = wb["11_Segments"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"11_Segments — Operational Data").font = F_TITLE
 
     src = SOURCES[company]
-    hist_years = src["hist_years"][-8:]  # Last 8 years for segments
+    hist_years = src["hist_years"][-8:]  # 8 years for segments (wider view)
     year_headers(ws, 4, hist_years, src["fc_years"])
 
     segments_data = data.get("segments", [])
@@ -433,11 +441,13 @@ def fill_macro(wb, data: dict, company: str):
 
 
 def fill_revenue(wb, data: dict, company: str):
-    """Fill 10_Revenue with historical segment volumes & prices."""
+    """Fill 10_Revenue with historical segment volumes & prices.
+
+    Sources: segments_operational from Excel + project.yaml for missing years.
+    """
     ws = wb["10_Revenue"]
     segments_data = data.get("segments", [])
 
-    # Extract volume and price history per segment
     seg_vp: Dict[str, Dict[str, Dict[int, float]]] = {}
     for item in segments_data:
         seg = item["segment"]
@@ -445,8 +455,39 @@ def fill_revenue(wb, data: dict, company: str):
         if met in ("sales_kt", "production_kt", "avg_price_usd_t", "revenue"):
             seg_vp.setdefault(seg, {}).setdefault(met, {})[item["year"]] = item["value"]
 
+    # Supplement from project.yaml (has volume_history and price_history with 2025)
+    yaml_path = SV2_ROOT / f"companies/{company}/configs/project.yaml"
+    if yaml_path.exists():
+        import yaml
+        proj = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        custom_segs = proj.get("model", {}).get("custom", {}).get("revenue", {}).get("segments", {})
+        for seg_key, seg_cfg in custom_segs.items():
+            # Map yaml segment name to display name
+            name_map = {
+                "primary_al": "Primary Aluminium",
+                "alumina": "Alumina",
+                "other": "Other",
+                "nickel": "Nickel",
+                "copper": "Copper",
+                "pgm": "PGM",
+            }
+            display_name = name_map.get(seg_key, seg_key.title())
+            vol_hist = seg_cfg.get("volume_history", {})
+            price_hist = seg_cfg.get("price_history", {})
+
+            for yr, vol in vol_hist.items():
+                yr = int(yr)
+                seg_vp.setdefault(display_name, {}).setdefault("sales_kt", {})[yr] = float(vol)
+            for yr, price in price_hist.items():
+                yr = int(yr)
+                # YAML prices may be in tUSD (×1000) — normalize to $/t
+                p = float(price)
+                if p > 100000:  # likely in tUSD units (e.g., 2652000 = $2652/t × 1000)
+                    p = p / 1000
+                seg_vp.setdefault(display_name, {}).setdefault("avg_price_usd_t", {})[yr] = p
+
     src = SOURCES[company]
-    hist_years = src["hist_years"][-5:]
+    hist_years = src["hist_years"][-N_HIST_DISPLAY:]  # 3 years (match model layout)
 
     print(f"    Revenue segments: {len(seg_vp)} with volume/price data")
     # Fill into existing revenue rows (seg1, seg2, seg3)
@@ -488,6 +529,21 @@ def fill_revenue(wb, data: dict, company: str):
                 cell = ws.cell(price_r, col, round(price_data[year], 0))
                 cell.font = F_INPUT
                 cell.number_format = FMT_INT
+
+        # Forecast: carry forward last historical volume/price into F-H
+        fc_years = src["fc_years"]
+        fc_start_col = COL_START + N_HIST_DISPLAY  # col F = 6
+        last_vol = vol_data.get(hist_years[-1], vol_data.get(hist_years[-2], 0))
+        last_price = price_data.get(hist_years[-1], price_data.get(hist_years[-2], 0))
+
+        for i, yr in enumerate(fc_years):
+            c = fc_start_col + i
+            if last_vol > 0:
+                ws.cell(vol_r, c, round(last_vol, 0)).font = F_INPUT
+                ws.cell(vol_r, c).number_format = FMT_INT
+            if last_price > 0 and price_r:
+                ws.cell(price_r, c, round(last_price, 0)).font = F_INPUT
+                ws.cell(price_r, c).number_format = FMT_INT
 
 
 def fill_debt_hist(wb, data: dict, company: str):
@@ -594,6 +650,65 @@ def fill_debt_hist(wb, data: dict, company: str):
                 ws_bs.cell(REG[f"BS.{bs_key}"], 3, round(val, 1)).font = F_INPUT
 
 
+def fill_statement_history(wb, data: dict, company: str):
+    """Fill 21_PL and 23_CF history columns (E=2025) for forecast continuity."""
+    src = SOURCES[company]
+    last_yr = src["hist_years"][-1]
+    hc = COL_START + N_HIST_DISPLAY - 1  # col E = 5
+
+    is_d = data.get("is", {})
+    cf_d = data.get("cf", {})
+
+    # Fill CF history (last year) for cash opening
+    ws_cf = wb["23_CF"]
+    cf_map = {
+        "cfo_total": "cfo", "cfi_total": "cfi", "cff_total": "cff",
+        "capex": "capex", "net_change": "net_change",
+    }
+    filled = 0
+    for src_key, reg_suffix in cf_map.items():
+        val = cf_d.get(src_key, {}).get(last_yr)
+        if val is not None:
+            r = REG.get(f"CF.{reg_suffix}")
+            if r:
+                ws_cf.cell(r, hc, round(val, 1)).font = F_INPUT
+                ws_cf.cell(r, hc).number_format = FMT_MLN
+                filled += 1
+
+    # Cash opening = previous year closing cash from BS
+    bs_d = data.get("bs", {})
+    cash_open = bs_d.get("cash", {}).get(last_yr - 1, 0)
+    cash_close = bs_d.get("cash", {}).get(last_yr, 0)
+    if cash_close:
+        ws_cf.cell(REG["CF.cash_close"], hc, round(cash_close, 1)).font = F_INPUT
+        ws_cf.cell(REG["CF.cash_close"], hc).number_format = FMT_MLN
+    if cash_open:
+        ws_cf.cell(REG["CF.cash_open"], hc, round(cash_open, 1)).font = F_INPUT
+
+    # Fill PL history (last 3 years)
+    ws_pl = wb["21_PL"]
+    pl_map = {
+        "revenue": "revenue", "cogs": "cogs", "gross_profit": "gp",
+        "sga": "sga", "ebitda": "ebitda", "ebit": "ebit",
+        "interest_expense": "interest", "ebt": "ebt",
+        "tax_expense": "tax", "net_income": "ni",
+        "total_da": "da",
+    }
+    hist_3 = src["hist_years"][-N_HIST_DISPLAY:]
+    for yr in hist_3:
+        col = COL_START + hist_3.index(yr)
+        for src_key, reg_suffix in pl_map.items():
+            val = is_d.get(src_key, {}).get(yr)
+            if val is not None:
+                r = REG.get(f"PL.{reg_suffix}")
+                if r:
+                    ws_pl.cell(r, col, round(val, 1)).font = F_INPUT
+                    ws_pl.cell(r, col).number_format = FMT_MLN
+
+    print(f"    CF history: {filled} metrics for {last_yr}, cash={cash_close}")
+    print(f"    PL history: {len(pl_map)} metrics × {len(hist_3)} years")
+
+
 def fill_bs_history(wb, data: dict, company: str):
     """Fill 20_BS column C (last hist year) from BS history data."""
     ws = wb["20_BS"]
@@ -679,7 +794,7 @@ def fill_wc_days(wb, data: dict, company: str):
     """Compute DSO/DIO/DPO from historical AR/INV/AP/Rev/COGS."""
     ws = wb["16_WC"]
     src = SOURCES[company]
-    hist_years = src["hist_years"][-6:]  # last 6 years for WC display
+    hist_years = src["hist_years"][-N_HIST_DISPLAY:]  # last 3 years (match model layout)
 
     is_d = data.get("is", {})
     bs_d = data.get("bs", {})
@@ -729,7 +844,7 @@ def fill_wc_days(wb, data: dict, company: str):
 def fill_cogs_sga_from_history(wb, data: dict, company: str):
     """Fill 12_COGS and 13_SGA with historical ratios from IS data."""
     src = SOURCES[company]
-    hist_years = src["hist_years"][-6:]
+    hist_years = src["hist_years"][-N_HIST_DISPLAY:]  # 3 years (match model layout)
     fc_years = src["fc_years"]
 
     is_d = data.get("is", {})
@@ -879,6 +994,9 @@ def fill_all(company: str, model_path: str):
 
     print("\n7. Filling 17_Debt (opening balances)...")
     fill_debt_hist(wb, data, company)
+
+    print("\n7a. Filling statement sheets history (PL/CF col E)...")
+    fill_statement_history(wb, data, company)
 
     print("\n7b. Filling 20_BS history column from 02_Hist...")
     fill_bs_history(wb, data, company)
