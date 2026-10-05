@@ -1342,7 +1342,16 @@ def build_wc(wb, cfg):
 
 
 def build_debt(wb, cfg):
-    """17_Debt — aggregate debt corkscrew with simplified optimizer."""
+    """17_Debt — instrument-level debt schedule + aggregate corkscrew.
+
+    Structure:
+    1. AGGREGATE CORKSCREW (rows 7-21): totals for BS/CF linking
+    2. INSTRUMENT SCHEDULE (row 25+): top 15 instruments + Other
+       Each: Opening → Matures? → Refi → Interest → Closing
+
+    Circular: draw = IF(calc_reset=1, 0, MAX(0, min_cash - pre_cash))
+    Maturing instruments: mandatory repay + auto-refi at new rate
+    """
     ws = wb["17_Debt"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"17_Debt — {cfg['name']}").font = F_TITLE
@@ -1718,6 +1727,14 @@ def build_tax(wb, cfg):
         # NOL close = open - used
         formula_cell(ws, REG["TX.nol_close"], c_idx,
                      f"={cl}{REG['TX.nol_open']}-{cl}{REG['TX.nol_used']}", FMT_MLN)
+
+        # DTA/DTL: carry forward from previous year (simplified — no deferred tax calculation)
+        # In Python engine: DTA/DTL change = deferred tax expense
+        # Here: DTA_close = DTA_open (carry forward), DTL_close = DTL_open
+        formula_cell(ws, REG["TX.dta_open"], c_idx, f"={prev}{REG['TX.dta_close']}", FMT_MLN)
+        formula_cell(ws, REG["TX.dta_close"], c_idx, f"={cl}{REG['TX.dta_open']}", FMT_MLN)
+        formula_cell(ws, REG["TX.dtl_open"], c_idx, f"={prev}{REG['TX.dtl_close']}", FMT_MLN)
+        formula_cell(ws, REG["TX.dtl_close"], c_idx, f"={cl}{REG['TX.dtl_open']}", FMT_MLN)
 
 
 def build_valuation(wb, cfg):

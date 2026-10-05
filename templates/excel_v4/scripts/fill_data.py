@@ -671,6 +671,81 @@ def fill_debt_hist(wb, data: dict, company: str):
     ws.cell(REG["DT.nd"], hc, round(nd, 1)).font = F_FORMULA
     ws.cell(REG["DT.nd"], hc).number_format = FMT_MLN
 
+    # ── INSTRUMENT SCHEDULE ──
+    # Fill top instruments below aggregate corkscrew (row 25+)
+    debt_instruments = data.get("debt", [])
+    if debt_instruments:
+        # Sort by balance descending
+        instruments = sorted(debt_instruments, key=lambda x: -abs(float(x.get("opening_balance", 0) or 0)))
+        top_n = min(15, len(instruments))
+
+        r_start = 25
+        section_header(ws, r_start - 1, f"ИНСТРУМЕНТЫ ({len(instruments)} всего, top {top_n})")
+
+        # Headers
+        ws.cell(r_start, 1, "Инструмент").font = F_YEAR
+        ws.cell(r_start, 2, "Валюта").font = F_YEAR
+        ws.cell(r_start, 3, "Баланс").font = F_YEAR
+        ws.cell(r_start, 4, "Ставка").font = F_YEAR
+        ws.cell(r_start, 5, "Тип").font = F_YEAR
+        ws.cell(r_start, 6, "Погашение").font = F_YEAR
+
+        other_balance = 0
+        other_interest = 0
+        for i, inst in enumerate(instruments):
+            bal = abs(float(inst.get("opening_balance", 0) or 0))
+            rate = float(inst.get("interest_rate", 0) or 0)
+            name = str(inst.get("instrument_name", f"Instrument_{i+1}"))[:35]
+            ccy = str(inst.get("currency", "USD"))
+            rtype = str(inst.get("rate_type", "fixed"))
+            maturity = str(inst.get("maturity_date", ""))
+
+            if i < top_n:
+                r = r_start + 1 + i
+                ws.cell(r, 1, name).font = F_LABEL
+                ws.cell(r, 2, ccy).font = F_LABEL
+                ws.cell(r, 3, round(bal / 1e6, 1)).font = F_INPUT  # mln
+                ws.cell(r, 3).number_format = FMT_MLN
+                ws.cell(r, 4, rate).font = F_INPUT
+                ws.cell(r, 4).number_format = FMT_PCT2
+                ws.cell(r, 5, rtype).font = F_LABEL
+                ws.cell(r, 6, maturity).font = F_LABEL
+            else:
+                other_balance += bal
+                other_interest += bal * rate
+
+        # Other bucket
+        r_other = r_start + 1 + top_n
+        ws.cell(r_other, 1, f"Other ({len(instruments) - top_n} instruments)").font = F_LABEL_B
+        ws.cell(r_other, 3, round(other_balance / 1e6, 1)).font = F_INPUT
+        ws.cell(r_other, 3).number_format = FMT_MLN
+        if other_balance > 0:
+            ws.cell(r_other, 4, round(other_interest / other_balance, 4)).font = F_INPUT
+            ws.cell(r_other, 4).number_format = FMT_PCT2
+
+        # Total row
+        r_total_inst = r_other + 1
+        ws.cell(r_total_inst, 1, "ИТОГО").font = F_LABEL_B
+        total_col = get_column_letter(3)
+        formula_cell(ws, r_total_inst, 3,
+                     f"=SUM({total_col}{r_start+1}:{total_col}{r_other})", FMT_MLN, bold=True)
+
+        print(f"    Instruments: {top_n} top + Other ({len(instruments)-top_n}), total={total/1e6:.0f}M")
+
+    # Fill Tax DTA/DTL history
+    if "19_Tax" in wb.sheetnames:
+        ws_tx = wb["19_Tax"]
+        dta = abs(bs.get("dta", {}).get(last_yr, 0))
+        dtl = abs(bs.get("dtl", {}).get(last_yr, 0))
+        if dta:
+            ws_tx.cell(REG["TX.dta_open"], hc, round(dta, 1)).font = F_INPUT
+            ws_tx.cell(REG["TX.dta_close"], hc, round(dta, 1)).font = F_INPUT
+        if dtl:
+            ws_tx.cell(REG["TX.dtl_open"], hc, round(dtl, 1)).font = F_INPUT
+            ws_tx.cell(REG["TX.dtl_close"], hc, round(dtl, 1)).font = F_INPUT
+        if dta or dtl:
+            print(f"    Tax: DTA={dta:.0f} DTL={dtl:.0f}")
+
     # Fill lease opening from BS
     if "18_Lease" in wb.sheetnames:
         ws_l = wb["18_Lease"]
