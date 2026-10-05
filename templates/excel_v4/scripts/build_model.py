@@ -933,7 +933,7 @@ def build_checks(wb, cfg):
 
     for key, label, src_code, src_key in checks:
         r = REG.get(f"CK.{key}", 7)
-        label_row(ws, r, label, "mln", "= 0 ✓")
+        label_row(ws, r, label, "mln", "Должно быть 0")
 
     # BS check formula
     n_hist = 1
@@ -1502,13 +1502,13 @@ def build_valuation(wb, cfg):
     section_header(ws, r, "D. DCF RESULT")
     r += 1
     tv_r = r
-    label_row(ws, r, "Terminal Value (EV/EBITDA)", "mln", "= EBITDA_last × multiple")
+    label_row(ws, r, "Terminal Value (EV/EBITDA)", "mln", "EBITDA_last × multiple")
     last_fc_col = get_column_letter(7 + n_fc - 1)
     formula_cell(ws, r, 3,
                  f"='{NAME['PL']}'!{last_fc_col}${REG['PL.ebitda']}*$C${REG['VL.tm']}", FMT_MLN)
     r += 1
     tv_perp_r = r
-    label_row(ws, r, "Terminal Value (Perpetuity)", "mln", "= FCFF_last × (1+g) / (WACC−g)")
+    label_row(ws, r, "Terminal Value (Perpetuity)", "mln", "FCFF_last × (1+g) / (WACC-g)")
     formula_cell(ws, r, 3,
                  f"=IFERROR({last_fc_col}{fcff_start_r + 6}*(1+$C${REG['VL.tg']})"
                  f"/($C${r_wacc}-$C${REG['VL.tg']}),0)", FMT_MLN)
@@ -1753,7 +1753,7 @@ def build_revstress(wb, cfg):
     label_row(ws, 8, f"Порог ND/EBITDA: {nd_max}x")
     input_cell(ws, 8, 3, nd_max, FMT_MULT)
 
-    label_row(ws, 10, "Breakeven Revenue shock (%)", "%", "= Revenue(actual) × (1 + shock)")
+    label_row(ws, 10, "Breakeven Revenue shock (%)", "%", "Revenue(actual) × (1 + shock)")
     label_row(ws, 11, "Breakeven EBITDA shock (%)", "%")
     label_row(ws, 12, "Breakeven Interest rate shock (bp)", "bp")
 
