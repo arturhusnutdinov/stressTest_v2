@@ -920,6 +920,149 @@ def build_wc(wb, cfg):
         formula_cell(ws, r_delta, c, f"={cl}{r_nwc}-{prev}{r_nwc}", FMT_MLN)
 
 
+def build_debt(wb, cfg):
+    """17_Debt — aggregate debt corkscrew with simplified optimizer."""
+    ws = wb["17_Debt"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"17_Debt — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Долговой портфель: Open + Draw − Repay = Close, Interest = Avg × Rate").font = F_SUBTITLE
+    n_hist = 1
+    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+
+    section_header(ws, 6, "ДОЛГОВОЙ CORKSCREW (агрегированный)")
+    debt_items = [
+        ("open", "Долг, начало периода", "mln"),
+        ("draw", "Привлечение (draw)", "mln"),
+        ("mandatory", "Обязательное погашение", "mln"),
+        ("voluntary", "Добровольное погашение", "mln"),
+        ("refi", "Рефинансирование", "mln"),
+        ("close", "Долг, конец периода", "mln"),
+    ]
+    for key, label, unit in debt_items:
+        r = REG[f"DT.{key}"]
+        label_row(ws, r, label, unit)
+
+    section_header(ws, REG["DT.interest"] - 1, "ПРОЦЕНТНЫЕ РАСХОДЫ")
+    label_row(ws, REG["DT.interest"], "Процентные расходы", "mln")
+    label_row(ws, REG["DT.avg_rate"], "Средневзвешенная ставка", "%")
+
+    section_header(ws, REG["DT.st"] - 1, "ST / LT РАЗБИВКА")
+    label_row(ws, REG["DT.st"], "Краткосрочный долг (ST)", "mln")
+    label_row(ws, REG["DT.lt"], "Долгосрочный долг (LT)", "mln")
+    label_row(ws, REG["DT.nd"], "Чистый долг (ND)", "mln")
+    label_row(ws, REG["DT.nd_ebitda"], "ND / EBITDA", "x")
+
+    # Formulas for forecast columns
+    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c_idx)
+        prev = get_column_letter(c_idx - 1)
+
+        # Open = prev close
+        formula_cell(ws, REG["DT.open"], c_idx, f"={prev}{REG['DT.close']}", FMT_MLN)
+
+        # Draw, mandatory, voluntary — inputs
+        for k in ["draw", "mandatory", "voluntary", "refi"]:
+            input_cell(ws, REG[f"DT.{k}"], c_idx, 0, FMT_MLN)
+
+        # Close = open + draw - mandatory - voluntary + refi
+        formula_cell(ws, REG["DT.close"], c_idx,
+                     f"={cl}{REG['DT.open']}+{cl}{REG['DT.draw']}"
+                     f"-ABS({cl}{REG['DT.mandatory']})-ABS({cl}{REG['DT.voluntary']})"
+                     f"+{cl}{REG['DT.refi']}",
+                     FMT_MLN, bold=True)
+
+        # Interest = avg balance × rate
+        formula_cell(ws, REG["DT.interest"], c_idx,
+                     f"=({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']}",
+                     FMT_MLN)
+
+        # Avg rate — input (can be linked to macro key rate later)
+        input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
+
+        # ST / LT split — simplified: 30% ST / 70% LT
+        formula_cell(ws, REG["DT.st"], c_idx,
+                     f"={cl}{REG['DT.close']}*0.3", FMT_MLN)
+        formula_cell(ws, REG["DT.lt"], c_idx,
+                     f"={cl}{REG['DT.close']}*0.7", FMT_MLN)
+
+        # Net Debt = Total Debt - Cash
+        formula_cell(ws, REG["DT.nd"], c_idx,
+                     f"={cl}{REG['DT.close']}-'{NAME['BS']}'!{cl}${REG['BS.cash']}",
+                     FMT_MLN, bold=True)
+
+        # ND/EBITDA
+        formula_cell(ws, REG["DT.nd_ebitda"], c_idx,
+                     f"=IFERROR({cl}{REG['DT.nd']}/'{NAME['PL']}'!{cl}${REG['PL.ebitda']},0)",
+                     FMT_MULT)
+
+    # Historical debt opening (from last hist year)
+    hist_col = get_column_letter(3)  # C = last hist year
+    for k in ["open", "close"]:
+        input_cell(ws, REG[f"DT.{k}"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
+
+
+def build_lease(wb, cfg):
+    """18_Lease — IFRS 16 ROU asset + lease liability corkscrew."""
+    ws = wb["18_Lease"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"18_Lease — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "IFRS 16: ROU Asset dep + Lease Liability interest/payment").font = F_SUBTITLE
+    n_hist = 1
+    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+
+    section_header(ws, 6, "ROU ASSET (ПРАВО ПОЛЬЗОВАНИЯ)")
+    rou_items = [
+        ("rou_open", "ROU начало", "mln"),
+        ("rou_dep", "Амортизация ROU", "mln"),
+        ("rou_close", "ROU конец", "mln"),
+    ]
+    for key, label, unit in rou_items:
+        r = REG[f"LS.{key}"]
+        label_row(ws, r, label, unit)
+
+    section_header(ws, REG["LS.liab_open"] - 1, "LEASE LIABILITY (ОБЯЗАТЕЛЬСТВО)")
+    liab_items = [
+        ("liab_open", "Обязательство, начало", "mln"),
+        ("liab_int", "Процент по аренде", "mln"),
+        ("liab_pay", "Арендный платёж", "mln"),
+        ("liab_close", "Обязательство, конец", "mln"),
+    ]
+    for key, label, unit in liab_items:
+        r = REG[f"LS.{key}"]
+        label_row(ws, r, label, unit)
+
+    # Formulas
+    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c_idx)
+        prev = get_column_letter(c_idx - 1)
+
+        # ROU: open = prev close
+        formula_cell(ws, REG["LS.rou_open"], c_idx, f"={prev}{REG['LS.rou_close']}", FMT_MLN)
+        # ROU dep (input or formula: open / remaining_life)
+        input_cell(ws, REG["LS.rou_dep"], c_idx, 0, FMT_MLN)
+        # ROU close = open - dep
+        formula_cell(ws, REG["LS.rou_close"], c_idx,
+                     f"={cl}{REG['LS.rou_open']}-ABS({cl}{REG['LS.rou_dep']})", FMT_MLN)
+
+        # Liab: open = prev close
+        formula_cell(ws, REG["LS.liab_open"], c_idx, f"={prev}{REG['LS.liab_close']}", FMT_MLN)
+        # Interest = open × discount_rate (input)
+        formula_cell(ws, REG["LS.liab_int"], c_idx,
+                     f"={cl}{REG['LS.liab_open']}*0.06", FMT_MLN)
+        # Payment (input)
+        input_cell(ws, REG["LS.liab_pay"], c_idx, 0, FMT_MLN)
+        # Close = open + interest - payment
+        formula_cell(ws, REG["LS.liab_close"], c_idx,
+                     f"={cl}{REG['LS.liab_open']}+{cl}{REG['LS.liab_int']}-ABS({cl}{REG['LS.liab_pay']})",
+                     FMT_MLN)
+
+    # Historical opening (last hist year)
+    for k in ["rou_open", "rou_close", "liab_open", "liab_close"]:
+        input_cell(ws, REG[f"LS.{k}"], 3, 0, FMT_MLN)
+
+
 def build_cf(wb, cfg):
     """23_CF — Cash Flow Statement (indirect method)."""
     ws = wb["23_CF"]
@@ -1876,6 +2019,8 @@ def build(company: str, output: str):
         ("13_SGA",          build_sga),
         ("15_PPE",          build_ppe),
         ("16_WC",           build_wc),
+        ("17_Debt",         build_debt),
+        ("18_Lease",        build_lease),
         ("19_Tax",          build_tax),
         ("20_BS",           build_bs),
         ("21_PL",           build_pl),
