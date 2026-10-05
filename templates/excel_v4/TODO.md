@@ -75,7 +75,12 @@
 | 8 | EBITDA 2011-2014 Rusal: вычислен как GP+SGA+DA (не из source) — проверить | FIXED | 2026-10-05 |
 | 9 | 14_OtherIS: пустой лист — нужен builder | LOW | 2026-10-05 |
 | 10 | Nornickel PPE_gross=0: unified не имеет gross/accum_dep, только net | INFO | 2026-10-05 |
-| 11 | Circular solver (Debt↔Cash) не реализован — нужен seed/relax pattern | OPEN | 2026-10-05 |
+| 11 | Circular solver (Debt↔Cash) не реализован — нужен seed/relax pattern | FIXING | 2026-10-05 |
+| 15 | **CRITICAL**: Эконометрика макро-факторов: Revenue = β×Δln(Factor), COGS = β×Δln(PPI) | OPEN | 2026-10-05 |
+| 16 | Revenue forecast: НЕ carry-forward а macro-driven (β from OLS на Δln series) | OPEN | 2026-10-05 |
+| 17 | COGS forecast: component model с macro factors (alumina, energy, FX, CPI) | OPEN | 2026-10-05 |
+| 18 | 01_Macro: regression display (β, R², α, factor forecasts) | OPEN | 2026-10-05 |
+| 19 | Preprocessing: EWA with AR(1) (if R²>0.3 use AR1, else EWA) | OPEN | 2026-10-05 |
 | 12 | Forecast columns в COGS/SGA — формулы ratio, но нужны input или forecast-method | FIXED | 2026-10-05 |
 | 13 | **CRITICAL**: Column misalignment — Revenue/WC use C-E=hist+F-H=fc, but BS/PL/CF use C=hist+D-F=fc | FIXING | 2026-10-05 |
 | 14 | BS history col C not filled for Other_CA, Lease, Reserves → carry-forward = 0 | FIXED | 2026-10-05 |

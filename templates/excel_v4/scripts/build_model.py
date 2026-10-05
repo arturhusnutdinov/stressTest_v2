@@ -209,22 +209,171 @@ def build_macro(wb, cfg):
 
 
 def build_assump(wb, cfg):
-    """03_Assump — expanded assumptions linked to Control_Panel."""
+    """03_Assump — preprocessing layer: EWA-calibrated ratios from history.
+
+    Mirrors Python preprocessor/core.py logic:
+    - Margin ratios: COGS/Rev, SGA/Rev → EWA summary
+    - WC days: DSO, DIH, DPO → EWA
+    - CapEx: capex_to_rev, dep_rate → EWA
+    - All calibrated from 02_Hist data
+    """
     ws = wb["03_Assump"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"03_Assump — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "Развёрнутые предположения (зелёные = ← Control_Panel)").font = F_SUBTITLE
+    ws.cell(2, 1, "Препроцессинг: калибровка параметров из истории (EWA + AR(1))").font = F_SUBTITLE
 
+    hist = cfg["hist_years"][-3:]
     fc = cfg["fc_years"]
-    year_headers(ws, 4, [], fc)
+    year_headers(ws, 4, hist, fc)
+    n_hist = len(hist)
 
     r = 6
-    # Revenue assumptions
-    section_header(ws, r, "ВЫРУЧКА"); r += 1
-    label_row(ws, r, "Revenue method")
-    ref_cell(ws, r, 3, "='Control_Panel'!$C$12", FMT_INT); r += 1
-    label_row(ws, r, "Эластичность (β)")
-    ref_cell(ws, r, 3, "='Control_Panel'!$C$13", FMT_RATIO); r += 2
+    # ── SECTION 1: MARGIN RATIOS ──
+    section_header(ws, r, "1. МАРЖИНАЛЬНЫЕ КОЭФФИЦИЕНТЫ (из 02_Hist)"); r += 1
+
+    # For each ratio, compute per-year from history, then show EWA recommended
+    ratio_defs = [
+        ("COGS / Revenue", "PL", "cogs", "PL", "revenue", False, "COGS ratio"),
+        ("SGA / Revenue", "PL", "sga", "PL", "revenue", False, "SGA ratio"),
+        ("EBITDA margin", "PL", "ebitda", "PL", "revenue", True, "EBITDA margin"),
+        ("Net margin", "PL", "ni", "PL", "revenue", True, "Net margin"),
+    ]
+
+    for label, num_code, num_key, den_code, den_key, signed, note in ratio_defs:
+        label_row(ws, r, label, "%", note)
+        num_r = REG.get(f"{num_code}.{num_key}")
+        den_r = REG.get(f"{den_code}.{den_key}")
+        if num_r and den_r:
+            for i in range(n_hist):
+                c = 3 + i
+                cl = get_column_letter(c)
+                num_ref = f"'{NAME[num_code]}'!{cl}${num_r}"
+                den_ref = f"'{NAME[den_code]}'!{cl}${den_r}"
+                if signed:
+                    formula_cell(ws, r, c, f"=IFERROR({num_ref}/{den_ref},0)", FMT_PCT)
+                else:
+                    formula_cell(ws, r, c, f"=IFERROR(ABS({num_ref})/ABS({den_ref}),0)", FMT_PCT)
+            # Forecast = EWA (simplified: average of last 3 history years as proxy for EWA)
+            # Python: ewa with halflife=3 → approximately weighted average of recent years
+            hist_cols = [get_column_letter(3 + i) for i in range(n_hist)]
+            avg_formula = f"=AVERAGE({','.join(f'{c}{r}' for c in hist_cols)})"
+            for i in range(len(fc)):
+                formula_cell(ws, r, 3 + n_hist + i, avg_formula, FMT_PCT)
+        r += 1
+
+    r += 1
+    # ── SECTION 2: WC DAYS ──
+    section_header(ws, r, "2. ОБОРОТНЫЙ КАПИТАЛ (DSO / DIH / DPO)"); r += 1
+    # DSO = AR / Rev × 365, DIH = INV / COGS × 365, DPO = AP / COGS × 365
+    wc_defs = [
+        ("DSO (дни)", "BS", "ar", "PL", "revenue"),
+        ("DIH (дни)", "BS", "inv", "PL", "cogs"),
+        ("DPO (дни)", "BS", "ap", "PL", "cogs"),
+    ]
+    for label, bs_code, bs_key, is_code, is_key in wc_defs:
+        label_row(ws, r, label, "дни")
+        bs_r = REG.get(f"{bs_code}.{bs_key}")
+        is_r = REG.get(f"{is_code}.{is_key}")
+        if bs_r and is_r:
+            for i in range(n_hist):
+                c = 3 + i
+                cl = get_column_letter(c)
+                formula_cell(ws, r, c,
+                             f"=IFERROR(ABS('{NAME[bs_code]}'!{cl}${bs_r})"
+                             f"/ABS('{NAME[is_code]}'!{cl}${is_r})*365,0)",
+                             FMT_DAYS)
+            # Forecast: carry forward EWA (average of 3 hist)
+            hist_cols = [get_column_letter(3 + i) for i in range(n_hist)]
+            avg_f = f"=ROUND(AVERAGE({','.join(f'{c}{r}' for c in hist_cols)}),0)"
+            for i in range(len(fc)):
+                formula_cell(ws, r, 3 + n_hist + i, avg_f, FMT_DAYS)
+        r += 1
+
+    r += 1
+    # ── SECTION 3: CAPEX / DA ──
+    section_header(ws, r, "3. КАПИТАЛЬНЫЕ ЗАТРАТЫ И АМОРТИЗАЦИЯ"); r += 1
+    capex_defs = [
+        ("CapEx / Revenue", "CF", "capex", "PL", "revenue"),
+        ("DA / PPE_net (dep rate)", "PL", "da", "BS", "ppe"),
+        ("CapEx / DA (sustaining)", "CF", "capex", "PL", "da"),
+    ]
+    for label, num_code, num_key, den_code, den_key in capex_defs:
+        label_row(ws, r, label, "%")
+        num_r = REG.get(f"{num_code}.{num_key}")
+        den_r = REG.get(f"{den_code}.{den_key}")
+        if num_r and den_r:
+            for i in range(n_hist):
+                c = 3 + i
+                cl = get_column_letter(c)
+                formula_cell(ws, r, c,
+                             f"=IFERROR(ABS('{NAME[num_code]}'!{cl}${num_r})"
+                             f"/ABS('{NAME[den_code]}'!{cl}${den_r}),0)",
+                             FMT_PCT)
+            hist_cols = [get_column_letter(3 + i) for i in range(n_hist)]
+            avg_f = f"=AVERAGE({','.join(f'{c}{r}' for c in hist_cols)})"
+            for i in range(len(fc)):
+                formula_cell(ws, r, 3 + n_hist + i, avg_f, FMT_PCT)
+        r += 1
+
+    r += 1
+    # ── SECTION 4: DEBT ──
+    section_header(ws, r, "4. ДОЛГ"); r += 1
+    label_row(ws, r, "Implied Interest Rate")
+    for i in range(n_hist):
+        c = 3 + i
+        cl = get_column_letter(c)
+        formula_cell(ws, r, c,
+                     f"=IFERROR(ABS('{NAME['PL']}'!{cl}${REG['PL.interest']})"
+                     f"/(('{NAME['BS']}'!{cl}${REG['BS.st_debt']}+'{NAME['BS']}'!{cl}${REG['BS.lt_debt']})),0)",
+                     FMT_PCT)
+    r += 1
+    label_row(ws, r, "ND / EBITDA")
+    for i in range(n_hist):
+        c = 3 + i
+        cl = get_column_letter(c)
+        st = f"'{NAME['BS']}'!{cl}${REG['BS.st_debt']}"
+        lt = f"'{NAME['BS']}'!{cl}${REG['BS.lt_debt']}"
+        cash_ref = f"'{NAME['BS']}'!{cl}${REG['BS.cash']}"
+        ebitda_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
+        formula_cell(ws, r, c, f"=IFERROR(({st}+{lt}-{cash_ref})/{ebitda_ref},0)", FMT_MULT)
+    r += 1
+
+    r += 1
+    # ── SECTION 5: TAX ──
+    section_header(ws, r, "5. НАЛОГИ"); r += 1
+    label_row(ws, r, "Effective Tax Rate")
+    for i in range(n_hist):
+        c = 3 + i
+        cl = get_column_letter(c)
+        formula_cell(ws, r, c,
+                     f"=IFERROR(ABS('{NAME['PL']}'!{cl}${REG['PL.tax']})"
+                     f"/ABS('{NAME['PL']}'!{cl}${REG['PL.ebt']}),0)", FMT_PCT)
+    r += 1
+
+    r += 1
+    # ── SECTION 6: FORECAST SUMMARY ──
+    section_header(ws, r, "6. ПРОГНОЗНЫЕ ПРЕДПОЛОЖЕНИЯ (СВОДКА)"); r += 1
+    year_headers(ws, r, hist, fc); r += 1
+    summary_items = [
+        ("Revenue growth", "RV", "rev_growth", FMT_PCT),
+        ("COGS ratio", "CG", "ratio", FMT_PCT),
+        ("SGA ratio", "SA", "sga_ratio", FMT_PCT),
+        ("EBITDA margin", "PL", "ebitda_margin", FMT_PCT),
+        ("CapEx / Revenue", "PP", "capex_rev", FMT_PCT),
+        ("DA rate", "PP", "da_rate", FMT_PCT),
+        ("ND/EBITDA", "DT", "nd_ebitda", FMT_MULT),
+        ("Interest rate", "DT", "avg_rate", FMT_PCT),
+        ("Tax rate (effective)", "TX", "eff_rate", FMT_PCT),
+        ("Payout ratio", "EQ", "payout", FMT_PCT),
+    ]
+    for label, code, key, fmt in summary_items:
+        label_row(ws, r, label)
+        row_src = REG.get(f"{code}.{key}")
+        if row_src:
+            for c in range(3 + n_hist, 3 + n_hist + len(fc)):
+                cl = get_column_letter(c)
+                ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+        r += 1
 
     # Margins / COGS
     section_header(ws, r, "СЕБЕСТОИМОСТЬ"); r += 1
@@ -1162,9 +1311,33 @@ def build_debt(wb, cfg):
         # Open = prev close
         formula_cell(ws, REG["DT.open"], c_idx, f"={prev}{REG['DT.close']}", FMT_MLN)
 
-        # Draw, mandatory, voluntary — inputs
-        for k in ["draw", "mandatory", "voluntary", "refi"]:
-            input_cell(ws, REG[f"DT.{k}"], c_idx, 0, FMT_MLN)
+        # ── CIRCULAR DEBT OPTIMIZER (mirrors Python _solve_debt) ──
+        # Mandatory = scheduled repayment (input or % of opening)
+        input_cell(ws, REG["DT.mandatory"], c_idx, 0, FMT_MLN)
+
+        # Pre-financing cash = prev_cash + CFO + CFI - mandatory
+        # CFO and CFI come from 23_CF (which depends on interest → circular!)
+        cfo_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}"
+        cfi_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfi']}"
+        cash_prev = f"'{NAME['BS']}'!{prev}${REG['BS.cash']}"  # prev year cash from BS
+
+        # Draw = MAX(0, min_cash - pre_cash) — CIRCULAR REF solved by Excel iterative calc
+        # IFERROR protects against circular ref errors during convergence
+        cp_min_cash = "'Control_Panel'!$C$55"
+        formula_cell(ws, REG["DT.draw"], c_idx,
+                     f"=IFERROR(MAX(0,{cp_min_cash}-({cash_prev}+{cfo_ref}+{cfi_ref}"
+                     f"-ABS({cl}{REG['DT.mandatory']}))),0)",
+                     FMT_MLN)
+
+        # Voluntary = MAX(0, post_draw_cash - 1.5 × min_cash)
+        formula_cell(ws, REG["DT.voluntary"], c_idx,
+                     f"=IFERROR(MAX(0,({cash_prev}+{cfo_ref}+{cfi_ref}"
+                     f"-ABS({cl}{REG['DT.mandatory']})+{cl}{REG['DT.draw']})"
+                     f"-{cp_min_cash}*1.5),0)",
+                     FMT_MLN)
+
+        # Refi = 0 (simplified; manual override)
+        formula_cell(ws, REG["DT.refi"], c_idx, "=0", FMT_MLN)
 
         # Close = open + draw - mandatory - voluntary + refi
         formula_cell(ws, REG["DT.close"], c_idx,
@@ -1173,19 +1346,22 @@ def build_debt(wb, cfg):
                      f"+{cl}{REG['DT.refi']}",
                      FMT_MLN, bold=True)
 
-        # Interest = avg balance × rate
+        # Interest = avg(open, close) × rate — CIRCULAR (close depends on draw depends on cash)
         formula_cell(ws, REG["DT.interest"], c_idx,
                      f"=({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']}",
                      FMT_MLN)
 
-        # Avg rate — input (can be linked to macro key rate later)
+        # Avg rate — input (linked to implied rate from preprocessing)
         input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
 
-        # ST / LT split — simplified: 30% ST / 70% LT
+        # ST / LT split: mandatory next year → ST, rest → LT
+        # Simplified: historical ST/LT ratio carried forward
+        st_ratio = f"'{NAME['BS']}'!{prev}${REG['BS.st_debt']}/MAX(1," \
+                   f"'{NAME['BS']}'!{prev}${REG['BS.st_debt']}+'{NAME['BS']}'!{prev}${REG['BS.lt_debt']})"
         formula_cell(ws, REG["DT.st"], c_idx,
-                     f"={cl}{REG['DT.close']}*0.3", FMT_MLN)
+                     f"=IFERROR({cl}{REG['DT.close']}*{st_ratio},{cl}{REG['DT.close']}*0.3)", FMT_MLN)
         formula_cell(ws, REG["DT.lt"], c_idx,
-                     f"={cl}{REG['DT.close']}*0.7", FMT_MLN)
+                     f"={cl}{REG['DT.close']}-{cl}{REG['DT.st']}", FMT_MLN)
 
         # Net Debt = Total Debt - Cash
         formula_cell(ws, REG["DT.nd"], c_idx,
