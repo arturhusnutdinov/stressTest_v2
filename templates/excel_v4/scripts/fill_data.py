@@ -740,24 +740,31 @@ def fill_bs_history(wb, data: dict, company: str):
         "total_assets": "ta", "total_liabilities": "tl",
         "total_equity": "te", "retained_earnings": "re",
         "share_capital": "sc", "apic": "apic", "aoci": "aoci",
+        "nci": "aoci",  # NCI included in AOCI row for simplicity
+        "investments_lt": "other_nca",  # included in other NCA
         "total_ca": "tca", "total_nca": "tnca",
         "total_cl": "tcl", "total_ncl": "tncl",
     }
 
     # Fill BS for ALL 3 history years (C=2023, D=2024, E=2025)
+    # Accumulate values for keys that map to same BS row (e.g., investments_lt + other_nca → other_nca)
     hist_3 = src["hist_years"][-N_HIST_DISPLAY:]
 
     filled = 0
     for yr_idx, yr in enumerate(hist_3):
         col = COL_START + yr_idx
+        # Accumulate per-row
+        row_accum: Dict[int, float] = {}
         for src_key, bs_key in bs_map.items():
             val = bs.get(src_key, {}).get(yr)
             if val is not None and isinstance(val, (int, float)):
                 r = REG.get(f"BS.{bs_key}")
                 if r:
-                    ws.cell(r, col, round(val, 1)).font = F_INPUT
-                    ws.cell(r, col).number_format = FMT_MLN
-                    filled += 1
+                    row_accum[r] = row_accum.get(r, 0) + val
+        for r, val in row_accum.items():
+            ws.cell(r, col, round(val, 1)).font = F_INPUT
+            ws.cell(r, col).number_format = FMT_MLN
+            filled += 1
 
     # Also compute missing totals
     # Other CA = TCA - cash - ar - inv (if available)
