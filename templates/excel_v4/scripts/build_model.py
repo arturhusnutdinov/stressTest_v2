@@ -1115,97 +1115,401 @@ def build_tax(wb, cfg):
 
 
 def build_valuation(wb, cfg):
-    """35_Valuation — DCF + SOTP + Sensitivity."""
+    """35_Valuation — DCF + SOTP + Sensitivity (full formulas)."""
     ws = wb["35_Valuation"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"35_Valuation — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "DCF + SOTP + Sensitivity Matrix").font = F_SUBTITLE
+    ws.cell(2, 1, "DCF (FCFF) + SOTP + Sensitivity Matrix").font = F_SUBTITLE
 
-    section_header(ws, 6, "A. WACC (Cost of Capital)")
+    fc = cfg["fc_years"]
+    n_fc = len(fc)
+
+    # ── A. WACC ──
+    section_header(ws, 6, "A. WACC (Cost of Capital: CAPM)")
     for key, label, default in [
-        ("rf", "Risk-free rate (Rf)", 0.10), ("beta", "Beta", 1.1),
-        ("erp", "Equity Risk Premium", 0.07), ("crp", "Country Risk Premium", 0.04),
-        ("scp", "Size/Company Premium", 0.01),
+        ("rf", "Risk-free rate (Rf, нормализованная ОФЗ 10Y)", 0.10),
+        ("beta", "Beta (отрасль)", 1.1),
+        ("erp", "Equity Risk Premium (ERP)", 0.07),
+        ("crp", "Country Risk Premium (CRP)", 0.04),
+        ("scp", "Size/Company Premium (SCP)", 0.01),
     ]:
         r = REG[f"VL.{key}"]
-        label_row(ws, r, label, "%")
+        label_row(ws, r, label, "%" if key != "beta" else "x")
         input_cell(ws, r, 3, default, FMT_PCT2 if key != "beta" else FMT_RATIO)
 
     r_wacc = REG["VL.wacc"]
-    label_row(ws, r_wacc, "WACC (Ke)", "%")
+    label_row(ws, r_wacc, "WACC = Rf + β×ERP + CRP + SCP", "%", "Ke для DCF")
     formula_cell(ws, r_wacc, 3,
                  f"=$C${REG['VL.rf']}+$C${REG['VL.beta']}*$C${REG['VL.erp']}+"
                  f"$C${REG['VL.crp']}+$C${REG['VL.scp']}", FMT_PCT2, bold=True)
 
-    section_header(ws, REG["VL.tg"] - 1, "B. TERMINAL VALUE")
-    for key, label, default in [("tg", "Terminal growth (g)", 0.03),
-                                 ("tm", "Terminal EV/EBITDA", 6.0)]:
-        r = REG[f"VL.{key}"]
-        label_row(ws, r, label)
-        input_cell(ws, r, 3, default, FMT_PCT if key == "tg" else FMT_MULT)
+    # ── B. TERMINAL VALUE ──
+    section_header(ws, REG["VL.tg"] - 1, "B. TERMINAL VALUE PARAMETERS")
+    input_cell(ws, REG["VL.tg"], 3, 0.03, FMT_PCT)
+    label_row(ws, REG["VL.tg"], "Terminal growth rate (g)", "%", "Долгосрочный рост ~ ном. ВВП")
+    input_cell(ws, REG["VL.tm"], 3, 6.0, FMT_MULT)
+    label_row(ws, REG["VL.tm"], "Terminal EV/EBITDA multiple", "x", "Peer median")
 
-    section_header(ws, REG["VL.ev"] - 1, "C. DCF RESULT")
-    for key, label in [("ev", "Enterprise Value"), ("nd", "Net Debt"), ("eq_value", "Equity Value")]:
-        r = REG[f"VL.{key}"]
-        label_row(ws, r, label, "mln")
+    # ── C. DCF — FCFF CALCULATION ──
+    r = REG["VL.ev"] - 8  # space for FCFF rows
+    section_header(ws, r, "C. DCF: FREE CASH FLOW TO FIRM (FCFF)")
+    r += 1
+    year_headers(ws, r, [], fc)
+    r += 1
 
-    section_header(ws, REG["VL.sotp_total"] - 1, "D. SOTP (Sum of the Parts)")
-    label_row(ws, REG["VL.sotp_total"], "SOTP Enterprise Value", "mln")
+    # FCFF rows
+    fcff_items = [
+        ("EBIT", f"'{NAME['PL']}'!{{cl}}${REG['PL.ebit']}"),
+        ("Tax rate", f"'{NAME['TX']}'!{{cl}}${REG['TX.eff_rate']}"),
+        ("NOPAT = EBIT × (1 − tax)", None),
+        ("D&A (add back)", f"'{NAME['PP']}'!{{cl}}${REG['PP.dep_charge']}"),
+        ("CapEx", f"'{NAME['PP']}'!{{cl}}${REG['PP.capex']}"),
+        ("ΔWC", f"'{NAME['WC']}'!{{cl}}${REG['WC.delta_nwc']}"),
+        ("FCFF = NOPAT + D&A − CapEx − ΔWC", None),
+        ("Discount factor: 1/(1+WACC)^t", None),
+        ("PV of FCFF", None),
+    ]
 
-    section_header(ws, REG["VL.sens_matrix"] - 1, "E. SENSITIVITY MATRIX (WACC × Terminal Growth)")
-    label_row(ws, REG["VL.sens_matrix"], "5×5 матрица: Equity Value = f(WACC, g)")
+    fcff_start_r = r
+    for label, _ in fcff_items:
+        label_row(ws, r, label, "mln" if "rate" not in label.lower() and "factor" not in label.lower() else "")
+        r += 1
+
+    # FCFF formulas per forecast year
+    for i, yr in enumerate(fc):
+        c = 7 + i  # G, H, I...
+        cl = get_column_letter(c)
+        t = i + 1  # discount period
+        ebit_r = fcff_start_r
+        tax_r = fcff_start_r + 1
+        nopat_r = fcff_start_r + 2
+        da_r = fcff_start_r + 3
+        capex_r = fcff_start_r + 4
+        dwc_r = fcff_start_r + 5
+        fcff_r = fcff_start_r + 6
+        df_r = fcff_start_r + 7
+        pvfcff_r = fcff_start_r + 8
+
+        ref_cell(ws, ebit_r, c, f"='{NAME['PL']}'!{cl}${REG['PL.ebit']}", FMT_MLN)
+        ref_cell(ws, tax_r, c, f"='{NAME['TX']}'!{cl}${REG['TX.eff_rate']}", FMT_PCT)
+        formula_cell(ws, nopat_r, c, f"={cl}{ebit_r}*(1-{cl}{tax_r})", FMT_MLN, bold=True)
+        ref_cell(ws, da_r, c, f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
+        ref_cell(ws, capex_r, c, f"=ABS('{NAME['PP']}'!{cl}${REG['PP.capex']})", FMT_MLN)
+        ref_cell(ws, dwc_r, c, f"='{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}", FMT_MLN)
+        formula_cell(ws, fcff_r, c,
+                     f"={cl}{nopat_r}+{cl}{da_r}-{cl}{capex_r}-{cl}{dwc_r}", FMT_MLN, bold=True)
+        formula_cell(ws, df_r, c, f"=1/(1+$C${r_wacc})^{t}", FMT_RATIO)
+        formula_cell(ws, pvfcff_r, c, f"={cl}{fcff_r}*{cl}{df_r}", FMT_MLN)
+
+    r = pvfcff_r + 2
+
+    # Terminal value & DCF result
+    section_header(ws, r, "D. DCF RESULT")
+    r += 1
+    tv_r = r
+    label_row(ws, r, "Terminal Value (EV/EBITDA)", "mln", "= EBITDA_last × multiple")
+    last_fc_col = get_column_letter(7 + n_fc - 1)
+    formula_cell(ws, r, 3,
+                 f"='{NAME['PL']}'!{last_fc_col}${REG['PL.ebitda']}*$C${REG['VL.tm']}", FMT_MLN)
+    r += 1
+    tv_perp_r = r
+    label_row(ws, r, "Terminal Value (Perpetuity)", "mln", "= FCFF_last × (1+g) / (WACC−g)")
+    formula_cell(ws, r, 3,
+                 f"=IFERROR({last_fc_col}{fcff_start_r + 6}*(1+$C${REG['VL.tg']})"
+                 f"/($C${r_wacc}-$C${REG['VL.tg']}),0)", FMT_MLN)
+    r += 1
+    pv_tv_r = r
+    label_row(ws, r, "PV of Terminal Value", "mln")
+    formula_cell(ws, r, 3,
+                 f"=($C${tv_r}+$C${tv_perp_r})/2/(1+$C${r_wacc})^{n_fc}", FMT_MLN)
+    r += 1
+    npv_r = r
+    label_row(ws, r, "NPV of FCFF", "mln")
+    pv_cols = [f"{get_column_letter(7+i)}{pvfcff_r}" for i in range(n_fc)]
+    formula_cell(ws, r, 3, "=" + "+".join(pv_cols), FMT_MLN)
+    r += 1
+
+    # EV, ND, Equity
+    r_ev = REG["VL.ev"]
+    r_nd = REG["VL.nd"]
+    r_eq = REG["VL.eq_value"]
+    label_row(ws, r_ev, "Enterprise Value (NPV + PV_TV)", "mln")
+    formula_cell(ws, r_ev, 3, f"=$C${npv_r}+$C${pv_tv_r}", FMT_MLN, bold=True)
+    label_row(ws, r_nd, "Net Debt (последний прогнозный год)", "mln")
+    ref_cell(ws, r_nd, 3, f"='{NAME['DT']}'!{last_fc_col}${REG['DT.nd']}", FMT_MLN)
+    label_row(ws, r_eq, "Equity Value = EV − Net Debt", "mln")
+    formula_cell(ws, r_eq, 3, f"=$C${r_ev}-$C${r_nd}", FMT_MLN, bold=True)
+
+    # ── E. SOTP ──
+    r_sotp = REG["VL.sotp_total"]
+    section_header(ws, r_sotp - 2, "E. SOTP (Sum of the Parts)")
+    label_row(ws, r_sotp - 1, "Сегмент | Revenue(last) × EV/Rev multiple", "mln")
+    label_row(ws, r_sotp, "SOTP Enterprise Value (сумма)", "mln")
+    # Per-segment SOTP (from Revenue sheet)
+    for i, seg in enumerate(cfg["segments"]):
+        sr = r_sotp + 1 + i
+        label_row(ws, sr, seg["name"], "mln")
+        rev_r = REG.get(f"RV.{seg['key']}_rev", 10)
+        input_cell(ws, sr, 11, 0.7, FMT_MULT)  # K col = EV/Rev multiple input
+        ws.cell(sr, 12, "EV/Rev →").font = F_NOTE
+        formula_cell(ws, sr, 3,
+                     f"='{NAME['RV']}'!{last_fc_col}${rev_r}*$K${sr}", FMT_MLN)
+    # Total SOTP
+    seg_rows = [f"$C${r_sotp + 1 + i}" for i in range(len(cfg["segments"]))]
+    formula_cell(ws, r_sotp, 3, "=" + "+".join(seg_rows), FMT_MLN, bold=True)
+
+    # ── F. SENSITIVITY ──
+    sens_r = REG["VL.sens_matrix"]
+    section_header(ws, sens_r - 2, "F. SENSITIVITY: Equity Value = f(WACC, Terminal Growth)")
+    label_row(ws, sens_r - 1, "WACC ↓ \\ g →", "")
+    # 5×5 matrix: WACC from -4pp to +4pp, g from -2pp to +2pp
+    wacc_offsets = [-0.04, -0.02, 0.0, 0.02, 0.04]
+    g_offsets = [-0.02, -0.01, 0.0, 0.01, 0.02]
+
+    # Header row (g values)
+    for j, dg in enumerate(g_offsets):
+        c = 3 + j
+        formula_cell(ws, sens_r - 1, c, f"=$C${REG['VL.tg']}+{dg}", FMT_PCT)
+        ws.cell(sens_r - 1, c).font = F_YEAR
+
+    # Matrix body
+    for i, dw in enumerate(wacc_offsets):
+        rr = sens_r + i
+        formula_cell(ws, rr, 2, f"=$C${r_wacc}+{dw}", FMT_PCT)  # WACC label in col B
+        ws.cell(rr, 2).font = F_YEAR
+        for j, dg in enumerate(g_offsets):
+            c = 3 + j
+            # EV = NPV_FCFF + FCFF_last*(1+g_adj)/(WACC_adj - g_adj) / (1+WACC_adj)^n - ND
+            wacc_ref = f"($C${r_wacc}+{dw})"
+            g_ref = f"($C${REG['VL.tg']}+{dg})"
+            formula_cell(ws, rr, c,
+                         f"=IFERROR($C${npv_r}+{last_fc_col}{fcff_start_r + 6}*(1+{g_ref})"
+                         f"/({wacc_ref}-{g_ref})/(1+{wacc_ref})^{n_fc}-$C${r_nd},0)",
+                         FMT_MLN0)
+            # Highlight center cell
+            if dw == 0 and dg == 0:
+                ws.cell(rr, c).fill = FILL_RESULT
 
 
 def build_score(wb, cfg):
-    """31_Score — S&P 4-factor rating scorecard."""
+    """31_Score — S&P 4-factor rating scorecard with formulas."""
     ws = wb["31_Score"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"31_Score — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "S&P-like 4-factor Credit Rating").font = F_SUBTITLE
+    ws.cell(2, 1, "S&P-like 4-factor Credit Rating Scorecard").font = F_SUBTITLE
     n_hist = 1
     year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
 
-    section_header(ws, 6, "СКОРКАРТА")
-    for key, label, weight in [
-        ("leverage", "Leverage Score (ND/EBITDA)", "35%"),
-        ("coverage", "Coverage Score (ICR)", "30%"),
-        ("profit", "Profitability Score (EBITDA margin)", "20%"),
-        ("liquidity", "Liquidity Score (Current + Cash)", "15%"),
-    ]:
-        r = REG[f"SC.{key}"]
-        label_row(ws, r, f"{label} [{weight}]", "балл")
+    section_header(ws, 6, "СКОРКАРТА: КОМПОНЕНТЫ (0-100 баллов)")
+    # Leverage: ND/EBITDA → score via piecewise linear
+    # <0.5x → 80, 1x → 72, 2x → 55, 3x → 40, 4.5x → 15, >6x → 5
+    r_lev = REG["SC.leverage"]
+    label_row(ws, r_lev, "Leverage Score (ND/EBITDA) [35%]", "балл",
+              "<0.5→80, 2→55, 3.5→33, >6→5")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        nd_ebitda = f"'{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}"
+        formula_cell(ws, r_lev, c,
+                     f"=MAX(5,MIN(80,80-({nd_ebitda})*12.5))", FMT_RATIO1)
 
+    # Coverage: ICR → score
+    r_cov = REG["SC.coverage"]
+    label_row(ws, r_cov, "Coverage Score (EBITDA/Interest) [30%]", "балл",
+              "1x→10, 3x→42, 5x→62, >10→88")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        icr = f"'{NAME['RA']}'!{cl}${REG['RA.icr']}"
+        formula_cell(ws, r_cov, c,
+                     f"=MAX(5,MIN(88,{icr}*8.8))", FMT_RATIO1)
+
+    # Profitability: EBITDA margin → score (TTC-adjusted)
+    r_prof = REG["SC.profit"]
+    cycle_m = cfg.get("rating_cycle_margin", 0.20)
+    label_row(ws, r_prof, "Profitability Score (EBITDA margin TTC) [20%]", "балл",
+              f"Cycle avg={cycle_m*100:.0f}%, cap 1.5×")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        margin = f"'{NAME['RA']}'!{cl}${REG['RA.ebitda_margin']}"
+        formula_cell(ws, r_prof, c,
+                     f"=MAX(5,MIN(82,MIN({margin},{cycle_m}*1.5)*400))", FMT_RATIO1)
+
+    # Liquidity: Current ratio + Cash/Debt
+    r_liq = REG["SC.liquidity"]
+    label_row(ws, r_liq, "Liquidity Score (CR + Cash metrics) [15%]", "балл")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        cr = f"'{NAME['RA']}'!{cl}${REG['RA.current']}"
+        formula_cell(ws, r_liq, c,
+                     f"=MAX(5,MIN(80,{cr}*40))", FMT_RATIO1)
+
+    # Weighted score
     section_header(ws, REG["SC.base"] - 1, "ИТОГОВЫЙ РЕЙТИНГ")
-    for key, label in [("base", "Базовый балл"), ("ind_adj", "Отраслевая корректировка"),
-                       ("size_adj", "Размерная корректировка"), ("final", "Итоговый балл"),
-                       ("rating", "Рейтинг (S&P эквивалент)")]:
-        r = REG[f"SC.{key}"]
-        label_row(ws, r, label, "балл" if key != "rating" else "")
+    r_base = REG["SC.base"]
+    label_row(ws, r_base, "Базовый балл (взвешенный)", "балл")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        formula_cell(ws, r_base, c,
+                     f"=0.35*{cl}{r_lev}+0.30*{cl}{r_cov}+0.20*{cl}{r_prof}+0.15*{cl}{r_liq}",
+                     FMT_RATIO1, bold=True)
 
-    # Industry/size adjustments as inputs
-    input_cell(ws, REG["SC.ind_adj"], 3, cfg.get("rating_ind_adj", -6), FMT_RATIO1)
-    input_cell(ws, REG["SC.size_adj"], 3, cfg.get("rating_size_adj", 2), FMT_RATIO1)
+    r_ind = REG["SC.ind_adj"]
+    r_size = REG["SC.size_adj"]
+    label_row(ws, r_ind, "Отраслевая корректировка", "балл")
+    input_cell(ws, r_ind, 3, cfg.get("rating_ind_adj", -6), FMT_RATIO1)
+    label_row(ws, r_size, "Размерная корректировка", "балл")
+    input_cell(ws, r_size, 3, cfg.get("rating_size_adj", 2), FMT_RATIO1)
+
+    r_final = REG["SC.final"]
+    label_row(ws, r_final, "Итоговый балл", "балл")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        formula_cell(ws, r_final, c,
+                     f"=MAX(0,MIN(100,{cl}{r_base}+$C${r_ind}+$C${r_size}))", FMT_RATIO1, bold=True)
+
+    r_rating = REG["SC.rating"]
+    label_row(ws, r_rating, "Рейтинг (S&P эквивалент)", "")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        # Score → Rating lookup
+        formula_cell(ws, r_rating, c,
+                     f'=IF({cl}{r_final}>=95,"AAA",IF({cl}{r_final}>=85,"AA",'
+                     f'IF({cl}{r_final}>=75,"A",IF({cl}{r_final}>=63,"BBB",'
+                     f'IF({cl}{r_final}>=52,"BB",IF({cl}{r_final}>=42,"B",'
+                     f'IF({cl}{r_final}>=30,"CCC","D")))))))',
+                     FMT_TEXT)
 
 
 def build_covenants(wb, cfg):
-    """32_Covenants — covenant monitoring."""
+    """32_Covenants — covenant monitoring with actual vs threshold."""
     ws = wb["32_Covenants"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"32_Covenants — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Мониторинг ковенантов: фактическое vs порог + headroom").font = F_SUBTITLE
     n_hist = 1
     year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
 
-    section_header(ws, 6, "МОНИТОРИНГ КОВЕНАНТОВ")
     covs = cfg.get("covenants", {})
-    for key, label, threshold in [
-        ("nd_ebitda", "ND/EBITDA", covs.get("nd_ebitda_max", 4.5)),
-        ("icr", "Interest Coverage (ICR)", covs.get("icr_min", 2.0)),
-        ("ebitda_margin", "EBITDA Margin", covs.get("margin_min", 0.10)),
-    ]:
-        r = REG.get(f"CO.{key}", 7)
-        label_row(ws, r, label)
-        # Threshold in col L
-        ws.cell(r, 12, f"Порог: {threshold}").font = F_NOTE
+
+    # Structure: each covenant = 3 rows (actual, threshold, headroom/breach)
+    section_header(ws, 6, "КОВЕНАНТЫ")
+    r = 7
+    cov_defs = [
+        ("ND/EBITDA", covs.get("nd_ebitda_max", 4.5), "max", "RA", "nd_ebitda", FMT_MULT),
+        ("Interest Coverage (ICR)", covs.get("icr_min", 2.0), "min", "RA", "icr", FMT_MULT),
+        ("EBITDA Margin", covs.get("margin_min", 0.10), "min", "RA", "ebitda_margin", FMT_PCT),
+        ("Current Ratio", covs.get("current_min", 1.0), "min", "RA", "current", FMT_MULT),
+        ("Debt/Equity", covs.get("de_max", 4.0), "max", "RA", "debt_equity", FMT_MULT),
+    ]
+
+    for label, threshold, direction, code, key, fmt in cov_defs:
+        subsection_header(ws, r, label); r += 1
+
+        # Actual
+        label_row(ws, r, "Фактическое значение")
+        row_src = REG.get(f"{code}.{key}")
+        if row_src:
+            for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+                cl = get_column_letter(c)
+                ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+        r += 1
+
+        # Threshold
+        label_row(ws, r, f"Порог ({'≤' if direction == 'max' else '≥'} {threshold})")
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            input_cell(ws, r, c, threshold, fmt)
+        thresh_r = r
+        r += 1
+
+        # Headroom / Breach
+        label_row(ws, r, "Headroom / BREACH", "", "Положительное = запас, отрицательное = нарушение")
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            if direction == "max":
+                formula_cell(ws, r, c, f"={cl}{thresh_r}-{cl}{r-2}", fmt)
+            else:
+                formula_cell(ws, r, c, f"={cl}{r-2}-{cl}{thresh_r}", fmt)
+        r += 2
+
+    # Breach count
+    section_header(ws, r, "ИТОГО НАРУШЕНИЙ")
+    r += 1
+    label_row(ws, r, "Количество нарушений", "", "0 = все ОК")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        # Count headroom rows < 0 (every 5th row starting from 10)
+        parts = []
+        for i, (_, _, _, _, _, _) in enumerate(cov_defs):
+            headroom_r = 10 + i * 5
+            parts.append(f"IF({cl}{headroom_r}<0,1,0)")
+        formula_cell(ws, r, c, "=" + "+".join(parts), FMT_INT, bold=True)
+
+
+def build_revstress(wb, cfg):
+    """33_RevStress — reverse stress + tornado analysis."""
+    ws = wb["33_RevStress"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"33_RevStress — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Обратный стресс-тест + Tornado-анализ чувствительности").font = F_SUBTITLE
+
+    section_header(ws, 6, "A. ОБРАТНЫЙ СТРЕСС-ТЕСТ (bisection)")
+    label_row(ws, 7, "Какой шок Revenue приводит к нарушению ND/EBITDA?", "", "Результат: % снижения выручки")
+    covs = cfg.get("covenants", {})
+    nd_max = covs.get("nd_ebitda_max", 4.5)
+    label_row(ws, 8, f"Порог ND/EBITDA: {nd_max}x")
+    input_cell(ws, 8, 3, nd_max, FMT_MULT)
+
+    label_row(ws, 10, "Breakeven Revenue shock (%)", "%", "= Revenue(actual) × (1 + shock)")
+    label_row(ws, 11, "Breakeven EBITDA shock (%)", "%")
+    label_row(ws, 12, "Breakeven Interest rate shock (bp)", "bp")
+
+    section_header(ws, 15, "B. TORNADO: ±1σ НА КЛЮЧЕВЫЕ ПЕРЕМЕННЫЕ")
+    ws.cell(16, 1, "Переменная").font = F_LABEL_B
+    ws.cell(16, 3, "Base").font = F_YEAR
+    ws.cell(16, 4, "−1σ").font = F_YEAR
+    ws.cell(16, 5, "+1σ").font = F_YEAR
+    ws.cell(16, 6, "ΔNI (−1σ)").font = F_YEAR
+    ws.cell(16, 7, "ΔNI (+1σ)").font = F_YEAR
+
+    tornado_vars = [
+        ("Commodity price", "−20%", "+20%"),
+        ("FX (USD/RUB)", "+15%", "−15%"),
+        ("Interest rate", "+200bp", "−200bp"),
+        ("Volume (kt)", "−10%", "+10%"),
+        ("COGS ratio", "+5pp", "−5pp"),
+        ("SGA ratio", "+2pp", "−2pp"),
+        ("CapEx / Revenue", "+3pp", "−3pp"),
+        ("Payout ratio", "+20pp", "−20pp"),
+    ]
+    for i, (var, neg, pos) in enumerate(tornado_vars):
+        r = 17 + i
+        label_row(ws, r, var)
+        ws.cell(r, 4, neg).font = F_LABEL
+        ws.cell(r, 5, pos).font = F_LABEL
+        # ΔNI cells — manual or scenario-linked
+        input_cell(ws, r, 6, 0, FMT_MLN)
+        input_cell(ws, r, 7, 0, FMT_MLN)
+
+
+def build_scenarios(wb, cfg):
+    """40_Scen — scenario comparison table."""
+    ws = wb["40_Scen"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"40_Scen — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Сравнение стресс-сценариев (base vs 7-12 сценариев)").font = F_SUBTITLE
+
+    section_header(ws, 4, "СЦЕНАРИИ (заполняется после прогона Python stress engine)")
+    ws.cell(5, 1, "Сценарий").font = F_LABEL_B
+    kpis = ["Revenue", "EBITDA", "Net Income", "ND/EBITDA", "ICR", "Rating"]
+    for i, kpi in enumerate(kpis):
+        ws.cell(5, 3 + i, kpi).font = F_YEAR
+
+    scenarios = ["Base", "Commodity −20%", "FX shock", "Rate +200bp",
+                 "Severe", "Demand shock", "Upside"]
+    for i, sc in enumerate(scenarios):
+        r = 6 + i
+        label_row(ws, r, sc)
+        for c in range(3, 3 + len(kpis)):
+            input_cell(ws, r, c, 0, FMT_MLN if c < 6 else FMT_MULT)
 
 
 def build_control_panel(wb, cfg):
@@ -1580,7 +1884,9 @@ def build(company: str, output: str):
         ("30_Ratios",       build_ratios),
         ("31_Score",        build_score),
         ("32_Covenants",    build_covenants),
+        ("33_RevStress",    build_revstress),
         ("35_Valuation",    build_valuation),
+        ("40_Scen",         build_scenarios),
         ("90_Checks",       build_checks),
         ("Model_Output",    build_model_output),
         ("Changelog",       build_changelog),
