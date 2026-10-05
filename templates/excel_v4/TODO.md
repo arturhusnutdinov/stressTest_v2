@@ -76,4 +76,6 @@
 | 9 | 14_OtherIS: пустой лист — нужен builder | LOW | 2026-10-05 |
 | 10 | Nornickel PPE_gross=0: unified не имеет gross/accum_dep, только net | INFO | 2026-10-05 |
 | 11 | Circular solver (Debt↔Cash) не реализован — нужен seed/relax pattern | OPEN | 2026-10-05 |
-| 12 | Forecast columns в COGS/SGA — формулы ratio, но нужны input или forecast-method | OPEN | 2026-10-05 |
+| 12 | Forecast columns в COGS/SGA — формулы ratio, но нужны input или forecast-method | FIXED | 2026-10-05 |
+| 13 | **CRITICAL**: Column misalignment — Revenue/WC use C-E=hist+F-H=fc, but BS/PL/CF use C=hist+D-F=fc | FIXING | 2026-10-05 |
+| 14 | BS history col C not filled for Other_CA, Lease, Reserves → carry-forward = 0 | FIXED | 2026-10-05 |

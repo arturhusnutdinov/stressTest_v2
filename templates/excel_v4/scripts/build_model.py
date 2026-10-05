@@ -526,7 +526,7 @@ def build_ppe(wb, cfg):
     label_row(ws, REG["PP.net_close"], "ОС нетто, конец", "mln")
 
     # Formulas for forecast columns
-    n_hist = 1  # only last hist year for opening balance
+    n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
@@ -654,7 +654,7 @@ def build_bs(wb, cfg):
     label_row(ws, r_check, "Контроль: А − О − К", "mln", "Должно быть = 0")
 
     # Formulas for totals (all forecast columns)
-    n_hist = 1
+    n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
 
@@ -787,7 +787,7 @@ def build_pl(wb, cfg):
     label_row(ws, r_nm, "Net margin", "%")
 
     # Formulas for forecast columns
-    n_hist = 1
+    n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
 
@@ -882,7 +882,7 @@ def build_ratios(wb, cfg):
         label_row(ws, REG[f"RA.{key}"], label, "дни")
 
     # Key ratio formulas for forecast columns
-    n_hist = 1
+    n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
 
@@ -936,7 +936,7 @@ def build_checks(wb, cfg):
         label_row(ws, r, label, "mln", "Должно быть 0")
 
     # BS check formula
-    n_hist = 1
+    n_hist = len(cfg["hist_years"][-3:])
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         # BS check = direct reference from 20_BS
@@ -1078,8 +1078,8 @@ def build_debt(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"17_Debt — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Долговой портфель: Open + Draw − Repay = Close, Interest = Avg × Rate").font = F_SUBTITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "ДОЛГОВОЙ CORKSCREW (агрегированный)")
     debt_items = [
@@ -1161,8 +1161,8 @@ def build_lease(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"18_Lease — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "IFRS 16: ROU Asset dep + Lease Liability interest/payment").font = F_SUBTITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "ROU ASSET (ПРАВО ПОЛЬЗОВАНИЯ)")
     rou_items = [
@@ -1221,8 +1221,8 @@ def build_cf(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"23_CF — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "ОДДС (косвенный метод)").font = F_SUBTITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "ОПЕРАЦИОННАЯ ДЕЯТЕЛЬНОСТЬ (CFO)")
     cf_items = [
@@ -1324,8 +1324,8 @@ def build_equity(wb, cfg):
     ws = wb["24_Equity"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"24_Equity — {cfg['name']}").font = F_TITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "НЕРАСПРЕДЕЛЁННАЯ ПРИБЫЛЬ")
     for key, label in [("re_open", "Начало периода"), ("ni", "Чистая прибыль"),
@@ -1360,8 +1360,8 @@ def build_tax(wb, cfg):
     ws = wb["19_Tax"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"19_Tax — {cfg['name']}").font = F_TITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "НАЛОГ НА ПРИБЫЛЬ (IAS 12)")
     for key, label in [("ebt", "Прибыль до налога (EBT)"), ("nol_open", "NOL начало"),
@@ -1592,8 +1592,8 @@ def build_score(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"31_Score — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "S&P-like 4-factor Credit Rating Scorecard").font = F_SUBTITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "СКОРКАРТА: КОМПОНЕНТЫ (0-100 баллов)")
     # Leverage: ND/EBITDA → score via piecewise linear
@@ -1680,8 +1680,8 @@ def build_covenants(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"32_Covenants — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Мониторинг ковенантов: фактическое vs порог + headroom").font = F_SUBTITLE
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     covs = cfg.get("covenants", {})
 
@@ -2033,8 +2033,8 @@ def build_model_output(wb, cfg):
     ws.cell(1, 1, f"Model_Output — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Сводный вывод модели (все ссылки — зелёные)").font = F_SUBTITLE
 
-    n_hist = 1
-    year_headers(ws, 4, cfg["hist_years"][-1:], cfg["fc_years"])
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     r = 6
     sections = [

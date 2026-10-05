@@ -496,6 +496,8 @@ def fill_debt_hist(wb, data: dict, company: str):
     src = SOURCES[company]
     hist_years = src["hist_years"]
     last_yr = hist_years[-1]
+    # History last column = 3 + len(hist_years[-3:]) - 1
+    hc = 3 + len(hist_years[-3:]) - 1  # col index for last hist year
 
     bs = data.get("bs", {})
     st = bs.get("short_term_debt", {}).get(last_yr, 0)
@@ -503,16 +505,15 @@ def fill_debt_hist(wb, data: dict, company: str):
     total = abs(st) + abs(lt)
     cash = abs(bs.get("cash", {}).get(last_yr, 0))
 
-    # Fill last hist year column (C=col 3)
     if total > 0:
-        ws.cell(REG["DT.open"], 3, round(total, 1)).font = F_INPUT
-        ws.cell(REG["DT.open"], 3).number_format = FMT_MLN
-        ws.cell(REG["DT.close"], 3, round(total, 1)).font = F_INPUT
-        ws.cell(REG["DT.close"], 3).number_format = FMT_MLN
-        ws.cell(REG["DT.st"], 3, round(abs(st), 1)).font = F_INPUT
-        ws.cell(REG["DT.st"], 3).number_format = FMT_MLN
-        ws.cell(REG["DT.lt"], 3, round(abs(lt), 1)).font = F_INPUT
-        ws.cell(REG["DT.lt"], 3).number_format = FMT_MLN
+        ws.cell(REG["DT.open"], hc, round(total, 1)).font = F_INPUT
+        ws.cell(REG["DT.open"], hc).number_format = FMT_MLN
+        ws.cell(REG["DT.close"], hc, round(total, 1)).font = F_INPUT
+        ws.cell(REG["DT.close"], hc).number_format = FMT_MLN
+        ws.cell(REG["DT.st"], hc, round(abs(st), 1)).font = F_INPUT
+        ws.cell(REG["DT.st"], hc).number_format = FMT_MLN
+        ws.cell(REG["DT.lt"], hc, round(abs(lt), 1)).font = F_INPUT
+        ws.cell(REG["DT.lt"], hc).number_format = FMT_MLN
         print(f"    Debt opening: ST={abs(st):.0f} LT={abs(lt):.0f} Total={total:.0f}")
 
     # Avg rate from interest / avg debt
@@ -520,15 +521,16 @@ def fill_debt_hist(wb, data: dict, company: str):
     interest = abs(is_data.get("interest_expense", {}).get(last_yr, 0))
     if total > 0 and interest > 0:
         avg_rate = interest / total
-        for c in range(4, 4 + len(src["fc_years"])):
+        fc_start_col = hc + 1
+        for c in range(fc_start_col, fc_start_col + len(src["fc_years"])):
             ws.cell(REG["DT.avg_rate"], c, round(avg_rate, 4)).font = F_INPUT
             ws.cell(REG["DT.avg_rate"], c).number_format = FMT_PCT
         print(f"    Avg rate (implied): {avg_rate*100:.1f}%")
 
     # Also fill ND in history col
     nd = total - cash
-    ws.cell(REG["DT.nd"], 3, round(nd, 1)).font = F_FORMULA
-    ws.cell(REG["DT.nd"], 3).number_format = FMT_MLN
+    ws.cell(REG["DT.nd"], hc, round(nd, 1)).font = F_FORMULA
+    ws.cell(REG["DT.nd"], hc).number_format = FMT_MLN
 
     # Fill lease opening from BS
     if "18_Lease" in wb.sheetnames:
@@ -538,10 +540,10 @@ def fill_debt_hist(wb, data: dict, company: str):
         lease_ncl = abs(bs.get("lease_liab_noncurrent", {}).get(last_yr, 0))
         lease_total = lease_cl + lease_ncl
         if rou > 0 or lease_total > 0:
-            ws_l.cell(REG["LS.rou_open"], 3, round(rou, 1)).font = F_INPUT
-            ws_l.cell(REG["LS.rou_close"], 3, round(rou, 1)).font = F_INPUT
-            ws_l.cell(REG["LS.liab_open"], 3, round(lease_total, 1)).font = F_INPUT
-            ws_l.cell(REG["LS.liab_close"], 3, round(lease_total, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.rou_open"], hc, round(rou, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.rou_close"], hc, round(rou, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.liab_open"], hc, round(lease_total, 1)).font = F_INPUT
+            ws_l.cell(REG["LS.liab_close"], hc, round(lease_total, 1)).font = F_INPUT
             print(f"    Lease: ROU={rou:.0f} Liability={lease_total:.0f}")
 
     # Fill PPE opening from BS
@@ -551,11 +553,11 @@ def fill_debt_hist(wb, data: dict, company: str):
         accdep = abs(bs.get("ppe_accum_dep", {}).get(last_yr, 0))
         ppe_net = abs(bs.get("ppe_net", {}).get(last_yr, 0))
         if ppe_net > 0:
-            ws_p.cell(REG["PP.gross_open"], 3, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.gross_open"], 3).number_format = FMT_MLN
-            ws_p.cell(REG["PP.dep_open"], 3, round(accdep or ppe_net, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.net_open"], 3, round(ppe_net, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.net_close"], 3, round(ppe_net, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.gross_open"], hc, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.gross_open"], hc).number_format = FMT_MLN
+            ws_p.cell(REG["PP.dep_open"], hc, round(accdep or ppe_net, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.net_open"], hc, round(ppe_net, 1)).font = F_INPUT
+            ws_p.cell(REG["PP.net_close"], hc, round(ppe_net, 1)).font = F_INPUT
             print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f}")
 
     # Fill Equity opening
@@ -563,8 +565,8 @@ def fill_debt_hist(wb, data: dict, company: str):
         ws_e = wb["24_Equity"]
         re = bs.get("retained_earnings", {}).get(last_yr, 0)
         if re != 0:
-            ws_e.cell(REG["EQ.re_open"], 3, round(re, 1)).font = F_INPUT
-            ws_e.cell(REG["EQ.re_close"], 3, round(re, 1)).font = F_INPUT
+            ws_e.cell(REG["EQ.re_open"], hc, round(re, 1)).font = F_INPUT
+            ws_e.cell(REG["EQ.re_close"], hc, round(re, 1)).font = F_INPUT
             print(f"    Retained earnings opening: {re:.0f}")
 
     # Fill BS last hist year (static items for carry-forward)
@@ -590,6 +592,87 @@ def fill_debt_hist(wb, data: dict, company: str):
                     break
             if val:
                 ws_bs.cell(REG[f"BS.{bs_key}"], 3, round(val, 1)).font = F_INPUT
+
+
+def fill_bs_history(wb, data: dict, company: str):
+    """Fill 20_BS column C (last hist year) from BS history data."""
+    ws = wb["20_BS"]
+    src = SOURCES[company]
+    last_yr = src["hist_years"][-1]
+    bs = data.get("bs", {})
+
+    # Map BS metrics to 20_BS rows (comprehensive)
+    bs_map = {
+        "cash": "cash", "accounts_receivable": "ar", "inventory": "inv",
+        "other_ca": "other_ca",
+        "ppe_net": "ppe", "rou_asset": "rou", "goodwill": "goodwill",
+        "intangibles": "intang", "dta": "dta", "other_nca": "other_nca",
+        "accounts_payable": "ap", "short_term_debt": "st_debt",
+        "taxes_payable": "tax_pay", "other_cl": "other_cl",
+        "long_term_debt": "lt_debt", "lease_liab_current": "lease_cl",
+        "lease_liab_noncurrent": "lease_ncl", "provisions": "prov",
+        "dtl": "dtl", "other_ncl": "other_ncl",
+        "total_assets": "ta", "total_liabilities": "tl",
+        "total_equity": "te", "retained_earnings": "re",
+        "share_capital": "sc", "apic": "apic", "aoci": "aoci",
+        "total_ca": "tca", "total_nca": "tnca",
+        "total_cl": "tcl", "total_ncl": "tncl",
+    }
+
+    # Determine BS history column = last of 3 hist years (col E = index 5)
+    hist_3 = src["hist_years"][-3:]
+    bs_col = 3 + len(hist_3) - 1  # E = col 5 for 3 hist years
+
+    filled = 0
+    for src_key, bs_key in bs_map.items():
+        val = bs.get(src_key, {}).get(last_yr)
+        if val is not None and isinstance(val, (int, float)):
+            r = REG.get(f"BS.{bs_key}")
+            if r:
+                ws.cell(r, bs_col, round(val, 1)).font = F_INPUT
+                ws.cell(r, bs_col).number_format = FMT_MLN
+                filled += 1
+
+    # Also compute missing totals
+    # Other CA = TCA - cash - ar - inv (if available)
+    tca = bs.get("total_current_assets", {}).get(last_yr, 0)
+    cash = abs(bs.get("cash", {}).get(last_yr, 0))
+    ar = abs(bs.get("accounts_receivable", {}).get(last_yr, 0))
+    inv = abs(bs.get("inventory", {}).get(last_yr, 0))
+    if tca and (cash or ar or inv):
+        other_ca = abs(tca) - cash - ar - inv
+        if other_ca > 0:
+            ws.cell(REG["BS.other_ca"], 3, round(other_ca, 1)).font = F_INPUT
+
+    # Other CL
+    tcl = bs.get("total_current_liabilities", {}).get(last_yr, 0)
+    ap = abs(bs.get("accounts_payable", {}).get(last_yr, 0))
+    st_d = abs(bs.get("short_term_debt", {}).get(last_yr, 0))
+    if tcl and (ap or st_d):
+        other_cl = abs(tcl) - ap - st_d
+        if other_cl > 0:
+            ws.cell(REG["BS.other_cl"], 3, round(other_cl, 1)).font = F_INPUT
+
+    # Other NCL
+    tncl = bs.get("total_non_current_liabilities", {}).get(last_yr, 0)
+    lt_d = abs(bs.get("long_term_debt", {}).get(last_yr, 0))
+    prov = abs(bs.get("provisions", {}).get(last_yr, 0))
+    if tncl:
+        other_ncl = abs(tncl) - lt_d - prov
+        if other_ncl > 0:
+            ws.cell(REG["BS.other_ncl"], 3, round(other_ncl, 1)).font = F_INPUT
+
+    # Other NCA
+    tnca = bs.get("total_non_current_assets", {}).get(last_yr, 0)
+    ppe = abs(bs.get("ppe_net", {}).get(last_yr, 0))
+    if tnca and ppe:
+        gw = abs(bs.get("goodwill", {}).get(last_yr, 0))
+        intang = abs(bs.get("intangibles", {}).get(last_yr, 0))
+        other_nca = abs(tnca) - ppe - gw - intang
+        if other_nca > 0 and REG.get("BS.other_nca"):
+            ws.cell(REG["BS.other_nca"], 3, round(other_nca, 1)).font = F_INPUT
+
+    print(f"    BS history: {filled} metrics filled for {last_yr}")
 
 
 def fill_wc_days(wb, data: dict, company: str):
@@ -796,6 +879,9 @@ def fill_all(company: str, model_path: str):
 
     print("\n7. Filling 17_Debt (opening balances)...")
     fill_debt_hist(wb, data, company)
+
+    print("\n7b. Filling 20_BS history column from 02_Hist...")
+    fill_bs_history(wb, data, company)
 
     print("\n8. Computing WC days + filling COGS/SGA from history...")
     fill_wc_days(wb, data, company)
