@@ -552,6 +552,47 @@ def build_bs(wb, cfg):
         formula_cell(ws, r_check, c_idx,
                      f"={cl}{r_ta}-{cl}{r_tl}-{cl}{r_te}", FMT_RATIO)
 
+        # ── Cross-sheet links: BS items ← corkscrews ──
+        # Cash ← CF cash_close
+        ref_cell(ws, REG["BS.cash"], c_idx,
+                 f"='{NAME['CF']}'!{cl}${REG['CF.cash_close']}", FMT_MLN)
+        # AR ← WC
+        ref_cell(ws, REG["BS.ar"], c_idx,
+                 f"='{NAME['WC']}'!{cl}${REG['WC.ar']}", FMT_MLN)
+        # Inventory ← WC
+        ref_cell(ws, REG["BS.inv"], c_idx,
+                 f"='{NAME['WC']}'!{cl}${REG['WC.inv']}", FMT_MLN)
+        # PPE ← PP&E net_close
+        ref_cell(ws, REG["BS.ppe"], c_idx,
+                 f"='{NAME['PP']}'!{cl}${REG['PP.net_close']}", FMT_MLN)
+        # AP ← WC (negative)
+        ref_cell(ws, REG["BS.ap"], c_idx,
+                 f"=ABS('{NAME['WC']}'!{cl}${REG['WC.ap']})", FMT_MLN)
+        # ST debt ← Debt
+        ref_cell(ws, REG["BS.st_debt"], c_idx,
+                 f"='{NAME['DT']}'!{cl}${REG['DT.st']}", FMT_MLN)
+        # LT debt ← Debt
+        ref_cell(ws, REG["BS.lt_debt"], c_idx,
+                 f"='{NAME['DT']}'!{cl}${REG['DT.lt']}", FMT_MLN)
+        # DTA ← Tax
+        ref_cell(ws, REG["BS.dta"], c_idx,
+                 f"='{NAME['TX']}'!{cl}${REG['TX.dta_close']}", FMT_MLN)
+        # DTL ← Tax
+        ref_cell(ws, REG["BS.dtl"], c_idx,
+                 f"='{NAME['TX']}'!{cl}${REG['TX.dtl_close']}", FMT_MLN)
+        # Retained earnings ← Equity corkscrew
+        ref_cell(ws, REG["BS.re"], c_idx,
+                 f"='{NAME['EQ']}'!{cl}${REG['EQ.re_close']}", FMT_MLN)
+
+    # Static items (prev year value carried forward)
+    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c_idx)
+        prev = get_column_letter(c_idx - 1)
+        for key in ["other_ca", "goodwill", "intang", "other_nca",
+                     "tax_pay", "other_cl", "lease_ncl", "prov",
+                     "other_ncl", "sc", "apic", "aoci"]:
+            formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
+
 
 def build_pl(wb, cfg):
     """21_PL — Income Statement with formula references."""
@@ -597,6 +638,26 @@ def build_pl(wb, cfg):
     n_hist = 1
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
+
+        # ── Cross-sheet refs: PL items ← engine sheets ──
+        # Revenue ← 10_Revenue
+        ref_cell(ws, REG["PL.revenue"], c_idx,
+                 f"='{NAME['RV']}'!{cl}${REG['RV.total_rev']}", FMT_MLN, bold=True)
+        # COGS ← 12_COGS
+        ref_cell(ws, REG["PL.cogs"], c_idx,
+                 f"='{NAME['CG']}'!{cl}${REG['CG.total']}", FMT_MLN)
+        # SGA ← 13_SGA
+        ref_cell(ws, REG["PL.sga"], c_idx,
+                 f"='{NAME['SA']}'!{cl}${REG['SA.sga_total']}", FMT_MLN)
+        # D&A ← 15_PPE dep_charge
+        ref_cell(ws, REG["PL.da"], c_idx,
+                 f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
+        # Interest ← 17_Debt
+        ref_cell(ws, REG["PL.interest"], c_idx,
+                 f"='{NAME['DT']}'!{cl}${REG['DT.interest']}", FMT_MLN)
+        # Tax ← 19_Tax
+        ref_cell(ws, REG["PL.tax"], c_idx,
+                 f"='{NAME['TX']}'!{cl}${REG['TX.total']}", FMT_MLN)
 
         # GP = Revenue + COGS (COGS is negative)
         formula_cell(ws, REG["PL.gp"], c_idx,
@@ -912,6 +973,29 @@ def build_cf(wb, cfg):
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
+
+        # ── Cross-sheet refs: CF items ← source sheets ──
+        # NI ← PL
+        ref_cell(ws, REG["CF.ni"], c_idx,
+                 f"='{NAME['PL']}'!{cl}${REG['PL.ni']}", FMT_MLN)
+        # DA ← PPE
+        ref_cell(ws, REG["CF.da"], c_idx,
+                 f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
+        # Deferred tax ← Tax
+        ref_cell(ws, REG["CF.deferred_tax"], c_idx,
+                 f"='{NAME['TX']}'!{cl}${REG['TX.deferred']}", FMT_MLN)
+        # WC change ← WC delta
+        ref_cell(ws, REG["CF.wc_change"], c_idx,
+                 f"='{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}", FMT_MLN)
+        # CapEx ← PPE
+        ref_cell(ws, REG["CF.capex"], c_idx,
+                 f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
+        # Dividends ← Equity
+        ref_cell(ws, REG["CF.div_paid"], c_idx,
+                 f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
+        # Interest paid ← Debt
+        ref_cell(ws, REG["CF.interest_paid"], c_idx,
+                 f"='{NAME['DT']}'!{cl}${REG['DT.interest']}", FMT_MLN)
 
         # CFO = NI + DA + impairment + deferred_tax - WC_change + other
         cfo_parts = [f"{cl}{REG['CF.ni']}", f"{cl}{REG['CF.da']}", f"{cl}{REG['CF.impairment']}",
