@@ -958,8 +958,12 @@ def build_bs(wb, cfg):
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
+        # Tax Payable = current year tax (not carry forward; avoid negative tax receivable)
+        formula_cell(ws, REG["BS.tax_pay"], c_idx,
+                     f"='{NAME['TX']}'!{cl}${REG['TX.current']}", FMT_MLN)
+
         for key in ["other_ca", "goodwill", "intang", "other_nca",
-                     "tax_pay", "other_cl", "lease_ncl", "prov",
+                     "other_cl", "lease_ncl", "prov",
                      "other_ncl", "sc", "apic", "aoci"]:
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
 
@@ -1687,13 +1691,16 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
-        # Interest paid ← Debt
-        ref_cell(ws, REG["CF.interest_paid"], c_idx,
-                 f"='{NAME['DT']}'!{cl}${REG['DT.interest']}", FMT_MLN)
+        # Interest paid: 0 in CFF (interest flows through NI in CFO)
+        # US GAAP style: interest is operating, not financing
+        formula_cell(ws, REG["CF.interest_paid"], c_idx, "=0", FMT_MLN)
 
         # CFO = NI + DA + impairment + deferred_tax - WC_change + other
+        # Interest: flows through NI (already deducted). No add-back needed.
+        # Interest_paid in CFF set to 0 below (US GAAP / simplified IFRS)
         cfo_parts = [f"{cl}{REG['CF.ni']}", f"{cl}{REG['CF.da']}", f"{cl}{REG['CF.impairment']}",
-                     f"{cl}{REG['CF.deferred_tax']}", f"-{cl}{REG['CF.wc_change']}", f"{cl}{REG['CF.other_noncash']}"]
+                     f"{cl}{REG['CF.deferred_tax']}", f"-{cl}{REG['CF.wc_change']}",
+                     f"{cl}{REG['CF.other_noncash']}"]
         formula_cell(ws, r_cfo, c_idx, "=" + "+".join(cfo_parts), FMT_MLN, bold=True)
 
         # CFI = -capex + disp + other
