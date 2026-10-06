@@ -990,18 +990,28 @@ def fill_bs_history(wb, data: dict, company: str):
             other_ca = tca - known_ca
             if other_ca > 0:
                 ws.cell(REG["BS.other_ca"], col, round(other_ca, 1)).font = F_INPUT
+                ws.cell(REG["BS.other_ca"], col).number_format = FMT_MLN
+
+        # Also compute Other_NCA from TNCA
+        tnca_src = abs(bs.get("total_nca", bs.get("total_non_current_assets", {})).get(yr, 0))
+        if tnca_src > 0:
+            known_nca = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
+                           ["ppe_net", "intangibles", "dta", "rou_asset", "goodwill"])
+            other_nca = tnca_src - known_nca
+            if other_nca > 0:
+                ws.cell(REG["BS.other_nca"], col, round(other_nca, 1)).font = F_INPUT
 
         if tcl > 0:
             known_cl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
-                          ["accounts_payable", "short_term_debt"]) + bs.get("taxes_payable", {}).get(yr, 0)
+                          ["accounts_payable", "short_term_debt", "lease_liab_current"
+                          ]) + bs.get("taxes_payable", {}).get(yr, 0)
             other_cl = tcl - known_cl
             if other_cl > 0:
                 ws.cell(REG["BS.other_cl"], col, round(other_cl, 1)).font = F_INPUT
 
         if tncl_src > 0:
             known_ncl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
-                           ["long_term_debt", "dtl"])
-            other_ncl = tncl_src - known_ncl
+                           ["long_term_debt", "dtl", "lease_liab_noncurrent"])
             if other_ncl > 0:
                 ws.cell(REG["BS.other_ncl"], col, round(other_ncl, 1)).font = F_INPUT
 

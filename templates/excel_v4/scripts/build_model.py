@@ -125,6 +125,7 @@ COMPANY_CONFIGS = {
         "rating_size_adj": 2.0,
         "rating_cycle_margin": 0.12,
         "covenants": {"nd_ebitda_max": 4.5, "icr_min": 1.5, "margin_min": 0.05},
+        "nci_pct": 0.0,  # Rusal: NCI included in AOCI, no separate NCI income
     },
     "nornickel": {
         "name": "PJSC MMC Norilsk Nickel",
@@ -146,6 +147,7 @@ COMPANY_CONFIGS = {
         "rating_size_adj": 2.0,
         "rating_cycle_margin": 0.41,
         "covenants": {"nd_ebitda_max": 3.0, "icr_min": 3.0, "margin_min": 0.15},
+        "nci_pct": 0.158,  # NCI/TE = 2129/13445 = 15.8% — NCI income share
     },
 }
 
@@ -966,9 +968,17 @@ def build_bs(wb, cfg):
         # Other CL = TCL(history) - known_CL (plug to preserve total)
         # In history: other_cl includes lease, provisions, etc.
         # In forecast: carry forward
+        # AOCI/NCI: grow by NCI income if company has NCI
+        nci_pct = cfg.get("nci_pct", 0.0)
+        if nci_pct > 0:
+            # AOCI_NCI(t) = AOCI_NCI(t-1) + NI × nci_pct
+            formula_cell(ws, REG["BS.aoci"], c_idx,
+                         f"={prev}{REG['BS.aoci']}+'{NAME['PL']}'!{cl}${REG['PL.ni']}*{nci_pct}",
+                         FMT_MLN)
+
         for key in ["other_ca", "goodwill", "intang", "other_nca",
                      "other_cl", "lease_ncl", "prov",
-                     "other_ncl", "sc", "apic", "aoci"]:
+                     "other_ncl", "sc", "apic"] + (["aoci"] if nci_pct == 0 else []):
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
 
 
@@ -1751,9 +1761,28 @@ def build_equity(wb, cfg):
 
         # RE open = prev close
         formula_cell(ws, REG["EQ.re_open"], c_idx, f"={prev}{REG['EQ.re_close']}", FMT_MLN)
-        # NI from PL
-        ref_cell(ws, REG["EQ.ni"], c_idx,
-                 f"='{NAME['PL']}'!{cl}${REG['PL.ni']}", FMT_MLN)
+        # NI from PL (parent only — subtract NCI share)
+        nci_pct = cfg.get("nci_pct", 0.0)
+        if nci_pct > 0:
+            formula_cell(ws, REG["EQ.ni"], c_idx,
+                         f"='{NAME['PL']}'!{cl}${REG['PL.ni']}*(1-{nci_pct})", FMT_MLN)
+        else:
+            ref_cell(ws, REG["EQ.ni"], c_idx,
+                     f"='{NAME['PL']}'!{cl}${REG['PL.ni']}", FMT_MLN)
+        # Dividends = NI × payout_ratio (from CP)
+        # CP payout row is dynamic — find it
+        cp_payout_row = REG.get("CP.payout_ratio")
+        if cp_payout_row:
+            formula_cell(ws, REG["EQ.div"], c_idx,
+                         f"=MAX(0,{cl}{REG['EQ.ni']})*'Control_Panel'!$C${cp_payout_row}",
+                         FMT_MLN)
+        else:
+            # Fallback: fixed payout from config
+            payout = 0.6 if "Nornickel" in cfg.get("name", "") else 0.0
+            if payout > 0:
+                formula_cell(ws, REG["EQ.div"], c_idx,
+                             f"=MAX(0,{cl}{REG['EQ.ni']})*{payout}", FMT_MLN)
+
         # RE close = open + NI - div - buyback + other
         formula_cell(ws, REG["EQ.re_close"], c_idx,
                      f"={cl}{REG['EQ.re_open']}+{cl}{REG['EQ.ni']}"
@@ -2340,7 +2369,8 @@ def build_control_panel(wb, cfg):
     section_header(ws, r, "J. ДИВИДЕНДЫ И КАПИТАЛ"); r += 1
     payout = 0.0 if "RUSAL" in cfg["name"] else 0.60
     label_row(ws, r, "Dividend payout ratio")
-    input_cell(ws, r, 3, payout, FMT_PCT); r += 1
+    input_cell(ws, r, 3, payout, FMT_PCT)
+    REG["CP.payout_ratio"] = r; r += 1
     label_row(ws, r, "Buyback (% FCF)")
     input_cell(ws, r, 3, 0.0, FMT_PCT); r += 2
 
