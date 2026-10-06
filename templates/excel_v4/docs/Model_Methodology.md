@@ -202,17 +202,36 @@ NWC = AR + INV - AP
 ΔNWC = NWC(t) - NWC(t-1) → CFO adjustment
 ```
 
-### 4.3 Debt (17_Debt)
+### 4.3 Debt (17_Debt + _Debt_Schedule)
+
+**Aggregate corkscrew (17_Debt):**
 ```
 Open + Draw - Mandatory - Voluntary + Refi = Close
-Interest = AVG(Open, Close) × avg_rate
-
 Draw: circular optimizer (see §3.4)
 Voluntary: MAX(0, est_cash - 1.5×min_cash) × IF(NI>0)
-ST/LT split: historical ratio carry-forward
+```
 
-Net Debt = Total Debt - Cash
-ND/EBITDA = Net Debt / EBITDA
+**Per-instrument schedule (_Debt_Schedule — hidden technical sheet):**
+```
+Per instrument (20 for Rusal, 10 for Nornickel):
+  Opening → Mandatory (if maturity_year = forecast_year) → Refi → Interest → Close
+  Canonical kinds: BOND_BULLET, BOND_FLOAT, TERM_AMORT, RC
+  Interest = AVG(Open, Close) × Rate
+    BOND_FLOAT: Rate = KeyRate_proxy + Spread
+    BOND_BULLET: Rate = contract_rate (from $F column)
+  Total row: SUM per column → linked to 17_Debt.interest
+```
+
+**Mandatory repay from instrument maturities:**
+| Year | Rusal | Nornickel |
+|------|-------|-----------|
+| 2026 | $3,357M (35%) | $2,000M (21%) |
+| 2027 | $5,629M (59%) | $0M |
+| 2028 | $140M (1%) | $2,000M (21%) |
+
+**Weighted avg rate (from instruments, not implied):**
+- Rusal: **8.01%** (71 instruments: CNY 4.75-8.5%, RUB 14-15%)
+- Nornickel: **5.62%** (10 instruments: USD 5.75-7%, RUB 3.5-12%)
 ```
 
 ### 4.4 Equity (24_Equity)
@@ -351,32 +370,36 @@ save active workbook
 
 ## 9. Результаты
 
-### Rusal 2026E (after audit fixes)
+### Rusal 2026E (final, per-instrument debt)
 | Показатель | Значение | До аудита |
 |-----------|---------|-----------|
 | Revenue | **$14,321M** | $10,546M |
 | EBITDA | **$577M (4.0%)** | $425M |
-| Net Income | **+$205M** ✅ | -$1,222M |
-| Interest | **-$773M** | -$1,155M |
-| Cash | **$752M** | -$400M |
-| Avg Debt Rate | **8.01%** | 12.03% |
+| Net Income | **+$157M** ✅ | -$1,222M |
+| Interest | **-$832M** (per-inst) | -$1,155M |
+| Cash | **$705M** | -$400M |
+| Avg Debt Rate | **8.01%** (weighted) | 12.03% |
+| Instruments | **20 + Other** | Aggregate |
 | Mandatory Repay | **$3,357M** | $0 |
 | ND/EBITDA | **16x** | 20x |
 | Rating | D | D |
-| **BS Check** | **-290 (1.2%)** | -17,503 → 0 |
+| **BS Check** | **-274 (1.1%)** | -17,503 |
 | CF Bridge | **0** ✓ | ✓ |
 
-### Nornickel 2026E (after audit fixes)
+### Nornickel 2026E (final, per-instrument debt)
 | Показатель | Значение |
 |-----------|---------|
 | Revenue | **$13,716M** |
-| EBITDA | **$4,815M (35%)** |
-| Net Income | **$1,252M** |
-| Cash | **$764M** |
-| Avg Debt Rate | **8.73%** |
-| ND/EBITDA | **2.1x** |
+| EBITDA | **$4,130M (30%)** |
+| Net Income | **$1,440M** |
+| Interest | **-$664M** (per-inst) |
+| Cash | **$1,281M** |
+| Avg Debt Rate | **5.62%** (weighted) |
+| Instruments | **10** (canonical) |
+| Mandatory Repay | **$2,000M** |
+| ND/EBITDA | **2.3x** |
 | Rating | CCC |
-| **BS Check** | **-270 (0.9%)** |
+| **BS Check** | **-333 (1.1%)** |
 | CF Bridge | **0** ✓ |
 
 ### Audit Findings (12/12 addressed)
@@ -408,3 +431,4 @@ save active workbook
 | `DESIGN.md` | Architecture | Архитектурное описание |
 | `IMPLEMENTATION_PLAN.md` | Plan | Детальный план реализации |
 | `TODO.md` | Issues | 19+ tracked issues |
+| `AUDIT_FIXES.md` | Audit | 12/12 findings tracked |
