@@ -236,33 +236,65 @@ def build_cover(wb, cfg):
 
 
 def build_macro(wb, cfg):
-    """01_Macro — macro scenarios + econometric equations."""
+    """01_Macro — macro scenarios + econometric equations + CHOOSE."""
     ws = wb["01_Macro"]
     apply_col_widths(ws)
 
     ws.cell(1, 1, f"01_Macro — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "Макросценарии и эконометрические уравнения").font = F_SUBTITLE
+    ws.cell(2, 1, "Макросценарии (3) + CHOOSE + Эконометрика").font = F_SUBTITLE
 
+    n_hist = len(cfg["hist_years"][-3:])
+    n_fc = len(cfg["fc_years"])
+    fc_start = 3 + n_hist
     year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
-    # Section A: Scenario 1 (Base)
-    section_header(ws, 6, "A. Сценарий 1: Базовый")
-    for i, factor in enumerate(cfg["macro_factors"]):
-        r = 8 + i
-        label_row(ws, r, factor)
-        # Forecast columns — yellow input
-        for c in range(3 + len(cfg["hist_years"][-3:]), 3 + len(cfg["hist_years"][-3:]) + len(cfg["fc_years"])):
-            input_cell(ws, r, c, 0, FMT_RATIO1)
+    factors = cfg["macro_factors"]
+    n_f = len(factors)
 
-    # Section B: Active scenario (CHOOSE)
-    gap = len(cfg["macro_factors"]) + 4
-    section_header(ws, 6 + gap, "Активный сценарий (CHOOSE)")
-    ws.cell(6 + gap + 1, 1, "Определяется по номеру из 00_Cover").font = F_NOTE
+    # ── Scenario blocks: 3 scenarios with same factor list ──
+    scenario_names = ["Базовый", "Стресс", "Severe"]
+    scenario_starts = {}  # factor_idx → (s1_row, s2_row, s3_row)
 
-    # Section C: Econometric display
-    section_header(ws, 6 + 2 * gap, "C. Эконометрика: Revenue ~ β × Δln(Factor)")
+    for s_idx, s_name in enumerate(scenario_names):
+        s_base = 6 + s_idx * (n_f + 3)
+        section_header(ws, s_base, f"Сценарий {s_idx+1}: {s_name}")
+        for i, factor in enumerate(factors):
+            r = s_base + 2 + i
+            label_row(ws, r, factor)
+            for c in range(fc_start, fc_start + n_fc):
+                input_cell(ws, r, c, 0, FMT_RATIO1)
+            if s_idx == 0:
+                scenario_starts[i] = [r]
+            else:
+                scenario_starts[i].append(r)
+
+    # ── Active scenario: CHOOSE based on CP.C5 ──
+    act_base = 6 + 3 * (n_f + 3) + 1
+    section_header(ws, act_base, "АКТИВНЫЙ СЦЕНАРИЙ (CHOOSE по номеру из Control_Panel)")
+    # Scenario selector ref
+    cp_scen = "Control_Panel!$C$5"
+
+    for i, factor in enumerate(factors):
+        r_act = act_base + 2 + i
+        label_row(ws, r_act, factor, "", "=CHOOSE(сценарий)")
+        s1, s2, s3 = scenario_starts[i]
+        for c in range(fc_start, fc_start + n_fc):
+            cl = get_column_letter(c)
+            formula_cell(ws, r_act, c,
+                         f"=IF({cp_scen}=1,{cl}{s1},IF({cp_scen}=2,{cl}{s2},{cl}{s3}))",
+                         FMT_RATIO1)
+        # Store active row for REG
+        reg_key = REG.get(f"MA.act_{['kr','brent','lme1','lme2','fx','gdp','cpi','ppi'][i]}"
+                          if i < 8 else None)
+
+    # Store active scenario base row for other sheets
+    REG["MA.act_base"] = act_base + 2
+
+    # ── Econometric display ──
+    econ_base = act_base + n_f + 4
+    section_header(ws, econ_base, "ЭКОНОМЕТРИКА: Revenue ~ β × Δln(Factor)")
     for i, label in enumerate(["β (эластичность)", "R² (коэфф. детерминации)", "α (константа)"]):
-        r = 6 + 2 * gap + 2 + i
+        r = econ_base + 2 + i
         label_row(ws, r, label)
 
 
@@ -1237,6 +1269,56 @@ def build_ratios(wb, cfg):
         formula_cell(ws, REG["RA.current"], c_idx,
                      f"=IFERROR('{NAME['BS']}'!{cl}${REG['BS.tca']}/'{NAME['BS']}'!{cl}${REG['BS.tcl']},0)",
                      FMT_MULT)
+
+        # ── Previously empty metrics (H1 audit) ──
+
+        # Debt/Equity
+        formula_cell(ws, REG["RA.debt_equity"], c_idx,
+                     f"=IFERROR('{NAME['DT']}'!{cl}${REG['DT.close']}/'{NAME['BS']}'!{cl}${REG['BS.te']},0)",
+                     FMT_MULT)
+        # Debt/Assets
+        formula_cell(ws, REG["RA.debt_assets"], c_idx,
+                     f"=IFERROR('{NAME['DT']}'!{cl}${REG['DT.close']}/'{NAME['BS']}'!{cl}${REG['BS.ta']},0)",
+                     FMT_PCT)
+        # Gross margin
+        formula_cell(ws, REG["RA.gp_margin"], c_idx,
+                     f"=IFERROR('{NAME['PL']}'!{cl}${REG['PL.gp']}/'{NAME['PL']}'!{cl}${REG['PL.revenue']},0)",
+                     FMT_PCT)
+        # EBIT margin
+        formula_cell(ws, REG["RA.ebit_margin"], c_idx,
+                     f"=IFERROR('{NAME['PL']}'!{cl}${REG['PL.ebit']}/'{NAME['PL']}'!{cl}${REG['PL.revenue']},0)",
+                     FMT_PCT)
+        # ROA
+        formula_cell(ws, REG["RA.roa"], c_idx,
+                     f"=IFERROR('{NAME['PL']}'!{cl}${REG['PL.ni']}/'{NAME['BS']}'!{cl}${REG['BS.ta']},0)",
+                     FMT_PCT)
+        # ROIC = EBIT × (1-tax) / (Equity + Net Debt)
+        cp_tax = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+        formula_cell(ws, REG["RA.roic"], c_idx,
+                     f"=IFERROR('{NAME['PL']}'!{cl}${REG['PL.ebit']}*(1-{cp_tax})"
+                     f"/('{NAME['BS']}'!{cl}${REG['BS.te']}+'{NAME['DT']}'!{cl}${REG['DT.nd']}),0)",
+                     FMT_PCT)
+        # Quick ratio = (Cash + AR) / TCL
+        formula_cell(ws, REG["RA.quick"], c_idx,
+                     f"=IFERROR(('{NAME['BS']}'!{cl}${REG['BS.cash']}+'{NAME['BS']}'!{cl}${REG['BS.ar']})"
+                     f"/'{NAME['BS']}'!{cl}${REG['BS.tcl']},0)",
+                     FMT_MULT)
+        # Cash ratio = Cash / TCL
+        formula_cell(ws, REG["RA.cash_ratio"], c_idx,
+                     f"=IFERROR('{NAME['BS']}'!{cl}${REG['BS.cash']}/'{NAME['BS']}'!{cl}${REG['BS.tcl']},0)",
+                     FMT_MULT)
+        # DSO, DIH, DPO, CCC from WC sheet
+        for wc_key, ra_key in [("dso", "dso"), ("dio", "dio"), ("dpo", "dpo"), ("ccc", "ccc")]:
+            ref_cell(ws, REG[f"RA.{ra_key}"], c_idx,
+                     f"='{NAME['WC']}'!{cl}${REG[f'WC.{wc_key}']}", FMT_DAYS)
+        # CapEx/Revenue
+        formula_cell(ws, REG["RA.capex_rev"], c_idx,
+                     f"=IFERROR(ABS('{NAME['PP']}'!{cl}${REG['PP.capex']})/'{NAME['PL']}'!{cl}${REG['PL.revenue']},0)",
+                     FMT_PCT)
+        # D&A/Revenue
+        formula_cell(ws, REG["RA.da_rev"], c_idx,
+                     f"=IFERROR('{NAME['PP']}'!{cl}${REG['PP.dep_charge']}/'{NAME['PL']}'!{cl}${REG['PL.revenue']},0)",
+                     FMT_PCT)
 
 
 def build_checks(wb, cfg):
