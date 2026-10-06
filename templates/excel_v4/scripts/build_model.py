@@ -1192,9 +1192,9 @@ def build_ratios(wb, cfg):
         formula_cell(ws, REG["RA.nd_ebitda"], c_idx,
                      f"=IFERROR('{NAME['DT']}'!{cl}${REG['DT.nd']}/'{NAME['PL']}'!{cl}${REG['PL.ebitda']},0)",
                      FMT_MULT)
-        # ICR
+        # ICR = EBITDA / |Interest| (interest is negative in PL)
         formula_cell(ws, REG["RA.icr"], c_idx,
-                     f"=IFERROR('{NAME['PL']}'!{cl}${REG['PL.ebitda']}/'{NAME['PL']}'!{cl}${REG['PL.interest']},0)",
+                     f"=IFERROR('{NAME['PL']}'!{cl}${REG['PL.ebitda']}/ABS('{NAME['PL']}'!{cl}${REG['PL.interest']}),0)",
                      FMT_MULT)
         # EBITDA margin
         formula_cell(ws, REG["RA.ebitda_margin"], c_idx,
@@ -3100,7 +3100,7 @@ def build_debt_schedule(wb, cfg):
     n_fc = len(fc)
 
     # Header: instrument info (cols A-G) + per-year blocks (H onwards)
-    info_headers = ["#", "Instrument", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
+    info_headers = ["№", "Instrument", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
     for i, h in enumerate(info_headers):
         ws.cell(4, i + 1, h).font = F_YEAR
         ws.cell(4, i + 1).alignment = A_CENTER
