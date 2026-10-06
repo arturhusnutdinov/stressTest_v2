@@ -632,6 +632,179 @@ def fill_revenue(wb, data: dict, company: str):
                 ws.cell(price_r, c).number_format = FMT_INT
 
 
+def fill_debt_schedule(wb, data: dict, company: str):
+    """Fill _Debt_Schedule with per-instrument formulas.
+
+    For each instrument:
+    - Map to canonical kind (BOND_BULLET, BOND_FLOAT, TERM_AMORT, RC)
+    - Per year: Open → Mandatory (if maturity) → Refi → Interest → Close
+    - Floating rate: KeyRate + spread from 01_Macro
+    """
+    if "_Debt_Schedule" not in wb.sheetnames:
+        return
+
+    ws = wb["_Debt_Schedule"]
+    src = SOURCES[company]
+    fc_years = src["fc_years"]
+    debt_instruments = data.get("debt", [])
+
+    if not debt_instruments:
+        print("    Debt schedule: no instruments")
+        return
+
+    # Sort by balance descending
+    instruments = sorted(debt_instruments,
+                         key=lambda x: -abs(float(x.get("opening_balance", 0) or 0)))
+    max_inst = min(20, len(instruments))
+
+    # Canonical kind mapping
+    def infer_kind(name, db_type, rate_type):
+        rt = (rate_type or "").lower()
+        dt = (db_type or "").lower()
+        if "revolv" in dt or "rc" in dt:
+            return "RC"
+        if "float" in rt or "keyrate" in name.lower():
+            return "BOND_FLOAT"
+        if "amort" in dt or "term" in dt:
+            return "TERM_AMORT"
+        return "BOND_BULLET"
+
+    # KeyRate forecast row in 01_Macro (for floating rate)
+    # Scenario base key rate is in row 8 of 01_Macro
+    macro_kr_row = 8  # LME Aluminium... actually we need KeyRate
+    # For now: use avg_rate from DT for floating (simplified)
+
+    yr_start = 8  # col H
+    cols_per = 5  # Open, Mandatory, Refi, Interest, Close
+
+    other_balance = 0
+    other_interest = 0
+
+    for i, inst in enumerate(instruments):
+        if i >= max_inst:
+            bal = abs(float(inst.get("opening_balance", 0) or 0)) / 1e6
+            rate = float(inst.get("interest_rate", 0) or 0)
+            other_balance += bal
+            other_interest += bal * rate
+            continue
+
+        r = 5 + i
+        name = str(inst.get("instrument_name", f"Inst_{i+1}"))[:35]
+        db_type = str(inst.get("db_type", ""))
+        ccy = str(inst.get("currency", "USD"))
+        bal_mln = abs(float(inst.get("opening_balance", 0) or 0)) / 1e6
+        rate = float(inst.get("interest_rate", 0) or 0)
+        rate_type = str(inst.get("rate_type", "fixed"))
+        maturity = str(inst.get("maturity_date", ""))
+        kind = infer_kind(name, db_type, rate_type)
+
+        # Parse maturity year
+        mat_year = None
+        for y in range(2025, 2035):
+            if str(y) in maturity:
+                mat_year = y
+                break
+
+        # Write instrument info
+        ws.cell(r, 1, i + 1).font = F_LABEL
+        ws.cell(r, 2, name).font = F_LABEL
+        ws.cell(r, 3, kind).font = F_LABEL
+        ws.cell(r, 4, ccy).font = F_LABEL
+        ws.cell(r, 5, round(bal_mln, 1)).font = F_INPUT
+        ws.cell(r, 5).number_format = FMT_MLN
+        ws.cell(r, 6, rate).font = F_INPUT
+        ws.cell(r, 6).number_format = FMT_PCT2
+        ws.cell(r, 7, maturity).font = F_LABEL
+
+        # Per-year schedule
+        for yr_idx, yr in enumerate(fc_years):
+            bc = yr_start + yr_idx * cols_per  # base column
+            cl_open = get_column_letter(bc)
+            cl_mand = get_column_letter(bc + 1)
+            cl_refi = get_column_letter(bc + 2)
+            cl_int = get_column_letter(bc + 3)
+            cl_close = get_column_letter(bc + 4)
+
+            if yr_idx == 0:
+                # Opening = instrument balance
+                ws.cell(r, bc, round(bal_mln, 1)).font = F_INPUT
+                ws.cell(r, bc).number_format = FMT_MLN
+            else:
+                # Opening = prev year close
+                prev_close_col = get_column_letter(bc - 1)  # prev year Close col
+                formula_cell(ws, r, bc, f"={prev_close_col}{r}", FMT_MLN)
+
+            # Mandatory = full balance if maturity_year = this year
+            if mat_year and mat_year == yr:
+                formula_cell(ws, r, bc + 1, f"={cl_open}{r}", FMT_MLN)
+            else:
+                formula_cell(ws, r, bc + 1, "=0", FMT_MLN)
+
+            # Refi = Mandatory (auto-rollover)
+            formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
+
+            # Interest = AVG(open, close) × rate
+            # For floating: use higher rate (KeyRate proxy from DT.avg_rate)
+            if kind == "BOND_FLOAT":
+                # Floating: interest from DT avg_rate (includes KeyRate)
+                dt_rate_col = get_column_letter(COL_START + N_HIST_DISPLAY + yr_idx)
+                rate_ref = f"'17_Debt'!{dt_rate_col}${REG['DT.avg_rate']}"
+            else:
+                rate_ref = f"$F${r}"  # contract rate from column F
+
+            formula_cell(ws, r, bc + 3,
+                         f"=({cl_open}{r}+{cl_close}{r})/2*{rate_ref}", FMT_MLN)
+
+            # Close = Open - Mandatory + Refi
+            formula_cell(ws, r, bc + 4,
+                         f"={cl_open}{r}-{cl_mand}{r}+{cl_refi}{r}", FMT_MLN)
+
+    # Other bucket (remaining instruments)
+    if other_balance > 0:
+        r_other = 5 + max_inst
+        ws.cell(r_other, 2, f"Other ({len(instruments) - max_inst} instruments)").font = F_LABEL_B
+        ws.cell(r_other, 5, round(other_balance, 1)).font = F_INPUT
+        ws.cell(r_other, 5).number_format = FMT_MLN
+        avg_other_rate = other_interest / other_balance if other_balance > 0 else 0.08
+        ws.cell(r_other, 6, round(avg_other_rate, 4)).font = F_INPUT
+        ws.cell(r_other, 6).number_format = FMT_PCT2
+
+        for yr_idx, yr in enumerate(fc_years):
+            bc = yr_start + yr_idx * cols_per
+            if yr_idx == 0:
+                ws.cell(r_other, bc, round(other_balance, 1)).font = F_INPUT
+            else:
+                prev_close = get_column_letter(bc - 1)
+                formula_cell(ws, r_other, bc, f"={prev_close}{r_other}", FMT_MLN)
+            formula_cell(ws, r_other, bc + 1, "=0", FMT_MLN)  # no maturity schedule
+            formula_cell(ws, r_other, bc + 2, "=0", FMT_MLN)
+            cl_open = get_column_letter(bc)
+            cl_close = get_column_letter(bc + 4)
+            formula_cell(ws, r_other, bc + 3,
+                         f"=({cl_open}{r_other}+{cl_close}{r_other})/2*$F${r_other}", FMT_MLN)
+            formula_cell(ws, r_other, bc + 4,
+                         f"={cl_open}{r_other}", FMT_MLN)  # no repay for other
+
+    print(f"    Debt schedule: {max_inst} instruments + Other, per-year formulas")
+
+    # Now link 17_Debt totals FROM _Debt_Schedule
+    ws_dt = wb["17_Debt"]
+    r_total = 5 + max_inst + (1 if other_balance > 0 else 0) + 1  # after Other + 1
+    # Actually use the pre-computed total row from build_debt_schedule
+    total_r = REG.get("DS.total_row", r_total)
+
+    for yr_idx, yr in enumerate(fc_years):
+        c_dt = COL_START + N_HIST_DISPLAY + yr_idx  # forecast col in 17_Debt
+        bc = yr_start + yr_idx * cols_per
+
+        # 17_Debt interest = _Debt_Schedule total interest
+        int_col = get_column_letter(bc + 3)
+        formula_cell(ws_dt, REG["DT.interest"], c_dt,
+                     f"='_Debt_Schedule'!{int_col}${total_r}", FMT_MLN)
+
+    print(f"    17_Debt.interest linked to _Debt_Schedule totals")
+
+
 def fill_revenue_reconciliation(wb, data: dict, company: str):
     """Fill reconciliation row: Reported Revenue - Σ segments for history years."""
     ws = wb["10_Revenue"]
@@ -1463,6 +1636,9 @@ def fill_all(company: str, model_path: str):
 
     print("\n7. Filling 17_Debt (opening balances)...")
     fill_debt_hist(wb, data, company)
+
+    print("\n5b. Filling _Debt_Schedule (per-instrument)...")
+    fill_debt_schedule(wb, data, company)
 
     print("\n6a. Filling revenue reconciliation...")
     fill_revenue_reconciliation(wb, data, company)

@@ -61,6 +61,7 @@ SHEETS = [
     ("SN", "40_Scen",        TAB_REPORT),
     ("CK", "90_Checks",      TAB_CTRL),
     ("MO", "Model_Output",   TAB_CTRL),
+    ("DS", "_Debt_Schedule",  TAB_ENGINE),  # Technical: per-instrument schedule (hidden)
     ("CL", "Changelog",      TAB_CTRL),
 ]
 
@@ -2596,6 +2597,74 @@ def build_model_output(wb, cfg):
         r += 1  # gap between sections
 
 
+def build_debt_schedule(wb, cfg):
+    """_Debt_Schedule — per-instrument schedule (technical, hidden later).
+
+    Layout (per forecast year block):
+      Row per instrument: Name | Kind | CCY | Balance | Rate | Type | Maturity
+      Then columns per year: Open | Mandatory | Refi | Interest | Close
+
+    Canonical kinds (from Python InstrumentKind):
+      BOND_BULLET: bullet maturity, fixed rate
+      BOND_FLOAT: bullet maturity, floating (KeyRate + spread)
+      TERM_AMORT: scheduled amortization
+      RC: revolving credit (draw/repay flexible)
+
+    Interest = Balance × Rate (per instrument)
+    Floating: Rate = KeyRate_forecast + Spread
+    Mandatory = IF(maturity_year = forecast_year, opening_balance, 0)
+    Refi = Mandatory (auto-rollover at market rate)
+    """
+    ws = wb["_Debt_Schedule"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, "DEBT SCHEDULE — Per-Instrument (Technical)").font = F_TITLE
+    ws.cell(2, 1, "Canonical instruments: BOND_BULLET / BOND_FLOAT / TERM_AMORT / RC").font = F_SUBTITLE
+
+    fc = cfg["fc_years"]
+    n_fc = len(fc)
+
+    # Header: instrument info (cols A-G) + per-year blocks (H onwards)
+    info_headers = ["#", "Instrument", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
+    for i, h in enumerate(info_headers):
+        ws.cell(4, i + 1, h).font = F_YEAR
+        ws.cell(4, i + 1).alignment = A_CENTER
+
+    # Per-year column blocks: Open | Mandatory | Refi | Interest | Close
+    yr_cols_per = 5  # columns per year
+    for yr_idx, yr in enumerate(fc):
+        base_col = 8 + yr_idx * yr_cols_per
+        for j, sub in enumerate(["Open", "Mandatory", "Refi", "Interest", "Close"]):
+            ws.cell(3, base_col + j, f"{yr}E").font = F_YEAR
+            ws.cell(4, base_col + j, sub).font = F_YEAR
+
+    # Instruments will be filled by fill_data (rows 5+)
+    # Row N+5 = TOTAL row with SUM formulas
+
+    # Placeholder: 20 instrument rows + Other + total
+    max_instruments = 20
+    r_total = 5 + max_instruments + 1 + 1  # +1 Other row, +1 gap
+    ws.cell(r_total, 1, "").font = F_LABEL_B
+    ws.cell(r_total, 2, "ИТОГО").font = F_LABEL_B
+
+    # Total formulas per year
+    for yr_idx in range(n_fc):
+        base_col = 8 + yr_idx * yr_cols_per
+        for j in range(yr_cols_per):
+            col = base_col + j
+            col_letter = get_column_letter(col)
+            formula_cell(ws, r_total, col,
+                         f"=SUM({col_letter}5:{col_letter}{r_total - 1})", FMT_MLN, bold=True)
+
+    # Store key row/col references for 17_Debt linkage
+    REG["DS.total_row"] = r_total
+    REG["DS.yr_start_col"] = 8
+    REG["DS.cols_per_year"] = yr_cols_per
+    REG["DS.max_instruments"] = max_instruments
+
+    # Hide sheet (technical)
+    ws.sheet_state = 'hidden'
+
+
 def build_changelog(wb, cfg):
     """Changelog — version history."""
     ws = wb["Changelog"]
@@ -2659,6 +2728,7 @@ def build(company: str, output: str):
         ("40_Scen",         build_scenarios),
         ("90_Checks",       build_checks),
         ("Model_Output",    build_model_output),
+        ("_Debt_Schedule",  build_debt_schedule),
         ("Changelog",       build_changelog),
     ]
     for name, builder in builders:
