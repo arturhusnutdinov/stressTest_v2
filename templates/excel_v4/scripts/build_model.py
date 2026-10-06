@@ -715,12 +715,10 @@ def build_ppe(wb, cfg):
     label_row(ws, r_da_rate, "DA / ОС нетто (rate)", "%")
 
     # CP references for CapEx parameters
-    # CP.da_rate = DA rate, CP row 42 = sustaining ratio, CP row 43 = expansion %
+    # CP references (dynamic rows from REG, set in build_control_panel)
     cp_da_rate = ref('CP', 'da_rate', '$C')
-    # Sustaining ratio and expansion % are in CP nearby
-    # We'll use $C$42 for sustaining_da_ratio and $C$43 for expansion_pct
-    cp_sustaining = "'Control_Panel'!$C$42"
-    cp_expansion = "'Control_Panel'!$C$43"
+    cp_sustaining = ref('CP', 'sustaining_ratio', '$C')
+    cp_expansion = ref('CP', 'expansion_pct', '$C')
 
     # Formulas for forecast columns
     n_hist = len(cfg["hist_years"][-3:])
@@ -1493,12 +1491,11 @@ def build_debt(wb, cfg):
                      f"=IF(calc_reset=1,{seed_draw},{iter_draw})",
                      FMT_MLN)
 
-        # Voluntary = MAX(0, post-draw-cash - 1.5×min_cash) × IF(NI>0)
-        # Only repay if company is profitable and has excess cash
+        # Voluntary: use est_cash (no circular) — only when profitable
         ni_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ni']}"
         formula_cell(ws, REG["DT.voluntary"], c_idx,
                      f"=IF({ni_ref}>0,"
-                     f"MAX(0,({cash_prev}+{cfo_ref}+{cfi_ref}+{cff_ref})-{cp_min_cash}*1.5),"
+                     f"MAX(0,({est_cash})+{cl}{REG['DT.draw']}-{cp_min_cash}*1.5),"
                      f"0)",
                      FMT_MLN)
 
@@ -2296,9 +2293,11 @@ def build_control_panel(wb, cfg):
     REG["CP.da_rate"] = r
     r += 1
     label_row(ws, r, "Sustaining CapEx / DA ratio")
-    input_cell(ws, r, 3, 1.8, FMT_RATIO); r += 1
+    input_cell(ws, r, 3, 1.8, FMT_RATIO)
+    REG["CP.sustaining_ratio"] = r; r += 1
     label_row(ws, r, "Expansion CapEx (% rev growth)")
-    input_cell(ws, r, 3, 0.05, FMT_PCT); r += 1
+    input_cell(ws, r, 3, 0.05, FMT_PCT)
+    REG["CP.expansion_pct"] = r; r += 1
     label_row(ws, r, "Useful life (лет)")
     input_cell(ws, r, 3, 16, FMT_INT); r += 1
     label_row(ws, r, "Disposal % of CapEx")

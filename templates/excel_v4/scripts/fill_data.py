@@ -60,6 +60,7 @@ IS_MAP = {
     "ebitda": ("EBITDA", "ebitda", False),
     "ebit": ("EBIT", "ebit", False),
     "interest_expense": ("Процентные расходы", "interest", False),
+    "finance_cost_net": ("Фин. расходы (нетто)", "interest", False),  # Nornickel alias
     "interest_income": ("Процентные доходы", None, False),
     "other_operating_expenses": ("Прочие опер. расходы", None, False),
     "ebt": ("Прибыль до налога", "ebt", False),
@@ -660,6 +661,9 @@ def fill_debt_hist(wb, data: dict, company: str):
     # Avg rate from interest / avg debt
     is_data = data.get("is", {})
     interest = abs(is_data.get("interest_expense", {}).get(last_yr, 0))
+    if interest == 0:
+        # Try alternative metric names (Nornickel: finance_cost_net)
+        interest = abs(is_data.get("finance_cost_net", {}).get(last_yr, 0))
     if total > 0 and interest > 0:
         avg_rate = interest / total
         fc_start_col = hc + 1
@@ -1098,11 +1102,17 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
     last_rev = abs(rev_hist.get(hist_years[-1], 1))
     cogs_ratio = last_cogs / last_rev if last_rev else 0.80
 
-    # Write calibrated COGS ratio to Control_Panel row 20 for use by forecast formulas
+    # Write calibrated COGS ratio to Control_Panel row 20
     ws_cp = wb["Control_Panel"]
     ws_cp.cell(20, 3, round(cogs_ratio, 4)).font = F_INPUT
     ws_cp.cell(20, 3).number_format = FMT_PCT
     ws_cp.cell(20, 1, "COGS ratio (калиброванный)").font = F_LABEL
+
+    # Ensure min_cash is set (row 55)
+    if ws_cp.cell(55, 3).value is None:
+        ws_cp.cell(55, 3, 500).font = F_INPUT
+        ws_cp.cell(55, 3).number_format = FMT_MLN0
+        ws_cp.cell(55, 1, "Min cash target").font = F_LABEL
 
     print(f"    COGS: ratio={cogs_ratio:.1%} → CP!C20")
 
