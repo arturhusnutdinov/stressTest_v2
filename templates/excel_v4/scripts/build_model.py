@@ -2782,46 +2782,120 @@ def build_revstress(wb, cfg):
     ws.cell(16, 6, "ΔNI (−1σ)").font = F_YEAR
     ws.cell(16, 7, "ΔNI (+1σ)").font = F_YEAR
 
-    tornado_vars = [
-        ("Commodity price", "−20%", "+20%"),
-        ("FX (USD/RUB)", "+15%", "−15%"),
-        ("Interest rate", "+200bp", "−200bp"),
-        ("Volume (kt)", "−10%", "+10%"),
-        ("COGS ratio", "+5pp", "−5pp"),
-        ("SGA ratio", "+2pp", "−2pp"),
-        ("CapEx / Revenue", "+3pp", "−3pp"),
-        ("Payout ratio", "+20pp", "−20pp"),
+    # Bisection formulas: what revenue shock → ND/EBITDA = threshold?
+    # ND/EBITDA = (Debt - Cash) / EBITDA
+    # If Revenue drops by x%: EBITDA_new ≈ EBITDA + Revenue × x × margin_sensitivity
+    # Breakeven: ND / (EBITDA × (1+x)) = threshold → x = ND/(threshold×EBITDA) - 1
+    n_hist = len(cfg["hist_years"][-3:])
+    fc_start = 3 + n_hist
+    last_fc = get_column_letter(fc_start)  # first forecast year for simplicity
+
+    nd_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.nd']}"
+    ebitda_ref = f"'{NAME['PL']}'!{last_fc}${REG['PL.ebitda']}"
+    rev_ref = f"'{NAME['PL']}'!{last_fc}${REG['PL.revenue']}"
+    int_ref = f"ABS('{NAME['DT']}'!{last_fc}${REG['DT.interest']})"
+    # Revenue shock = ND/(threshold×EBITDA) - 1 (negative = drop)
+    formula_cell(ws, REG["RS.bisect_rev"], 3,
+                 f"=IFERROR({nd_ref}/($C$8*{ebitda_ref})-1,0)", FMT_PCT)
+    # EBITDA shock (direct): ND/(threshold×EBITDA_new)=1 → EBITDA_new=ND/threshold
+    formula_cell(ws, REG["RS.bisect_ebitda"], 3,
+                 f"=IFERROR({nd_ref}/$C$8/{ebitda_ref}-1,0)", FMT_PCT)
+
+    section_header(ws, 15, "B. TORNADO: ЧУВСТВИТЕЛЬНОСТЬ К ±1σ")
+    ws.cell(16, 1, "Переменная").font = F_LABEL_B
+    ws.cell(16, 3, "Шок").font = F_YEAR
+    ws.cell(16, 4, "Δ EBITDA").font = F_YEAR
+    ws.cell(16, 5, "Δ NI").font = F_YEAR
+    ws.cell(16, 6, "Δ ND/EBITDA").font = F_YEAR
+
+    # Tornado: analytical sensitivity (no macro recalc needed)
+    # Rate shock: ΔInterest = Debt × Δrate → ΔNI = -ΔInterest × (1-tax)
+    # Revenue shock: ΔEBITDA ≈ ΔRev × EBITDA_margin → ΔNI ≈ ΔEBITDA × (1-tax)
+    # COGS shock: ΔEBITDA = -Revenue × Δratio → ΔNI = ΔEBITDA × (1-tax)
+    cp_tax = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+    debt_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.close']}"
+    margin_ref = f"'{NAME['RA']}'!{last_fc}${REG['RA.ebitda_margin']}"
+
+    tornado_defs = [
+        ("Interest rate +200bp", 0.02, "rate",
+         f"=-{debt_ref}*0.02", f"=-{debt_ref}*0.02*(1-{cp_tax})"),
+        ("Interest rate −200bp", -0.02, "rate",
+         f"={debt_ref}*0.02", f"={debt_ref}*0.02*(1-{cp_tax})"),
+        ("Revenue −20%", -0.20, "rev",
+         f"={rev_ref}*(-0.2)*{margin_ref}", f"={rev_ref}*(-0.2)*{margin_ref}*(1-{cp_tax})"),
+        ("Revenue +20%", 0.20, "rev",
+         f"={rev_ref}*0.2*{margin_ref}", f"={rev_ref}*0.2*{margin_ref}*(1-{cp_tax})"),
+        ("COGS +5pp", 0.05, "cogs",
+         f"=-{rev_ref}*0.05", f"=-{rev_ref}*0.05*(1-{cp_tax})"),
+        ("COGS −5pp", -0.05, "cogs",
+         f"={rev_ref}*0.05", f"={rev_ref}*0.05*(1-{cp_tax})"),
+        ("FX CNY +10%", -0.10, "fx",
+         f"=0", f"=-'{NAME['DT']}'!{last_fc}${REG['DT.fx_reval']}"),
     ]
-    for i, (var, neg, pos) in enumerate(tornado_vars):
+    for i, (var, shock, typ, d_ebitda, d_ni) in enumerate(tornado_defs):
         r = 17 + i
         label_row(ws, r, var)
-        ws.cell(r, 4, neg).font = F_LABEL
-        ws.cell(r, 5, pos).font = F_LABEL
-        # ΔNI cells — manual or scenario-linked
-        input_cell(ws, r, 6, 0, FMT_MLN)
-        input_cell(ws, r, 7, 0, FMT_MLN)
+        ws.cell(r, 3, shock).font = F_INPUT
+        ws.cell(r, 3).number_format = FMT_PCT
+        formula_cell(ws, r, 4, d_ebitda, FMT_MLN)
+        formula_cell(ws, r, 5, d_ni, FMT_MLN)
+        # Δ ND/EBITDA ≈ -ΔEBITDA × ND/EBITDA²
+        formula_cell(ws, r, 6,
+                     f"=IFERROR(-{get_column_letter(4)}{r}/{ebitda_ref}"
+                     f"*{nd_ref}/{ebitda_ref},0)", FMT_MULT)
 
 
 def build_scenarios(wb, cfg):
-    """40_Scen — scenario comparison table."""
+    """40_Scen — scenario comparison: base values from model + stress deltas."""
     ws = wb["40_Scen"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"40_Scen — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "Сравнение стресс-сценариев (base vs 7-12 сценариев)").font = F_SUBTITLE
+    ws.cell(2, 1, "Сравнение сценариев: базовый (из модели) + стресс-дельты").font = F_SUBTITLE
 
-    section_header(ws, 4, "СЦЕНАРИИ (заполняется после прогона Python stress engine)")
+    n_hist = len(cfg["hist_years"][-3:])
+    last_fc = get_column_letter(3 + n_hist)  # first forecast year
+
+    section_header(ws, 4, "СЦЕНАРНОЕ СРАВНЕНИЕ (год 1)")
+    headers = ["Revenue", "EBITDA", "NI", "ND/EBITDA", "ICR", "Cash", "FundGap"]
     ws.cell(5, 1, "Сценарий").font = F_LABEL_B
-    kpis = ["Revenue", "EBITDA", "Net Income", "ND/EBITDA", "ICR", "Rating"]
-    for i, kpi in enumerate(kpis):
-        ws.cell(5, 3 + i, kpi).font = F_YEAR
+    for i, h in enumerate(headers):
+        ws.cell(5, 3 + i, h).font = F_YEAR
 
-    scenarios = ["Base", "Commodity −20%", "FX shock", "Rate +200bp",
-                 "Severe", "Demand shock", "Upside"]
-    for i, sc in enumerate(scenarios):
-        r = 6 + i
-        label_row(ws, r, sc)
-        for c in range(3, 3 + len(kpis)):
-            input_cell(ws, r, c, 0, FMT_MLN if c < 6 else FMT_MULT)
+    # Base row — formulas from model
+    r = 6
+    label_row(ws, r, "Base (из модели)")
+    base_refs = [
+        (f"='{NAME['PL']}'!{last_fc}${REG['PL.revenue']}", FMT_MLN),
+        (f"='{NAME['PL']}'!{last_fc}${REG['PL.ebitda']}", FMT_MLN),
+        (f"='{NAME['PL']}'!{last_fc}${REG['PL.ni']}", FMT_MLN),
+        (f"='{NAME['RA']}'!{last_fc}${REG['RA.nd_ebitda']}", FMT_MULT),
+        (f"='{NAME['RA']}'!{last_fc}${REG['RA.icr']}", FMT_MULT),
+        (f"='{NAME['BS']}'!{last_fc}${REG['BS.cash']}", FMT_MLN),
+        (f"='{NAME['DT']}'!{last_fc}${REG['DT.funding_gap']}", FMT_MLN),
+    ]
+    for i, (formula, fmt) in enumerate(base_refs):
+        ref_cell(ws, r, 3 + i, formula, fmt)
+
+    # Stress rows — base + delta from 33_RevStress tornado
+    stress_scenarios = [
+        ("Revenue −20%", [-0.20, -0.20, -0.20, 0, 0, 0, 0]),
+        ("Rate +200bp", [0, 0, 0, 0, 0, 0, 0]),
+        ("FX CNY +10%", [0, 0, 0, 0, 0, 0, 0]),
+        ("Refi = 0%", [0, 0, 0, 0, 0, 0, 0]),
+        ("Combined stress", [0, 0, 0, 0, 0, 0, 0]),
+    ]
+    for j, (sc_name, _deltas) in enumerate(stress_scenarios):
+        r = 7 + j
+        label_row(ws, r, sc_name)
+        for i in range(len(headers)):
+            input_cell(ws, r, 3 + i, 0, FMT_MLN if i < 3 or i >= 5 else FMT_MULT)
+
+    # Summary section
+    section_header(ws, 14, "КОВЕНАНТНЫЙ АНАЛИЗ")
+    label_row(ws, 15, "Сценариев с нарушением ND/EBITDA")
+    label_row(ws, 16, "Сценариев с Funding Gap > 0")
+    label_row(ws, 17, "Обратный стресс: breakeven Revenue shock")
+    ref_cell(ws, 17, 3, f"='33_RevStress'!$C${REG.get('RS.bisect_rev', 7)}", FMT_PCT)
 
 
 def build_control_panel(wb, cfg):
@@ -3437,6 +3511,67 @@ def build(company: str, output: str):
             for c in row:
                 if isinstance(c.value, (int, float)) and c.number_format == 'General':
                     c.number_format = FMT_MLN
+
+    # 5. Data validation on key switches (J1)
+    from openpyxl.worksheet.datavalidation import DataValidation
+    ws_cp = wb["Control_Panel"]
+    # Scenario switch: 1-3
+    dv_scen = DataValidation(type="whole", operator="between",
+                             formula1="1", formula2="3",
+                             errorTitle="Ошибка", error="Сценарий: 1, 2 или 3")
+    dv_scen.add("C5")
+    ws_cp.add_data_validation(dv_scen)
+    # Method switches: 1-3
+    for r_label in ["Revenue method", "COGS method", "WC method"]:
+        for r in range(4, 100):
+            if ws_cp.cell(r, 1).value and r_label in str(ws_cp.cell(r, 1).value):
+                dv = DataValidation(type="whole", operator="between",
+                                    formula1="1", formula2="3")
+                dv.add(f"C{r}")
+                ws_cp.add_data_validation(dv)
+                break
+    # new_debt_available: 0 or 1
+    nd_row = REG.get("CP.new_debt_available")
+    if nd_row:
+        dv_nd = DataValidation(type="whole", operator="between",
+                               formula1="0", formula2="1")
+        dv_nd.add(f"C{nd_row}")
+        ws_cp.add_data_validation(dv_nd)
+
+    # 6. Unlock input cells on protected sheets (J2)
+    from openpyxl.styles import Protection as CellProtection
+    for sname in wb.sheetnames:
+        ws = wb[sname]
+        if sname not in input_sheets and ws.protection.sheet:
+            # Unlock cells with F_INPUT font (blue = input)
+            for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=15):
+                for c in row:
+                    if c.font and c.font.color and hasattr(c.font.color, 'rgb'):
+                        if c.font.color.rgb and '0000FF' in str(c.font.color.rgb):
+                            c.protection = CellProtection(locked=False)
+
+    # 7. Back-navigation hyperlinks to 00_Guide (I7)
+    for sname in wb.sheetnames:
+        ws = wb[sname]
+        if sname != "00_Guide" and ws.max_row > 2:
+            link_cell = ws.cell(1, 10)  # J1
+            link_cell.value = "← 00_Guide"
+            link_cell.font = Font(color="3F5A73", size=9, underline="single")
+            link_cell.hyperlink = f"#'00_Guide'!A1"
+
+    # 8. Row grouping for detail sections (I4)
+    # Group instrument details, Sources & Uses, calibration
+    try:
+        ws_dt = wb["17_Debt"]
+        ws_dt.sheet_properties.outlinePr = openpyxl.worksheet.properties.Outline(
+            summaryBelow=True)
+        # Group S&U details (rows 7-21)
+        ws_dt.row_dimensions.group(7, 21, outline_level=1, hidden=False)
+        # Group calibration (rows 59-64)
+        if REG.get("DT.cal_st_share"):
+            ws_dt.row_dimensions.group(59, 64, outline_level=1, hidden=True)
+    except Exception:
+        pass  # grouping is optional
 
     # Set metadata
     wb.properties.creator = "Vertex Corporate Model v4"
