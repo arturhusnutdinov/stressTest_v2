@@ -1051,9 +1051,9 @@ def build_pl(wb, cfg):
         # D&A ← 15_PPE dep_charge
         ref_cell(ws, REG["PL.da"], c_idx,
                  f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
-        # Interest ← 17_Debt
-        ref_cell(ws, REG["PL.interest"], c_idx,
-                 f"='{NAME['DT']}'!{cl}${REG['DT.interest']}", FMT_MLN)
+        # Interest ← 17_Debt (always negative in PL — expense)
+        formula_cell(ws, REG["PL.interest"], c_idx,
+                     f"=-ABS('{NAME['DT']}'!{cl}${REG['DT.interest']})", FMT_MLN)
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
                  f"='{NAME['TX']}'!{cl}${REG['TX.total']}", FMT_MLN)
@@ -1067,9 +1067,9 @@ def build_pl(wb, cfg):
         # EBIT = EBITDA - DA - impairment
         formula_cell(ws, REG["PL.ebit"], c_idx,
                      f"={cl}{REG['PL.ebitda']}-{cl}{REG['PL.da']}-{cl}{REG['PL.impairment']}", FMT_MLN, bold=True)
-        # EBT = EBIT - interest + interest_income + other_fin + associates
+        # EBT = EBIT + interest(negative) + interest_income + other_fin + associates
         formula_cell(ws, REG["PL.ebt"], c_idx,
-                     f"={cl}{REG['PL.ebit']}-{cl}{REG['PL.interest']}+{cl}{REG['PL.interest_income']}+"
+                     f"={cl}{REG['PL.ebit']}+{cl}{REG['PL.interest']}+{cl}{REG['PL.interest_income']}+"
                      f"{cl}{REG['PL.other_fin']}+{cl}{REG['PL.associates']}", FMT_MLN, bold=True)
         # NI = EBT - Tax
         formula_cell(ws, REG["PL.ni"], c_idx,
@@ -1226,15 +1226,25 @@ def build_checks(wb, cfg):
                      f"-'{NAME['EQ']}'!{cl}${REG['EQ.re_close']}",
                      FMT_RATIO)
 
-    # Error count: count checks where ABS > 1 (tolerance $1M)
+    # Error count: check integrity + detect #VALUE! in key cells
     r_err = REG["CK.error_count"]
-    label_row(ws, r_err, "ОШИБОК ВСЕГО", "", "Должно быть 0")
+    label_row(ws, r_err, "ОШИБОК ВСЕГО (integrity + #VALUE!)", "", "Должно быть 0")
     ws.cell(r_err, 1).font = F_LABEL_B
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
+        # Part 1: integrity checks > tolerance
         check_rows = [REG["CK.bs_check"], REG["CK.cf_check"], REG["CK.ppe_roll"],
                       REG["CK.debt_roll"], REG["CK.equity_roll"]]
-        parts = [f"IF(ABS({cl}{r})>1,1,0)" for r in check_rows]
+        parts = [f"IF(ISERROR({cl}{r}),1,IF(ABS({cl}{r})>1,1,0))" for r in check_rows]
+        # Part 2: ISERROR on key model cells (PL, BS, CF, Valuation)
+        key_cells = [
+            f"'{NAME['PL']}'!{cl}${REG['PL.ni']}",    # Net Income
+            f"'{NAME['BS']}'!{cl}${REG['BS.ta']}",     # Total Assets
+            f"'{NAME['BS']}'!{cl}${REG['BS.cash']}",   # Cash
+            f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}",    # CFO
+            f"'{NAME['VL']}'!$C${REG['VL.wacc']}",     # WACC
+        ]
+        parts += [f"IF(ISERROR({ref}),1,0)" for ref in key_cells]
         formula_cell(ws, r_err, c_idx, "=" + "+".join(parts), FMT_INT, bold=True)
 
 
@@ -1702,9 +1712,10 @@ def build_cf(wb, cfg):
         # CapEx ← PPE
         ref_cell(ws, REG["CF.capex"], c_idx,
                  f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
-        # Debt draw ← Debt
-        ref_cell(ws, REG["CF.debt_draw"], c_idx,
-                 f"='{NAME['DT']}'!{cl}${REG['DT.draw']}", FMT_MLN)
+        # Debt draw ← Debt (new draw + refinancing)
+        formula_cell(ws, REG["CF.debt_draw"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.draw']}+'{NAME['DT']}'!{cl}${REG['DT.refi']}",
+                     FMT_MLN)
         # Debt repay ← Debt (mandatory + voluntary)
         formula_cell(ws, REG["CF.debt_repay"], c_idx,
                      f"='{NAME['DT']}'!{cl}${REG['DT.mandatory']}+'{NAME['DT']}'!{cl}${REG['DT.voluntary']}",
@@ -1853,9 +1864,10 @@ def build_tax(wb, cfg):
         # Effective rate
         formula_cell(ws, REG["TX.eff_rate"], c_idx,
                      f"=IFERROR({cl}{REG['TX.total']}/{cl}{REG['TX.ebt']},0)", FMT_PCT)
-        # NOL close = open - used
+        # NOL close = open - used + new_losses (accumulate when EBT < 0)
         formula_cell(ws, REG["TX.nol_close"], c_idx,
-                     f"={cl}{REG['TX.nol_open']}-{cl}{REG['TX.nol_used']}", FMT_MLN)
+                     f"={cl}{REG['TX.nol_open']}-{cl}{REG['TX.nol_used']}"
+                     f"+MAX(0,-{cl}{REG['TX.ebt']})", FMT_MLN)
 
         # DTA/DTL: carry forward from previous year (simplified — no deferred tax calculation)
         # In Python engine: DTA/DTL change = deferred tax expense

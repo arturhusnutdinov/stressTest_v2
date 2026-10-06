@@ -721,6 +721,35 @@ def fill_debt_hist(wb, data: dict, company: str):
         ws.cell(REG["DT.interest"], hc, round(interest, 1)).font = F_INPUT
         ws.cell(REG["DT.interest"], hc).number_format = FMT_MLN
 
+    # Fill mandatory repay from instrument maturities
+    fc_years = src["fc_years"]
+    debt_instruments = data.get("debt", [])
+    if debt_instruments:
+        from collections import defaultdict
+        repay_by_year = defaultdict(float)
+        for inst in debt_instruments:
+            bal = abs(float(inst.get("opening_balance", 0) or 0))
+            mat = str(inst.get("maturity_date", ""))
+            for y in fc_years:
+                if str(y) in mat:
+                    repay_by_year[y] += bal
+                    break
+
+        fc_start_col = hc + 1
+        for i, yr in enumerate(fc_years):
+            c = fc_start_col + i
+            repay = repay_by_year.get(yr, 0) / 1e6  # convert to mln
+            if repay > 0:
+                ws.cell(REG["DT.mandatory"], c, round(repay, 1)).font = F_INPUT
+                ws.cell(REG["DT.mandatory"], c).number_format = FMT_MLN
+                # Refinancing = mandatory (assumed full refi)
+                ws.cell(REG["DT.refi"], c).value = f"={get_column_letter(c)}{REG['DT.mandatory']}"
+                ws.cell(REG["DT.refi"], c).font = F_FORMULA
+                ws.cell(REG["DT.refi"], c).number_format = FMT_MLN
+
+        if repay_by_year:
+            print(f"    Mandatory repay: " + ", ".join(f"{yr}={repay_by_year[yr]/1e6:,.0f}M" for yr in sorted(repay_by_year)))
+
     # Also fill ND in history col
     nd = total - cash
     ws.cell(REG["DT.nd"], hc, round(nd, 1)).font = F_FORMULA
