@@ -700,6 +700,28 @@ def fill_debt_schedule(wb, data: dict, company: str):
         print("    Debt schedule: no instruments")
         return
 
+    # Load KeyRate forecast from YAML for floating rate repricing
+    import yaml as _yaml
+    yaml_path = SV2_ROOT / f"companies/{company}/configs/project.yaml"
+    kr_forecast = {}
+    target_nd_ebitda = 3.5
+    if yaml_path.exists():
+        _proj = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        kr_forecast = _proj.get("model", {}).get("custom", {}).get("debt", {}).get("cbr_key_rate_forecast", {})
+        target_nd_ebitda = _proj.get("model", {}).get("custom", {}).get("debt", {}).get("target_net_debt_ebitda",
+                           _proj.get("model", {}).get("standard", {}).get("debt", {}).get("target_net_debt_ebitda", 3.5))
+
+    # Write KeyRate forecast to row 3 of _Debt_Schedule (reference for floating instruments)
+    kr_row = 3  # row 3 = KeyRate forecast
+    ws.cell(kr_row, 1, "KeyRate forecast").font = F_NOTE
+    yr_start = 8
+    cols_per = 5
+    for yr_idx, yr in enumerate(fc_years):
+        bc = yr_start + yr_idx * cols_per
+        kr_val = kr_forecast.get(yr, kr_forecast.get(int(yr), 0.12))
+        ws.cell(kr_row, bc, kr_val).font = F_INPUT
+        ws.cell(kr_row, bc).number_format = FMT_PCT
+
     # Sort by balance descending
     instruments = sorted(debt_instruments,
                          key=lambda x: -abs(float(x.get("opening_balance", 0) or 0)))
@@ -792,13 +814,18 @@ def fill_debt_schedule(wb, data: dict, company: str):
             formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
 
             # Interest = AVG(open, close) × rate
-            # For floating: use higher rate (KeyRate proxy from DT.avg_rate)
+            # BOND_FLOAT: rate = KeyRate(from row 3) + spread (from $F = contract spread)
+            # BOND_BULLET/OTHER: rate = contract rate from $F
             if kind == "BOND_FLOAT":
-                # Floating: interest from DT avg_rate (includes KeyRate)
-                dt_rate_col = get_column_letter(COL_START + N_HIST_DISPLAY + yr_idx)
-                rate_ref = f"'17_Debt'!{dt_rate_col}${REG['DT.avg_rate']}"
+                # Floating: KeyRate + spread
+                kr_col = get_column_letter(bc)  # KeyRate in same year block, row 3
+                rate_ref = f"({kr_col}${kr_row}+$F${r})"  # KeyRate + spread
+            elif kind == "RC":
+                # RC: typically KeyRate + premium
+                kr_col = get_column_letter(bc)
+                rate_ref = f"({kr_col}${kr_row}+$F${r})"
             else:
-                rate_ref = f"$F${r}"  # contract rate from column F
+                rate_ref = f"$F${r}"  # fixed contract rate
 
             formula_cell(ws, r, bc + 3,
                          f"=({cl_open}{r}+{cl_close}{r})/2*{rate_ref}", FMT_MLN)
@@ -844,16 +871,122 @@ def fill_debt_schedule(wb, data: dict, company: str):
             total_r = r
             break
 
+    NAME_PL = "21_PL"
+    NAME_PPE = "15_PPE"
+
+    # ── ST/LT split from instrument maturities ──
+    # Add ST/LT computation rows after total in _Debt_Schedule
+    r_st_label = total_r + 2
+    r_lt_label = total_r + 3
+    ws.cell(r_st_label, 2, "ST (maturity ≤ t+1)").font = F_LABEL_B
+    ws.cell(r_lt_label, 2, "LT (maturity > t+1)").font = F_LABEL_B
+
     for yr_idx, yr in enumerate(fc_years):
-        c_dt = COL_START + N_HIST_DISPLAY + yr_idx  # forecast col in 17_Debt
         bc = yr_start + yr_idx * cols_per
+        close_col = get_column_letter(bc + 4)  # Close column
+
+        # ST: SUMPRODUCT of Close × (maturity_year ≤ yr+1)
+        # For each instrument: IF maturity_year ≤ yr+1 → Close, else 0
+        st_parts = []
+        lt_parts = []
+        for i_row in range(5, 5 + max_inst + (1 if other_balance > 0 else 0)):
+            mat_cell = f"$G${i_row}"  # maturity column
+            close_cell = f"{close_col}{i_row}"
+            # ST: instrument matures within 1 year of THIS forecast year
+            # Check if maturity text contains year ≤ yr+1
+            st_conditions = []
+            for check_yr in range(yr, yr + 2):  # this year or next
+                st_conditions.append(f'ISNUMBER(SEARCH("{check_yr}",{mat_cell}))')
+            st_formula = f"IF(OR({','.join(st_conditions)}),{close_cell},0)"
+            st_parts.append(st_formula)
+            lt_parts.append(f"{close_cell}-{st_formula}")
+
+        # Simplified: ST = SUM of instruments with maturity matching yr or yr+1
+        # Use simpler approach: count instruments per maturity year
+        formula_cell(ws, r_st_label, bc + 4,
+                     f"=SUMPRODUCT(({close_col}5:{close_col}{5+max_inst})*"
+                     f"((ISNUMBER(SEARCH(\"{yr}\",G5:G{5+max_inst})))"
+                     f"+(ISNUMBER(SEARCH(\"{yr+1}\",G5:G{5+max_inst})))))",
+                     FMT_MLN)
+        formula_cell(ws, r_lt_label, bc + 4,
+                     f"={close_col}{total_r}-{close_col}{r_st_label}",
+                     FMT_MLN)
+
+    for yr_idx, yr in enumerate(fc_years):
+        c_dt = COL_START + N_HIST_DISPLAY + yr_idx
+        bc = yr_start + yr_idx * cols_per
+        cl = get_column_letter(c_dt)
+        close_col = get_column_letter(bc + 4)
 
         # 17_Debt interest = _Debt_Schedule total interest
         int_col = get_column_letter(bc + 3)
         formula_cell(ws_dt, REG["DT.interest"], c_dt,
                      f"='_Debt_Schedule'!{int_col}${total_r}", FMT_MLN)
 
-    print(f"    17_Debt.interest linked to _Debt_Schedule totals")
+        # 17_Debt ST = _Debt_Schedule ST row
+        formula_cell(ws_dt, REG["DT.st"], c_dt,
+                     f"='_Debt_Schedule'!{close_col}${r_st_label}", FMT_MLN)
+
+        # 17_Debt LT = _Debt_Schedule LT row
+        formula_cell(ws_dt, REG["DT.lt"], c_dt,
+                     f"='_Debt_Schedule'!{close_col}${r_lt_label}", FMT_MLN)
+
+    # ── Target ND/EBITDA voluntary repay ──
+    # Voluntary = IF(ND/EBITDA > target AND NI > 0,
+    #               MIN(excess_cash, NetDebt - target×EBITDA), 0)
+    cp_target_row = None
+    ws_cp = wb["Control_Panel"]
+    for r in range(50, 60):
+        if ws_cp.cell(r, 1).value and "target" in str(ws_cp.cell(r, 1).value).lower() and "nd" in str(ws_cp.cell(r, 1).value).lower():
+            cp_target_row = r
+            break
+    if cp_target_row is None:
+        # Write target ND/EBITDA to CP
+        cp_target_row = 54  # near min_cash
+        ws_cp.cell(cp_target_row, 1, "Target ND/EBITDA").font = F_LABEL
+        ws_cp.cell(cp_target_row, 3, target_nd_ebitda).font = F_INPUT
+        ws_cp.cell(cp_target_row, 3).number_format = FMT_MULT
+
+    for yr_idx, yr in enumerate(fc_years):
+        c_dt = COL_START + N_HIST_DISPLAY + yr_idx
+        cl = get_column_letter(c_dt)
+        prev = get_column_letter(c_dt - 1)
+
+        # Override voluntary formula with target-leverage version
+        ni_ref = f"'{NAME_PL}'!{cl}${REG['PL.ni']}"
+        nd_ref = f"{cl}{REG['DT.nd']}"
+        ebitda_ref = f"'{NAME_PL}'!{cl}${REG['PL.ebitda']}"
+        target_ref = f"'Control_Panel'!$C${cp_target_row}"
+        cash_prev = f"'20_BS'!{prev}${REG['BS.cash']}"
+
+        # Voluntary = IF(NI>0 AND ND/EBITDA > target,
+        #   MIN(Cash - min_cash, NetDebt - target×EBITDA), 0)
+        # Use est_cash (no circular) for available cash
+        cp_min_cash = "'Control_Panel'!$C$55"
+        # Estimated ND for target check (from opening, no circular)
+        est_nd = f"({cl}{REG['DT.open']}-{cash_prev})"
+        # est_cash = prev_cash + EBITDA - interest(opening×rate) - capex - WC
+        capex_ref = f"ABS('{NAME_PPE}'!{cl}${REG['PP.capex']})"
+        wc_ref = f"'16_WC'!{cl}${REG['WC.delta_nwc']}"
+        int_est = f"{cl}{REG['DT.open']}*{cl}{REG['DT.avg_rate']}"
+        available_cash = f"({cash_prev}+{ebitda_ref}-({int_est})-{capex_ref}-{wc_ref}-{cp_min_cash})"
+        # Cap voluntary at 50% of available cash (conservative — don't drain all cash)
+        # Also respect max_voluntary_prepay_pct_fcf (30% default)
+        formula_cell(ws_dt, REG["DT.voluntary"], c_dt,
+                     f"=IF(AND({ni_ref}>0,"
+                     f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{target_ref},"
+                     f"{available_cash}>0),"
+                     f"MAX(0,MIN({available_cash}*0.3,"
+                     f"{est_nd}-{target_ref}*ABS({ebitda_ref}))),"
+                     f"0)",
+                     FMT_MLN)
+
+    # Store PL sheet name for formulas
+    NAME_PL = "21_PL"
+
+    print(f"    17_Debt: interest + ST/LT + voluntary linked to _Debt_Schedule")
+    print(f"    Floating rate: KeyRate from row {kr_row} + spread per instrument")
+    print(f"    Target ND/EBITDA: {target_nd_ebitda}x (CP row {cp_target_row})")
 
 
 def fill_revenue_reconciliation(wb, data: dict, company: str):
