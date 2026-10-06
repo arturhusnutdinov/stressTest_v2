@@ -1077,6 +1077,11 @@ def build_pl(wb, cfg):
         # Interest ← 17_Debt (always negative in PL — expense)
         formula_cell(ws, REG["PL.interest"], c_idx,
                      f"=-ABS('{NAME['DT']}'!{cl}${REG['DT.interest']})", FMT_MLN)
+        # Other financial: OI.other_fin - FX revaluation (positive reval = debt up = loss)
+        formula_cell(ws, REG["PL.other_fin"], c_idx,
+                     f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
+                     FMT_MLN)
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
                  f"='{NAME['TX']}'!{cl}${REG['TX.total']}", FMT_MLN)
@@ -1553,7 +1558,8 @@ def build_debt(wb, cfg):
         ("refi", "Рефинансирование", "mln"),
         ("new_term", "Новый срочный транш", "mln"),
         ("voluntary_term", "Добровольное погашение", "mln"),
-        ("term_close", "Срочный долг, конец", "mln"),
+        ("term_close", "Срочный долг, конец (до FX)", "mln"),
+        ("fx_reval", "Валютная переоценка долга", "mln"),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, unit)
     ws.cell(REG["DT.term_close"], 1).font = F_LABEL_B
@@ -1789,8 +1795,12 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.open"], c_idx,
                      f"={cl}{REG['DT.term_open']}+{cl}{REG['DT.rc_open']}",
                      FMT_MLN)
+        # FX revaluation — default 0, fill_data overrides from _Debt_Schedule
+        input_cell(ws, REG["DT.fx_reval"], c_idx, 0, FMT_MLN)
+
         formula_cell(ws, REG["DT.close"], c_idx,
-                     f"={cl}{REG['DT.term_close']}+{cl}{REG['DT.rc_close']}",
+                     f"={cl}{REG['DT.term_close']}+{cl}{REG['DT.rc_close']}"
+                     f"+{cl}{REG['DT.fx_reval']}",
                      FMT_MLN, bold=True)
 
         # ── E. INTEREST ──
@@ -1852,6 +1862,21 @@ def build_debt(wb, cfg):
     input_cell(ws, REG["DT.close"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.fx_reval"], 3, 0, FMT_MLN)
+
+    # ── G. HISTORICAL CALIBRATION (informational) ──
+    section_header(ws, REG["DT.cal_st_share"] - 1,
+                   "G. КАЛИБРОВКА ПО ИСТОРИИ (информационно)")
+    for key, label, fmt in [
+        ("cal_st_share", "Историческая доля ST = ST/(ST+LT)", FMT_PCT),
+        ("cal_maint_share", "D&A / CapEx (подд. CapEx ≈)", FMT_PCT),
+        ("cal_spread", "Спред к базовой ставке", FMT_PCT2),
+        ("cal_tenor", "Средний тенор инструментов, лет", FMT_RATIO),
+        ("cal_debt_capex", "Δ Долг − Refi / CapEx", FMT_PCT),
+        ("cal_st_flag", "Флаг: модельная ST/LT ≠ ист. ±15 п.п.", ""),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, "")
+    # Calibration formulas — historical columns only (filled by fill_data)
 
 
 def build_lease(wb, cfg):
@@ -2028,6 +2053,11 @@ def build_cf(wb, cfg):
                      f"-ABS({cl}{REG['CF.lease_pay']})", f"-ABS({cl}{REG['CF.interest_paid']})",
                      f"-ABS({cl}{REG['CF.div_paid']})", f"{cl}{REG['CF.other_cff']}"]
         formula_cell(ws, r_cff, c_idx, "=" + "+".join(cff_parts), FMT_MLN, bold=True)
+
+        # FX effect on cash: reverse non-cash FX loss from NI (add back debt reval)
+        # DT.fx_reval > 0 = debt increased = loss in PL = add back in CF
+        formula_cell(ws, REG["CF.fx"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.fx_reval']}", FMT_MLN)
 
         # Net change = CFO + CFI + CFF + FX
         formula_cell(ws, r_net, c_idx,
@@ -2726,6 +2756,14 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Премия за досрочное погашение LT", "%")
     input_cell(ws, r, 3, cfg.get("prepay_premium", 0.01), FMT_PCT)
     REG["CP.prepay_premium"] = r; r += 1
+
+    label_row(ws, r, "FX USDCNY change YoY", "%", "Δ курса: >0 = USD усиливается")
+    input_cell(ws, r, 3, 0.0, FMT_PCT)
+    REG["CP.fx_usdcny_chg"] = r; r += 1
+
+    label_row(ws, r, "FX USDRUB change YoY", "%", "Δ курса: >0 = USD усиливается")
+    input_cell(ws, r, 3, 0.0, FMT_PCT)
+    REG["CP.fx_usdrub_chg"] = r; r += 2
 
     cov = cfg.get("covenants", {})
     label_row(ws, r, "Ковенант: ND/EBITDA max", "x", "При нарушении — блок дивидендов и новых выборок")

@@ -52,6 +52,8 @@ def discover_cp_rows(wb):
         "премия за досрочное": "CP.prepay_premium",
         "ковенант: nd": "CP.cov_nd_ebitda",
         "ковенант: icr": "CP.cov_icr",
+        "fx usdcny": "CP.fx_usdcny_chg",
+        "fx usdrub": "CP.fx_usdrub_chg",
     }
     for r in range(4, 100):
         val = ws.cell(r, 1).value
@@ -1078,10 +1080,54 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws_dt, REG["DT.lt"], c_dt,
                      f"={cl_dt}{REG['DT.close']}-{cl_dt}{REG['DT.st']}", FMT_MLN)
 
-    # ── Target ND/EBITDA voluntary repay ──
-    # Voluntary = IF(ND/EBITDA > target AND NI > 0,
-    #               MIN(excess_cash, NetDebt - target×EBITDA), 0)
-    # Find Target ND/EBITDA row from REG or by searching CP
+    # ── FX Revaluation from currency exposure ──
+    # FX effect = Σ(instrument_close × (FX_old/FX_new - 1)) per currency
+    # Simplified: FX_effect ≈ -balance × pct_change_in_rate
+    # CNY instruments: -close × USDCNY_change; RUB: -close × USDRUB_change
+    cp_fx_cny = REG.get("CP.fx_usdcny_chg")
+    cp_fx_rub = REG.get("CP.fx_usdrub_chg")
+
+    if cp_fx_cny or cp_fx_rub:
+        r_fx_label = r_synth_end + 2
+        ws.cell(r_fx_label - 1, 2, "ВАЛЮТНАЯ ПЕРЕОЦЕНКА").font = F_LABEL_B
+        ws.cell(r_fx_label, 2, "FX Reval (CNY)").font = F_LABEL
+        ws.cell(r_fx_label + 1, 2, "FX Reval (RUB)").font = F_LABEL
+        ws.cell(r_fx_label + 2, 2, "FX Reval (ИТОГО)").font = F_LABEL_B
+
+        for yr_idx, yr in enumerate(fc_years):
+            bc = yr_start + yr_idx * cols_per
+            close_col = get_column_letter(bc + 4)
+            c_dt = COL_START + N_HIST_DISPLAY + yr_idx
+            cl_dt = get_column_letter(c_dt)
+
+            # Sum Close balances per currency using SUMPRODUCT + SEARCH
+            # CNY: SUMPRODUCT(Close × (currency = "CNY"))
+            cny_sum = (f"SUMPRODUCT(({close_col}5:{close_col}{r_inst_end})"
+                       f"*(ISNUMBER(SEARCH(\"CNY\",$D$5:$D${r_inst_end}))))")
+            rub_sum = (f"SUMPRODUCT(({close_col}5:{close_col}{r_inst_end})"
+                       f"*(ISNUMBER(SEARCH(\"RUB\",$D$5:$D${r_inst_end}))))")
+
+            # FX effect = -balance × pct_change (positive change = USD strengthens = gain on debt)
+            # Sign: positive FX reval = gain (debt decreases), negative = loss
+            cny_ref = f"'Control_Panel'!$C${cp_fx_cny}" if cp_fx_cny else "0"
+            rub_ref = f"'Control_Panel'!$C${cp_fx_rub}" if cp_fx_rub else "0"
+
+            formula_cell(ws, r_fx_label, bc + 4,
+                         f"=-({cny_sum})*{cny_ref}", FMT_MLN)
+            formula_cell(ws, r_fx_label + 1, bc + 4,
+                         f"=-({rub_sum})*{rub_ref}", FMT_MLN)
+            formula_cell(ws, r_fx_label + 2, bc + 4,
+                         f"={close_col}{r_fx_label}+{close_col}{r_fx_label+1}",
+                         FMT_MLN, bold=True)
+
+            # Link to 17_Debt FX reval
+            fx_total_col = get_column_letter(bc + 4)
+            formula_cell(ws_dt, REG["DT.fx_reval"], c_dt,
+                         f"='_Debt_Schedule'!{fx_total_col}${r_fx_label+2}", FMT_MLN)
+
+        print(f"    FX revaluation: CNY + RUB exposure, linked to CP FX assumptions")
+
+    # Voluntary_term: already set by build_model with proper waterfall
     ws_cp = wb["Control_Panel"]
     cp_target_row = REG.get("CP.target_leverage")
     if cp_target_row is None:
@@ -1099,7 +1145,72 @@ def fill_debt_schedule(wb, data: dict, company: str):
     # Voluntary_term: formula already set by build_model with proper S&U integration
     # No override needed — build_model references CP rows correctly via REG
 
-    print(f"    17_Debt: mandatory + refi + interest + ST/LT linked to _Debt_Schedule")
+    # ── Historical Calibration (Section 4 of TASK_debt_module.md) ──
+    # Write informational metrics to DT.cal_* rows in last hist column
+    last_yr = src["hist_years"][-1]
+    hc = COL_START + N_HIST_DISPLAY - 1
+    bs_d = data.get("bs", {})
+    st_val = abs(bs_d.get("short_term_debt", {}).get(last_yr, 0))
+    lt_val = abs(bs_d.get("long_term_debt", {}).get(last_yr, 0))
+    total_debt = st_val + lt_val
+    if total_debt > 0:
+        # 1. ST share
+        st_share = st_val / total_debt
+        ws_dt = wb["17_Debt"]
+        ws_dt.cell(REG["DT.cal_st_share"], hc, round(st_share, 3)).font = F_INPUT
+        ws_dt.cell(REG["DT.cal_st_share"], hc).number_format = FMT_PCT
+
+        # 2. Maintenance capex share = D&A / CapEx
+        da_last = abs(data.get("is", {}).get("total_da", {}).get(last_yr, 0))
+        capex_last = abs(data.get("cf", {}).get("capex", {}).get(last_yr, 0))
+        if capex_last > 0:
+            maint_share_hist = da_last / capex_last
+            ws_dt.cell(REG["DT.cal_maint_share"], hc, round(maint_share_hist, 3)).font = F_INPUT
+            ws_dt.cell(REG["DT.cal_maint_share"], hc).number_format = FMT_PCT
+
+        # 3. Spread to base = weighted avg rate - KeyRate (approx)
+        # Read avg_rate from the workbook (already filled by fill_debt_hist)
+        avg_rate_cell = ws_dt.cell(REG["DT.avg_rate"], hc).value
+        avg_rate_val = float(avg_rate_cell) if isinstance(avg_rate_cell, (int, float)) else 0.08
+        base_rate = 0.10  # approximate KeyRate level
+        spread_hist = avg_rate_val - base_rate if avg_rate_val > base_rate else 0
+        ws_dt.cell(REG["DT.cal_spread"], hc, round(spread_hist, 4)).font = F_INPUT
+        ws_dt.cell(REG["DT.cal_spread"], hc).number_format = FMT_PCT2
+
+        # 4. Average tenor (weighted by balance)
+        if debt_instruments:
+            w_tenor = w_bal_t = 0
+            for inst in debt_instruments:
+                b = abs(float(inst.get("opening_balance", 0) or 0))
+                mat = str(inst.get("maturity_date", ""))
+                for y in range(last_yr, last_yr + 20):
+                    if str(y) in mat:
+                        tenor = y - last_yr
+                        w_tenor += b * tenor
+                        w_bal_t += b
+                        break
+            if w_bal_t > 0:
+                avg_tenor = w_tenor / w_bal_t
+                ws_dt.cell(REG["DT.cal_tenor"], hc, round(avg_tenor, 1)).font = F_INPUT
+                ws_dt.cell(REG["DT.cal_tenor"], hc).number_format = FMT_RATIO
+
+        # 5. Debt-financed capex = (ΔDebt - refi) / CapEx — needs prev year, skip if unavailable
+        # 6. ST flag: for forecast years, compare model ST% vs hist median
+        for yr_idx, yr in enumerate(fc_years):
+            c_dt = COL_START + N_HIST_DISPLAY + yr_idx
+            cl_dt = get_column_letter(c_dt)
+            # Model ST share vs historical — flag if deviation > 15 p.p.
+            formula_cell(ws_dt, REG["DT.cal_st_flag"], c_dt,
+                         f"=IF(ABS({cl_dt}{REG['DT.st']}/MAX(1,{cl_dt}{REG['DT.close']})"
+                         f"-{get_column_letter(hc)}{REG['DT.cal_st_share']})>0.15,"
+                         f"\"⚠ ST ±15pp\",\"OK\")",
+                         "")
+
+        maint_str = f"{maint_share_hist*100:.1f}%" if capex_last > 0 else "n/a"
+        print(f"    Calibration: ST={st_share*100:.1f}%, maint={maint_str}, "
+              f"spread={spread_hist*100:.2f}%")
+
+    print(f"    17_Debt: mandatory + refi + interest + ST/LT + FX linked to _Debt_Schedule")
     print(f"    Floating rate: KeyRate from row {kr_row} + spread per instrument")
     print(f"    Target ND/EBITDA: {target_nd_ebitda}x (CP row {cp_target_row})")
 
