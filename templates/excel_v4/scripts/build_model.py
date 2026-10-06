@@ -210,6 +210,31 @@ def build_cover(wb, cfg):
         r = row + 2
 
 
+    # ── Traffic light (C5): model health indicator ──
+    r = 16
+    section_header(ws, r, "СТАТУС МОДЕЛИ")
+    r += 1
+    label_row(ws, r, "Ошибки (из 90_Checks)", "")
+    # Sum error counts across all forecast years
+    fc_cols = [get_column_letter(3 + len(cfg["hist_years"][-3:]) + i)
+               for i in range(len(cfg["fc_years"]))]
+    err_refs = "+".join(f"'90_Checks'!{c}${REG['CK.error_count']}" for c in fc_cols)
+    formula_cell(ws, r, 3, f"={err_refs}", FMT_INT)
+    r += 1
+    label_row(ws, r, "Статус", "")
+    formula_cell(ws, r, 3,
+                 f"=IF({get_column_letter(3)}{r-1}=0,\"✅ ОК\","
+                 f"IF({get_column_letter(3)}{r-1}<=3,\"⚠ ПРЕДУПРЕЖДЕНИЯ\",\"❌ ОШИБКИ\"))",
+                 FMT_TEXT, bold=True)
+    r += 1
+    label_row(ws, r, "Funding gap", "mln")
+    fg_refs = "+".join(f"'{NAME['DT']}'!{c}${REG['DT.funding_gap']}" for c in fc_cols)
+    formula_cell(ws, r, 3, f"={fg_refs}", FMT_MLN)
+    r += 1
+    label_row(ws, r, "calc_reset режим", "")
+    formula_cell(ws, r, 3, "=IF(calc_reset=1,\"SEED (не финальный)\",\"ITERATE (финальный)\")", FMT_TEXT)
+
+
 def build_macro(wb, cfg):
     """01_Macro — macro scenarios + econometric equations."""
     ws = wb["01_Macro"]
@@ -1297,6 +1322,7 @@ def build_checks(wb, cfg):
         ("cash_min", "Cash ≥ min_cash ИЛИ FundGap > 0", None, None),
         ("maint_debt", "Подд. CapEx не финансируется долгом", None, None),
         ("interest_check", "Int = Term + RC + Fee", None, None),
+        ("it_res", "Невязка кольца (Cash vs est_cash)", None, None),
     ]
     for key, label, _, _ in new_checks:
         r = REG.get(f"CK.{key}")
@@ -1355,6 +1381,15 @@ def build_checks(wb, cfg):
                      f"-'{NAME['DT']}'!{cl}${REG['DT.interest_term']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.interest_rc']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.commit_fee']}",
+                     FMT_RATIO)
+
+        # C3: Iteration residual — cash convergence check
+        # If RC_draw > 0, actual cash should ≈ min_cash
+        # Residual = |actual_cash - min_cash| when RC active, else 0
+        cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
+        formula_cell(ws, REG["CK.it_res"], c_idx,
+                     f"=IF('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,"
+                     f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
     # Error count: check integrity + detect errors in key cells
@@ -1509,12 +1544,26 @@ def build_wc(wb, cfg):
     year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
     section_header(ws, 6, "ОБОРОТНЫЙ КАПИТАЛ")
-    # Days inputs
+    # Days: history = input (from fill_data EWA), forecast = from Control_Panel
+    cp_days = {
+        "dso": REG.get("CP.wc_dso"),
+        "dio": REG.get("CP.wc_dio"),
+        "dpo": REG.get("CP.wc_dpo"),
+    }
     for key, label in [("dso", "DSO (дни)"), ("dio", "DIH (дни)"), ("dpo", "DPO (дни)")]:
         r = REG[f"WC.{key}"]
         label_row(ws, r, label, "дни")
-        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+        # History: input cells (filled by fill_data)
+        for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_DAYS)
+        # Forecast: reference Control_Panel if available, else carry forward
+        cp_row = cp_days.get(key)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            prev = get_column_letter(c - 1)
+            if cp_row:
+                ref_cell(ws, r, c, f"='Control_Panel'!$C${cp_row}", FMT_DAYS)
+            else:
+                formula_cell(ws, r, c, f"={prev}{r}", FMT_DAYS)
 
     # CCC = DSO + DIO - DPO
     r_ccc = REG["WC.ccc"]
@@ -2782,9 +2831,12 @@ def build_control_panel(wb, cfg):
     section_header(ws, r, "G. ОБОРОТНЫЙ КАПИТАЛ"); r += 1
     label_row(ws, r, "WC method (1=days, 2=ratio)")
     input_cell(ws, r, 3, 1, FMT_INT); r += 1
-    for d, default in [("DSO (дни)", 30), ("DIH (дни)", 80), ("DPO (дни)", 40)]:
-        label_row(ws, r, d)
-        input_cell(ws, r, 3, default, FMT_DAYS); r += 1
+    for d, default, key in [("DSO (дни)", 30, "CP.wc_dso"),
+                             ("DIH (дни)", 80, "CP.wc_dio"),
+                             ("DPO (дни)", 40, "CP.wc_dpo")]:
+        label_row(ws, r, d, "дни", "→ 16_WC forecast")
+        input_cell(ws, r, 3, default, FMT_DAYS)
+        REG[key] = r; r += 1
     r += 1
 
     # ── H. ДОЛГ ──

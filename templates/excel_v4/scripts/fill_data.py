@@ -74,6 +74,9 @@ def discover_cp_rows(wb):
         "industry adj": "CP.sc_ind_adj",
         "size adj": "CP.sc_size_adj",
         "cycle avg": "CP.sc_cycle_margin",
+        "dso (дни": "CP.wc_dso",
+        "dih (дни": "CP.wc_dio",
+        "dpo (дни": "CP.wc_dpo",
     }
     for r in range(4, 100):
         val = ws.cell(r, 1).value
@@ -1821,15 +1824,29 @@ def fill_wc_days(wb, data: dict, company: str):
             ws.cell(REG["WC.dpo"], col).number_format = FMT_DAYS
         computed += 1
 
-    # Forecast: link to 03_Assump EWA-calibrated days (rows 13/14/15)
+    # Forecast: WC days from Control_Panel (build_model sets formula =CP.wc_dso etc.)
+    # Calibrate CP values from EWA of history (03_Assump rows 13-15)
     fc_years = src["fc_years"]
+    ws_cp = wb["Control_Panel"]
     assump_rows = {"dso": 13, "dio": 14, "dpo": 15}
+    cp_keys = {"dso": REG.get("CP.wc_dso"), "dio": REG.get("CP.wc_dio"),
+               "dpo": REG.get("CP.wc_dpo")}
+    # Compute EWA average from history for CP calibration
     for metric_key, assump_row in assump_rows.items():
-        for i, yr in enumerate(fc_years):
-            c = COL_START + N_HIST_DISPLAY + i
-            cl = get_column_letter(c)
-            formula_cell(ws, REG[f"WC.{metric_key}"], c,
-                         f"='03_Assump'!{cl}${assump_row}", FMT_DAYS)
+        vals = []
+        for yr in hist_years:
+            c = COL_START + hist_years.index(yr)
+            v = ws.cell(REG[f"WC.{metric_key}"], c).value
+            if isinstance(v, (int, float)) and v > 0:
+                vals.append(v)
+        if vals:
+            ewa_avg = sum(vals) / len(vals)  # simple average
+            cp_row = cp_keys.get(metric_key)
+            if cp_row:
+                ws_cp.cell(cp_row, 3, round(ewa_avg, 0)).font = F_INPUT
+                ws_cp.cell(cp_row, 3).number_format = FMT_DAYS
+                print(f"    CP.wc_{metric_key} = {ewa_avg:.0f} (EWA from {len(vals)} years)")
+    # Note: build_model already set forecast WC days = CP ref, no override needed
 
     # Fill WC balances (AR, INV, AP) for history years
     bs_d = data.get("bs", {})

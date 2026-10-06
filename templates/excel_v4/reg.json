@@ -366,6 +366,7 @@
   "CK.cash_min": 19,
   "CK.maint_debt": 20,
   "CK.interest_check": 21,
-  "CK.error_count": 23,
+  "CK.it_res": 22,
+  "CK.error_count": 24,
   "RV.recon": 19
 }
