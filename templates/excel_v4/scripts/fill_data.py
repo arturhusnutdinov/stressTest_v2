@@ -923,13 +923,16 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws_dt, REG["DT.interest"], c_dt,
                      f"='_Debt_Schedule'!{int_col}${total_r}", FMT_MLN)
 
-        # 17_Debt ST = _Debt_Schedule ST row
+        # 17_Debt ST = schedule_ST + RC_close
+        cl_dt = get_column_letter(c_dt)
         formula_cell(ws_dt, REG["DT.st"], c_dt,
-                     f"='_Debt_Schedule'!{close_col}${r_st_label}", FMT_MLN)
+                     f"=MIN('_Debt_Schedule'!{close_col}${r_st_label},"
+                     f"{cl_dt}{REG['DT.term_close']})"
+                     f"+{cl_dt}{REG['DT.rc_close']}", FMT_MLN)
 
-        # 17_Debt LT = _Debt_Schedule LT row
+        # 17_Debt LT = DT.close - DT.st (residual, guarantees ST+LT=close)
         formula_cell(ws_dt, REG["DT.lt"], c_dt,
-                     f"='_Debt_Schedule'!{close_col}${r_lt_label}", FMT_MLN)
+                     f"={cl_dt}{REG['DT.close']}-{cl_dt}{REG['DT.st']}", FMT_MLN)
 
     # ── Target ND/EBITDA voluntary repay ──
     # Voluntary = IF(ND/EBITDA > target AND NI > 0,
@@ -972,7 +975,7 @@ def fill_debt_schedule(wb, data: dict, company: str):
         available_cash = f"({cash_prev}+{ebitda_ref}-({int_est})-{capex_ref}-{wc_ref}-{cp_min_cash})"
         # Cap voluntary at 50% of available cash (conservative — don't drain all cash)
         # Also respect max_voluntary_prepay_pct_fcf (30% default)
-        formula_cell(ws_dt, REG["DT.voluntary"], c_dt,
+        formula_cell(ws_dt, REG["DT.voluntary_term"], c_dt,
                      f"=IF(AND({ni_ref}>0,"
                      f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{target_ref},"
                      f"{available_cash}>0),"
@@ -1050,15 +1053,29 @@ def fill_debt_hist(wb, data: dict, company: str):
     cash = abs(bs.get("cash", {}).get(last_yr, 0))
 
     if total > 0:
+        # Term debt (total debt = term, RC starts at 0)
+        ws.cell(REG["DT.term_open"], hc, round(total, 1)).font = F_INPUT
+        ws.cell(REG["DT.term_open"], hc).number_format = FMT_MLN
+        ws.cell(REG["DT.term_close"], hc, round(total, 1)).font = F_INPUT
+        ws.cell(REG["DT.term_close"], hc).number_format = FMT_MLN
+        # Total (= term + RC, RC=0 in history)
         ws.cell(REG["DT.open"], hc, round(total, 1)).font = F_INPUT
         ws.cell(REG["DT.open"], hc).number_format = FMT_MLN
         ws.cell(REG["DT.close"], hc, round(total, 1)).font = F_INPUT
         ws.cell(REG["DT.close"], hc).number_format = FMT_MLN
+        # RC = 0 in history
+        ws.cell(REG["DT.rc_open"], hc, 0).font = F_INPUT
+        ws.cell(REG["DT.rc_close"], hc, 0).font = F_INPUT
+        # ST/LT
         ws.cell(REG["DT.st"], hc, round(abs(st), 1)).font = F_INPUT
         ws.cell(REG["DT.st"], hc).number_format = FMT_MLN
         ws.cell(REG["DT.lt"], hc, round(abs(lt), 1)).font = F_INPUT
         ws.cell(REG["DT.lt"], hc).number_format = FMT_MLN
-        print(f"    Debt opening: ST={abs(st):.0f} LT={abs(lt):.0f} Total={total:.0f}")
+        # RC limit (from company config)
+        rc_limit = {"rusal": 2500, "nornickel": 1500}.get(company, 2000)
+        ws.cell(REG["DT.rc_limit"], hc, rc_limit).font = F_INPUT
+        ws.cell(REG["DT.rc_limit"], hc).number_format = FMT_MLN
+        print(f"    Debt opening: ST={abs(st):.0f} LT={abs(lt):.0f} Total={total:.0f} RC_limit={rc_limit}")
 
     # Avg rate: compute weighted average from instrument table (not implied)
     is_data = data.get("is", {})
@@ -1140,7 +1157,7 @@ def fill_debt_hist(wb, data: dict, company: str):
         instruments = sorted(debt_instruments, key=lambda x: -abs(float(x.get("opening_balance", 0) or 0)))
         top_n = min(15, len(instruments))
 
-        r_start = 25
+        r_start = 60  # below new DT layout (ends at row 56)
         section_header(ws, r_start - 1, f"ИНСТРУМЕНТЫ ({len(instruments)} всего, top {top_n})")
 
         # Headers

@@ -122,11 +122,22 @@ COMPANY_CONFIGS = {
         "cogs_mode": "component",
         "cogs_components": {"material": 0.37, "energy": 0.27, "labour": 0.12, "other": 0.24},
         "debt_target_nd_ebitda": 3.5,
+        "rc_limit": 2500,
+        "rc_rate": 0.14,
+        "commit_fee_rate": 0.005,
+        "min_cash": 500,
+        "cash_buffer": 200,
+        "maint_share": 0.65,
+        "refi_pct_bonds": 1.0,
+        "refi_pct_bank": 1.0,
+        "spread_base": 0.04,
+        "spread_step": 0.005,
+        "term_tenor": 5,
         "rating_ind_adj": -6.0,
         "rating_size_adj": 2.0,
         "rating_cycle_margin": 0.12,
         "covenants": {"nd_ebitda_max": 4.5, "icr_min": 1.5, "margin_min": 0.05},
-        "nci_pct": 0.0,  # Rusal: NCI included in AOCI, no separate NCI income
+        "nci_pct": 0.0,
     },
     "nornickel": {
         "name": "PJSC MMC Norilsk Nickel",
@@ -144,11 +155,22 @@ COMPANY_CONFIGS = {
         "cogs_mode": "ratio",
         "cogs_ratio_default": 0.59,
         "debt_target_nd_ebitda": 1.5,
+        "rc_limit": 1500,
+        "rc_rate": 0.10,
+        "commit_fee_rate": 0.004,
+        "min_cash": 500,
+        "cash_buffer": 200,
+        "maint_share": 0.60,
+        "refi_pct_bonds": 1.0,
+        "refi_pct_bank": 1.0,
+        "spread_base": 0.03,
+        "spread_step": 0.005,
+        "term_tenor": 5,
         "rating_ind_adj": -6.0,
         "rating_size_adj": 2.0,
         "rating_cycle_margin": 0.41,
         "covenants": {"nd_ebitda_max": 3.0, "icr_min": 3.0, "margin_min": 0.15},
-        "nci_pct": 0.158,  # NCI/TE = 2129/13445 = 15.8% — NCI income share
+        "nci_pct": 0.158,
     },
 }
 
@@ -989,7 +1011,7 @@ def build_bs(wb, cfg):
                          FMT_MLN)
 
         for key in ["other_ca", "goodwill", "intang", "other_nca",
-                     "other_cl", "lease_ncl", "prov",
+                     "other_cl", "lease_cl", "lease_ncl", "prov",
                      "other_ncl", "sc", "apic"] + (["aoci"] if nci_pct == 0 else []):
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
 
@@ -1210,13 +1232,19 @@ def build_checks(wb, cfg):
                      f"-'{NAME['PP']}'!{cl}${REG['PP.dep_close']})",
                      FMT_RATIO)
 
-        # 4. Debt roll = open + draw - mandatory - voluntary - close
+        # 4. Debt roll = (term_open - mandatory + refi + new - vol - term_close)
+        #              + (rc_open + rc_draw - rc_repay - rc_close)
         formula_cell(ws, REG["CK.debt_roll"], c_idx,
-                     f"='{NAME['DT']}'!{cl}${REG['DT.open']}"
-                     f"+'{NAME['DT']}'!{cl}${REG['DT.draw']}"
+                     f"='{NAME['DT']}'!{cl}${REG['DT.term_open']}"
                      f"-ABS('{NAME['DT']}'!{cl}${REG['DT.mandatory']})"
-                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary']})"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.close']}",
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.refi']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
+                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary_term']})"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.term_close']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.rc_open']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_close']}",
                      FMT_RATIO)
 
         # 5. Equity roll = RE_open + NI - Div - RE_close
@@ -1227,23 +1255,70 @@ def build_checks(wb, cfg):
                      f"-'{NAME['EQ']}'!{cl}${REG['EQ.re_close']}",
                      FMT_RATIO)
 
-    # Error count: check integrity + detect #VALUE! in key cells
+    # ── Additional checks: RC + Sources & Uses ──
+    new_checks = [
+        ("rc_limit", "RC: Close ≤ Limit", None, None),
+        ("funding_gap", "Funding gap = 0", None, None),
+        ("su_balance", "S&U: Gap = RC_draw + NewTerm + FundGap", None, None),
+        ("st_lt_check", "ST + LT = DT.close", None, None),
+        ("schedule_check", "DT.close = Term + RC", None, None),
+    ]
+    for key, label, _, _ in new_checks:
+        r = REG.get(f"CK.{key}")
+        if r:
+            label_row(ws, r, label, "mln", "Должно быть 0 / TRUE")
+
+    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c_idx)
+        # RC limit: should be ≤ 0 (close - limit, negative = OK)
+        formula_cell(ws, REG["CK.rc_limit"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.rc_close']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_limit']}",
+                     FMT_RATIO)
+        # Funding gap: should be 0
+        ref_cell(ws, REG["CK.funding_gap"], c_idx,
+                 f"='{NAME['DT']}'!{cl}${REG['DT.funding_gap']}", FMT_RATIO)
+        # S&U balance: gap = rc_draw + new_term + funding_gap
+        formula_cell(ws, REG["CK.su_balance"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.su_gap']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.funding_gap']}",
+                     FMT_RATIO)
+        # ST + LT = close
+        formula_cell(ws, REG["CK.st_lt_check"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.st']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.lt']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.close']}",
+                     FMT_RATIO)
+        # Schedule: close = term + RC
+        formula_cell(ws, REG["CK.schedule_check"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.close']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.term_close']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_close']}",
+                     FMT_RATIO)
+
+    # Error count: check integrity + detect errors in key cells
     r_err = REG["CK.error_count"]
-    label_row(ws, r_err, "ОШИБОК ВСЕГО (integrity + #VALUE!)", "", "Должно быть 0")
+    label_row(ws, r_err, "ОШИБОК ВСЕГО (тождества + ошибочные значения)", "", "Должно быть 0")
     ws.cell(r_err, 1).font = F_LABEL_B
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         # Part 1: integrity checks > tolerance
         check_rows = [REG["CK.bs_check"], REG["CK.cf_check"], REG["CK.ppe_roll"],
-                      REG["CK.debt_roll"], REG["CK.equity_roll"]]
+                      REG["CK.debt_roll"], REG["CK.equity_roll"],
+                      REG["CK.st_lt_check"], REG["CK.schedule_check"]]
         parts = [f"IF(ISERROR({cl}{r}),1,IF(ABS({cl}{r})>1,1,0))" for r in check_rows]
-        # Part 2: ISERROR on key model cells (PL, BS, CF, Valuation)
+        # Part 2: RC limit breach and funding gap
+        parts.append(f"IF({cl}{REG['CK.rc_limit']}>1,1,0)")
+        parts.append(f"IF({cl}{REG['CK.funding_gap']}>1,1,0)")
+        # Part 3: ISERROR on key model cells
         key_cells = [
-            f"'{NAME['PL']}'!{cl}${REG['PL.ni']}",    # Net Income
-            f"'{NAME['BS']}'!{cl}${REG['BS.ta']}",     # Total Assets
-            f"'{NAME['BS']}'!{cl}${REG['BS.cash']}",   # Cash
-            f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}",    # CFO
-            f"'{NAME['VL']}'!$C${REG['VL.wacc']}",     # WACC
+            f"'{NAME['PL']}'!{cl}${REG['PL.ni']}",
+            f"'{NAME['BS']}'!{cl}${REG['BS.ta']}",
+            f"'{NAME['BS']}'!{cl}${REG['BS.cash']}",
+            f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}",
+            f"'{NAME['VL']}'!$C${REG['VL.wacc']}",
         ]
         parts += [f"IF(ISERROR({ref}),1,0)" for ref in key_cells]
         formula_cell(ws, r_err, c_idx, "=" + "+".join(parts), FMT_INT, bold=True)
@@ -1423,161 +1498,330 @@ def build_wc(wb, cfg):
 
 
 def build_debt(wb, cfg):
-    """17_Debt — instrument-level debt schedule + aggregate corkscrew.
+    """17_Debt — Sources & Uses, Term Debt, RC, Interest, ST/LT.
 
-    Structure:
-    1. AGGREGATE CORKSCREW (rows 7-21): totals for BS/CF linking
-    2. INSTRUMENT SCHEDULE (row 25+): top 15 instruments + Other
-       Each: Opening → Matures? → Refi → Interest → Closing
-
-    Circular: draw = IF(calc_reset=1, 0, MAX(0, min_cash - pre_cash))
-    Maturing instruments: mandatory repay + auto-refi at new rate
+    Architecture (per TASK_debt_module.md):
+    A. Sources & Uses — explicit decomposition of financing needs
+    B. Term Debt — schedule-driven, deterministic (from _Debt_Schedule)
+    C. Revolving Credit — single balancing plug, always ST, limited
+    D. Total Debt — term_close + rc_close
+    E. Interest — term (schedule) + RC + commitment fee
+    F. ST/LT — maturity-based from schedule + RC_close
     """
     ws = wb["17_Debt"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"17_Debt — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "Долговой портфель: Open + Draw − Repay = Close, Interest = Avg × Rate").font = F_SUBTITLE
+    ws.cell(2, 1, "Sources & Uses · Term Debt · RC · Interest · ST/LT").font = F_SUBTITLE
     n_hist = len(cfg["hist_years"][-3:])
     year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
-    section_header(ws, 6, "ДОЛГОВОЙ CORKSCREW (агрегированный)")
-    debt_items = [
-        ("open", "Долг, начало периода", "mln"),
-        ("draw", "Привлечение (draw)", "mln"),
+    # ── A. SOURCES & USES ──
+    section_header(ws, 6, "A. SOURCES & USES")
+    for key, label, unit in [
+        ("su_oper_flow", "EBITDA − налоги уплаченные", "mln"),
+        ("su_maint_capex", "Поддерживающий CapEx", "mln"),
+        ("su_growth_capex", "Проектный CapEx", "mln"),
+        ("su_delta_nwc", "Прирост оборотного капитала", "mln"),
+        ("su_mandatory", "Обязательные погашения", "mln"),
+        ("su_interest", "Проценты (срочный долг)", "mln"),
+        ("su_dividends", "Дивиденды", "mln"),
+        ("su_total_uses", "ИТОГО USES", "mln"),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, unit)
+    ws.cell(REG["DT.su_total_uses"], 1).font = F_LABEL_B
+
+    section_header(ws, REG["DT.su_refi"] - 1, "SOURCES")
+    for key, label, unit in [
+        ("su_refi", "Рефинансирование", "mln"),
+        ("su_excess_cash", "Кэш сверх минимума", "mln"),
+        ("su_total_sources", "ИТОГО SOURCES", "mln"),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, unit)
+    ws.cell(REG["DT.su_total_sources"], 1).font = F_LABEL_B
+
+    label_row(ws, REG["DT.su_gap"], "РАЗРЫВ (Uses − Sources)", "mln",
+              "Покрывается RC / новым траншем")
+    ws.cell(REG["DT.su_gap"], 1).font = F_LABEL_B
+    label_row(ws, REG["DT.su_maint_gap"], "Дефицит по подд. CapEx", "mln",
+              "Флаг: опер. поток < подд. CapEx")
+
+    # ── B. TERM DEBT ──
+    section_header(ws, REG["DT.term_open"] - 1, "B. СРОЧНЫЙ ДОЛГ (из _Debt_Schedule)")
+    for key, label, unit in [
+        ("term_open", "Срочный долг, начало", "mln"),
         ("mandatory", "Обязательное погашение", "mln"),
-        ("voluntary", "Добровольное погашение", "mln"),
         ("refi", "Рефинансирование", "mln"),
-        ("close", "Долг, конец периода", "mln"),
-    ]
-    for key, label, unit in debt_items:
-        r = REG[f"DT.{key}"]
-        label_row(ws, r, label, unit)
+        ("new_term", "Новый срочный транш", "mln"),
+        ("voluntary_term", "Добровольное погашение", "mln"),
+        ("term_close", "Срочный долг, конец", "mln"),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, unit)
+    ws.cell(REG["DT.term_close"], 1).font = F_LABEL_B
 
-    section_header(ws, REG["DT.interest"] - 1, "ПРОЦЕНТНЫЕ РАСХОДЫ")
-    label_row(ws, REG["DT.interest"], "Процентные расходы", "mln")
-    label_row(ws, REG["DT.avg_rate"], "Средневзвешенная ставка", "%")
+    # ── C. REVOLVING CREDIT ──
+    section_header(ws, REG["DT.rc_limit"] - 1, "C. REVOLVING CREDIT (RC)")
+    for key, label, unit in [
+        ("rc_limit", "Лимит RC", "mln"),
+        ("rc_open", "RC, начало", "mln"),
+        ("rc_draw", "RC draw", "mln"),
+        ("rc_repay", "RC repay (cash sweep)", "mln"),
+        ("rc_close", "RC, конец", "mln"),
+        ("rc_util", "Utilization (RC / лимит)", "%"),
+        ("funding_gap", "РАЗРЫВ ФИНАНСИРОВАНИЯ", "mln"),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, unit)
+    ws.cell(REG["DT.funding_gap"], 1).font = F_LABEL_B
 
-    section_header(ws, REG["DT.st"] - 1, "ST / LT РАЗБИВКА")
-    label_row(ws, REG["DT.st"], "Краткосрочный долг (ST)", "mln")
-    label_row(ws, REG["DT.lt"], "Долгосрочный долг (LT)", "mln")
+    # ── D. TOTAL DEBT ──
+    section_header(ws, REG["DT.open"] - 1, "D. ИТОГО ДОЛГ")
+    label_row(ws, REG["DT.open"], "Долг, начало периода", "mln")
+    label_row(ws, REG["DT.close"], "Долг, конец периода", "mln")
+    ws.cell(REG["DT.close"], 1).font = F_LABEL_B
+
+    # ── E. INTEREST ──
+    section_header(ws, REG["DT.interest_term"] - 1, "E. ПРОЦЕНТНЫЕ РАСХОДЫ")
+    for key, label, unit in [
+        ("interest_term", "Проценты по срочному долгу", "mln"),
+        ("interest_rc", "Проценты по RC", "mln"),
+        ("commit_fee", "Комиссия за неисп. лимит", "mln"),
+        ("interest", "ИТОГО проценты", "mln"),
+        ("avg_rate", "Средневзвешенная ставка", "%"),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, unit)
+    ws.cell(REG["DT.interest"], 1).font = F_LABEL_B
+
+    # ── F. ST/LT ──
+    section_header(ws, REG["DT.st"] - 1, "F. ST / LT РАЗБИВКА")
+    label_row(ws, REG["DT.st"], "Краткосрочный долг (ST = schedule_ST + RC)", "mln")
+    label_row(ws, REG["DT.lt"], "Долгосрочный долг (LT = schedule_LT)", "mln")
     label_row(ws, REG["DT.nd"], "Чистый долг (ND)", "mln")
     label_row(ws, REG["DT.nd_ebitda"], "ND / EBITDA", "x")
 
-    # Formulas for forecast columns
+    # ══════════════ FORMULAS ══════════════
+    # CP references (dynamic rows set by build_control_panel)
+    cp_min_cash = f"'Control_Panel'!$C${REG.get('CP.min_cash', 55)}"
+    cp_rc_limit = f"'Control_Panel'!$C${REG.get('CP.rc_limit', 56)}"
+    cp_rc_rate = f"'Control_Panel'!$C${REG.get('CP.rc_rate', 57)}"
+    cp_commit_fee = f"'Control_Panel'!$C${REG.get('CP.commit_fee_rate', 58)}"
+    cp_maint_share = f"'Control_Panel'!$C${REG.get('CP.maint_share', 59)}"
+    cp_sweep_pct = f"'Control_Panel'!$C${REG.get('CP.sweep_pct', 60)}"
+    cp_target_lev = f"'Control_Panel'!$C${REG.get('CP.target_leverage', 61)}"
+    cp_buffer = f"'Control_Panel'!$C${REG.get('CP.buffer', 62)}"
+
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
 
-        # Open = prev close
-        formula_cell(ws, REG["DT.open"], c_idx, f"={prev}{REG['DT.close']}", FMT_MLN)
-
-        # ── CIRCULAR DEBT OPTIMIZER (mirrors Python _solve_debt) ──
-        # Mandatory = scheduled repayment (input or % of opening)
-        input_cell(ws, REG["DT.mandatory"], c_idx, 0, FMT_MLN)
-
-        # Pre-financing cash = prev_cash + CFO + CFI - mandatory
-        # CFO and CFI come from 23_CF (which depends on interest → circular!)
-        cfo_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}"
-        cfi_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfi']}"
-        cash_prev = f"'{NAME['BS']}'!{prev}${REG['BS.cash']}"  # prev year cash from BS
-
-        # ── CIRCULAR DEBT OPTIMIZER with calc_reset seed pattern ──
-        # When calc_reset=1 (seed): draw=0, voluntary=0 (decouples circular)
-        # When calc_reset=0 (iterate): normal optimizer formulas
-        cp_min_cash = "'Control_Panel'!$C$55"
-
-        # ── Draw = MAX(0, min_cash - estimated_cash) ──
-        # Avoid circular through CF by estimating cash directly:
-        # est_cash = prev_cash + EBITDA - Interest - CapEx - ΔNWC - Tax - mandatory
-        # This is a simplified CFO+CFI without circular dependency
+        # ── Refs to other sheets (non-circular) ──
         ebitda_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
         capex_ref = f"'{NAME['PP']}'!{cl}${REG['PP.capex']}"
-        wc_ref = f"'{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}"
-        interest_self = f"({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']}"
-
-        # est_cash = prev_cash + EBITDA - interest_est - capex - ΔWC - mandatory
-        # Full cash estimate: EBITDA - interest - capex - ΔWC - tax - div - mandatory
-        # Interest: opening_debt × avg_rate (no circular)
-        # Tax: use statutory rate × MAX(0, EBITDA - interest - DA)
-        interest_est = f"{cl}{REG['DT.open']}*{cl}{REG['DT.avg_rate']}"
         da_ref = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
-        # Estimated EBT = EBITDA - DA - Interest
-        # Tax = MAX(0, EBT) × 25%
-        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_est}))*0.25"
-        # Dividends from equity sheet
+        wc_ref = f"'{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}"
+        ni_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ni']}"
         div_ref = f"ABS('{NAME['EQ']}'!{cl}${REG['EQ.div']})"
-        est_cash = (f"{cash_prev}+{ebitda_ref}"
-                    f"-({interest_est})"
-                    f"-ABS({capex_ref})"
-                    f"-{wc_ref}"
-                    f"-({tax_est})"
-                    f"-{div_ref}"
-                    f"-ABS({cl}{REG['DT.mandatory']})")
+        cash_prev = f"'{NAME['BS']}'!{prev}${REG['BS.cash']}"
+        tax_current = f"'{NAME['TX']}'!{cl}${REG['TX.current']}"
 
-        # Draw with calc_reset seed pattern:
-        # calc_reset=1: seed = est_cash based draw (no circular)
-        # calc_reset=0: iterate = CF-based draw (circular, converges in 3-4 iters)
-        seed_draw = f"MAX(0,{cp_min_cash}-({est_cash}))"
-        # pre_cash = prev_cash + CFO + CFI + CFF (full cash flow)
-        # CFF includes interest_paid, debt draw/repay, div
-        cff_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cff']}"
-        iter_draw = (f"IFERROR(MEDIAN(0,"
-                     f"MAX(0,{cp_min_cash}-({cash_prev}+{cfo_ref}+{cfi_ref}+{cff_ref})),"
-                     f"{cl}{REG['DT.open']}*3),{seed_draw})")
-        formula_cell(ws, REG["DT.draw"], c_idx,
-                     f"=IF(calc_reset=1,{seed_draw},{iter_draw})",
+        # Interest estimate: term debt only, opening balance × avg_rate (non-circular)
+        interest_term_est = f"{cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']}"
+
+        # ── A. SOURCES & USES formulas ──
+        # Sources
+        formula_cell(ws, REG["DT.su_oper_flow"], c_idx,
+                     f"={ebitda_ref}-{tax_current}", FMT_MLN)
+        formula_cell(ws, REG["DT.su_maint_capex"], c_idx,
+                     f"=ABS({capex_ref})*{cp_maint_share}", FMT_MLN)
+        formula_cell(ws, REG["DT.su_growth_capex"], c_idx,
+                     f"=ABS({capex_ref})*(1-{cp_maint_share})", FMT_MLN)
+        formula_cell(ws, REG["DT.su_delta_nwc"], c_idx,
+                     f"=MAX(0,{wc_ref})", FMT_MLN)
+        # su_mandatory ← term mandatory
+        ref_cell(ws, REG["DT.su_mandatory"], c_idx,
+                 f"=ABS({cl}{REG['DT.mandatory']})", FMT_MLN)
+        # su_interest ← term interest estimate (no RC — pre-RC view)
+        formula_cell(ws, REG["DT.su_interest"], c_idx,
+                     f"={cl}{REG['DT.interest_term']}", FMT_MLN)
+        formula_cell(ws, REG["DT.su_dividends"], c_idx,
+                     f"={div_ref}", FMT_MLN)
+        # Total uses
+        su_use_rows = [REG[f"DT.su_{k}"] for k in
+                       ["maint_capex", "growth_capex", "delta_nwc",
+                        "mandatory", "interest", "dividends"]]
+        formula_cell(ws, REG["DT.su_total_uses"], c_idx,
+                     "=" + "+".join(f"{cl}{r}" for r in su_use_rows),
+                     FMT_MLN, bold=True)
+
+        # Sources
+        ref_cell(ws, REG["DT.su_refi"], c_idx,
+                 f"={cl}{REG['DT.refi']}", FMT_MLN)
+        formula_cell(ws, REG["DT.su_excess_cash"], c_idx,
+                     f"=MAX(0,{cash_prev}-{cp_min_cash})", FMT_MLN)
+        formula_cell(ws, REG["DT.su_total_sources"], c_idx,
+                     f"={cl}{REG['DT.su_oper_flow']}+{cl}{REG['DT.su_refi']}"
+                     f"+{cl}{REG['DT.su_excess_cash']}",
+                     FMT_MLN, bold=True)
+
+        # Gap and maintenance gap
+        formula_cell(ws, REG["DT.su_gap"], c_idx,
+                     f"={cl}{REG['DT.su_total_uses']}-{cl}{REG['DT.su_total_sources']}",
+                     FMT_MLN, bold=True)
+        formula_cell(ws, REG["DT.su_maint_gap"], c_idx,
+                     f"=MAX(0,{cl}{REG['DT.su_maint_capex']}"
+                     f"-{cl}{REG['DT.su_oper_flow']})",
                      FMT_MLN)
 
-        # Voluntary: use est_cash (no circular) — only when profitable
-        ni_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ni']}"
-        formula_cell(ws, REG["DT.voluntary"], c_idx,
-                     f"=IF({ni_ref}>0,"
-                     f"MAX(0,({est_cash})+{cl}{REG['DT.draw']}-{cp_min_cash}*1.5),"
+        # ── B. TERM DEBT corkscrew ──
+        # term_open = prev term_close
+        formula_cell(ws, REG["DT.term_open"], c_idx,
+                     f"={prev}{REG['DT.term_close']}", FMT_MLN)
+        # Mandatory — input, filled by fill_data from schedule
+        input_cell(ws, REG["DT.mandatory"], c_idx, 0, FMT_MLN)
+        # Refi — input, filled by fill_data (= mandatory × refi_pct)
+        input_cell(ws, REG["DT.refi"], c_idx, 0, FMT_MLN)
+        # New term — input (0 default; analyst or fill_data adds if needed)
+        input_cell(ws, REG["DT.new_term"], c_idx, 0, FMT_MLN)
+
+        # Voluntary term: waterfall after RC repay
+        # Available = MAX(0, est_cash_before_RC - min_cash - buffer - RC_open)
+        # i.e., after fully repaying RC AND maintaining min_cash + buffer
+        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_term_est}))*0.25"
+        est_cash_before_rc = (
+            f"{cash_prev}+{ebitda_ref}"
+            f"-({interest_term_est})"
+            f"-ABS({capex_ref})"
+            f"-{wc_ref}"
+            f"-({tax_est})"
+            f"-{div_ref}"
+            f"-ABS({cl}{REG['DT.mandatory']})"
+            f"+{cl}{REG['DT.refi']}"
+            f"+{cl}{REG['DT.new_term']}")
+        # est_nd from opening (non-circular)
+        est_nd = f"({cl}{REG['DT.term_open']}-{cash_prev})"
+        vol_available = (f"MAX(0,({est_cash_before_rc})"
+                         f"-{cp_min_cash}-{cp_buffer}"
+                         f"-{cl}{REG['DT.rc_open']})")
+        formula_cell(ws, REG["DT.voluntary_term"], c_idx,
+                     f"=IF(AND({ni_ref}>0,"
+                     f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev}),"
+                     f"MAX(0,MIN({vol_available}*{cp_sweep_pct},"
+                     f"{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))),"
                      f"0)",
                      FMT_MLN)
 
-        # Refi = 0 (simplified; manual override)
-        formula_cell(ws, REG["DT.refi"], c_idx, "=0", FMT_MLN)
-
-        # Close = open + draw - mandatory - voluntary + refi
-        formula_cell(ws, REG["DT.close"], c_idx,
-                     f"={cl}{REG['DT.open']}+{cl}{REG['DT.draw']}"
-                     f"-ABS({cl}{REG['DT.mandatory']})-ABS({cl}{REG['DT.voluntary']})"
-                     f"+{cl}{REG['DT.refi']}",
+        # term_close = open - mandatory + refi + new_term - voluntary
+        formula_cell(ws, REG["DT.term_close"], c_idx,
+                     f"={cl}{REG['DT.term_open']}"
+                     f"-ABS({cl}{REG['DT.mandatory']})"
+                     f"+{cl}{REG['DT.refi']}"
+                     f"+{cl}{REG['DT.new_term']}"
+                     f"-ABS({cl}{REG['DT.voluntary_term']})",
                      FMT_MLN, bold=True)
 
-        # Interest = avg(open, close) × rate — IFERROR seed fallback for circular convergence
-        formula_cell(ws, REG["DT.interest"], c_idx,
-                     f"=IFERROR(({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']},"
-                     f"{cl}{REG['DT.open']}*{cl}{REG['DT.avg_rate']})",
+        # ── C. REVOLVING CREDIT ──
+        # RC limit from CP
+        ref_cell(ws, REG["DT.rc_limit"], c_idx,
+                 f"={cp_rc_limit}", FMT_MLN)
+        # RC open = prev close
+        formula_cell(ws, REG["DT.rc_open"], c_idx,
+                     f"={prev}{REG['DT.rc_close']}", FMT_MLN)
+
+        # est_cash_before_RC: includes term activity, voluntary, no RC
+        # Reuse the same estimate (non-circular)
+        # Adjust for voluntary_term being deducted
+        est_cash_full = (f"({est_cash_before_rc})"
+                         f"-ABS({cl}{REG['DT.voluntary_term']})")
+
+        # RC draw = MIN(limit - open, MAX(0, min_cash - est_cash))
+        formula_cell(ws, REG["DT.rc_draw"], c_idx,
+                     f"=MAX(0,MIN({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']},"
+                     f"MAX(0,{cp_min_cash}-({est_cash_full}))))",
                      FMT_MLN)
 
-        # Avg rate — input (linked to implied rate from preprocessing)
+        # RC repay = MIN(open, MAX(0, est_cash - min_cash))
+        formula_cell(ws, REG["DT.rc_repay"], c_idx,
+                     f"=MIN({cl}{REG['DT.rc_open']},"
+                     f"MAX(0,({est_cash_full})-{cp_min_cash}))",
+                     FMT_MLN)
+
+        # RC close = open + draw - repay
+        formula_cell(ws, REG["DT.rc_close"], c_idx,
+                     f"={cl}{REG['DT.rc_open']}"
+                     f"+{cl}{REG['DT.rc_draw']}"
+                     f"-{cl}{REG['DT.rc_repay']}",
+                     FMT_MLN, bold=True)
+
+        # Utilization
+        formula_cell(ws, REG["DT.rc_util"], c_idx,
+                     f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
+                     FMT_PCT)
+
+        # Funding gap = MAX(0, min_cash - est_cash - available_RC)
+        formula_cell(ws, REG["DT.funding_gap"], c_idx,
+                     f"=MAX(0,{cp_min_cash}-({est_cash_full})"
+                     f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']}))",
+                     FMT_MLN)
+
+        # ── D. TOTAL DEBT ──
+        formula_cell(ws, REG["DT.open"], c_idx,
+                     f"={cl}{REG['DT.term_open']}+{cl}{REG['DT.rc_open']}",
+                     FMT_MLN)
+        formula_cell(ws, REG["DT.close"], c_idx,
+                     f"={cl}{REG['DT.term_close']}+{cl}{REG['DT.rc_close']}",
+                     FMT_MLN, bold=True)
+
+        # ── E. INTEREST ──
+        # Term interest: from _Debt_Schedule total (fill_data overrides)
+        # Default: avg(open,close) × avg_rate
+        formula_cell(ws, REG["DT.interest_term"], c_idx,
+                     f"=IFERROR(({cl}{REG['DT.term_open']}+{cl}{REG['DT.term_close']})/2"
+                     f"*{cl}{REG['DT.avg_rate']},"
+                     f"{cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']})",
+                     FMT_MLN)
+        # RC interest: avg(open,close) × rc_rate
+        formula_cell(ws, REG["DT.interest_rc"], c_idx,
+                     f"=({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_close']})/2"
+                     f"*{cp_rc_rate}",
+                     FMT_MLN)
+        # Commitment fee: (limit - avg_balance) × fee_rate
+        formula_cell(ws, REG["DT.commit_fee"], c_idx,
+                     f"=({cl}{REG['DT.rc_limit']}"
+                     f"-({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_close']})/2)"
+                     f"*{cp_commit_fee}",
+                     FMT_MLN)
+        # Total interest = term + RC + fee
+        formula_cell(ws, REG["DT.interest"], c_idx,
+                     f"={cl}{REG['DT.interest_term']}"
+                     f"+{cl}{REG['DT.interest_rc']}"
+                     f"+{cl}{REG['DT.commit_fee']}",
+                     FMT_MLN, bold=True)
+        # Avg rate
         input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
 
-        # ST / LT split: mandatory next year → ST, rest → LT
-        # Simplified: historical ST/LT ratio carried forward
-        st_ratio = f"'{NAME['BS']}'!{prev}${REG['BS.st_debt']}/MAX(1," \
-                   f"'{NAME['BS']}'!{prev}${REG['BS.st_debt']}+'{NAME['BS']}'!{prev}${REG['BS.lt_debt']})"
+        # ── F. ST/LT ──
+        # ST = schedule_ST + RC (fill_data overrides schedule_ST from _Debt_Schedule)
+        # Default: mandatory next year + RC
         formula_cell(ws, REG["DT.st"], c_idx,
-                     f"=IFERROR({cl}{REG['DT.close']}*{st_ratio},{cl}{REG['DT.close']}*0.3)", FMT_MLN)
+                     f"={cl}{REG['DT.rc_close']}", FMT_MLN)
+        # LT = term_close (fill_data overrides with schedule_LT)
         formula_cell(ws, REG["DT.lt"], c_idx,
-                     f"={cl}{REG['DT.close']}-{cl}{REG['DT.st']}", FMT_MLN)
-
-        # Net Debt = Total Debt - Cash
+                     f"={cl}{REG['DT.term_close']}", FMT_MLN)
+        # Net Debt
         formula_cell(ws, REG["DT.nd"], c_idx,
                      f"={cl}{REG['DT.close']}-'{NAME['BS']}'!{cl}${REG['BS.cash']}",
                      FMT_MLN, bold=True)
-
         # ND/EBITDA
         formula_cell(ws, REG["DT.nd_ebitda"], c_idx,
-                     f"=IFERROR({cl}{REG['DT.nd']}/'{NAME['PL']}'!{cl}${REG['PL.ebitda']},0)",
+                     f"=IFERROR({cl}{REG['DT.nd']}/{ebitda_ref},0)",
                      FMT_MULT)
 
-    # Historical debt opening (from last hist year)
-    hist_col = get_column_letter(3)  # C = last hist year
-    for k in ["open", "close"]:
+    # Historical inputs (last hist year column)
+    for k in ["term_open", "term_close"]:
         input_cell(ws, REG[f"DT.{k}"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_open"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_close"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_limit"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.open"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.close"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
 
@@ -1712,13 +1956,17 @@ def build_cf(wb, cfg):
         # CapEx ← PPE
         ref_cell(ws, REG["CF.capex"], c_idx,
                  f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
-        # Debt draw ← Debt (new draw + refinancing)
+        # Debt draw ← Debt (refi + new_term + RC_draw)
         formula_cell(ws, REG["CF.debt_draw"], c_idx,
-                     f"='{NAME['DT']}'!{cl}${REG['DT.draw']}+'{NAME['DT']}'!{cl}${REG['DT.refi']}",
+                     f"='{NAME['DT']}'!{cl}${REG['DT.refi']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}",
                      FMT_MLN)
-        # Debt repay ← Debt (mandatory + voluntary)
+        # Debt repay ← Debt (mandatory + voluntary_term + RC_repay)
         formula_cell(ws, REG["CF.debt_repay"], c_idx,
-                     f"='{NAME['DT']}'!{cl}${REG['DT.mandatory']}+'{NAME['DT']}'!{cl}${REG['DT.voluntary']}",
+                     f"='{NAME['DT']}'!{cl}${REG['DT.mandatory']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.voluntary_term']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}",
                      FMT_MLN)
         # Lease pay ← Lease
         ref_cell(ws, REG["CF.lease_pay"], c_idx,
@@ -1726,6 +1974,10 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
+        # Other non-cash: change in tax payable (BS item not in WC)
+        formula_cell(ws, REG["CF.other_noncash"], c_idx,
+                     f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}",
+                     FMT_MLN)
         # Interest paid: 0 in CFF (interest flows through NI in CFO)
         # US GAAP style: interest is operating, not financing
         formula_cell(ws, REG["CF.interest_paid"], c_idx, "=0", FMT_MLN)
@@ -2371,13 +2623,63 @@ def build_control_panel(wb, cfg):
     r += 1
 
     # ── H. ДОЛГ ──
-    section_header(ws, r, "H. ДОЛГ"); r += 1
-    label_row(ws, r, "Target ND/EBITDA")
-    input_cell(ws, r, 3, cfg.get("debt_target_nd_ebitda", 2.0), FMT_MULT); r += 1
+    section_header(ws, r, "H. ДОЛГ И ФИНАНСИРОВАНИЕ"); r += 1
+
     label_row(ws, r, "Min cash target", "mln")
-    input_cell(ws, r, 3, 500, FMT_MLN0); r += 1
-    label_row(ws, r, "Max voluntary prepay (% FCF)")
-    input_cell(ws, r, 3, 0.30, FMT_PCT); r += 2
+    input_cell(ws, r, 3, cfg.get("min_cash", 500), FMT_MLN0)
+    REG["CP.min_cash"] = r; r += 1
+
+    label_row(ws, r, "RC лимит", "mln")
+    input_cell(ws, r, 3, cfg.get("rc_limit", 2000), FMT_MLN0)
+    REG["CP.rc_limit"] = r; r += 1
+
+    label_row(ws, r, "RC ставка (база + спред)", "%")
+    input_cell(ws, r, 3, cfg.get("rc_rate", 0.12), FMT_PCT)
+    REG["CP.rc_rate"] = r; r += 1
+
+    label_row(ws, r, "Commitment fee (% неисп. лимита)", "%")
+    input_cell(ws, r, 3, cfg.get("commit_fee_rate", 0.005), FMT_PCT2)
+    REG["CP.commit_fee_rate"] = r; r += 1
+
+    label_row(ws, r, "Доля поддерж. CapEx (maint_share)", "%")
+    input_cell(ws, r, 3, cfg.get("maint_share", 0.70), FMT_PCT)
+    REG["CP.maint_share"] = r; r += 1
+
+    label_row(ws, r, "Sweep % (добровольное погашение)", "%")
+    input_cell(ws, r, 3, 0.30, FMT_PCT)
+    REG["CP.sweep_pct"] = r; r += 1
+
+    label_row(ws, r, "Target ND/EBITDA", "x")
+    input_cell(ws, r, 3, cfg.get("debt_target_nd_ebitda", 2.0), FMT_MULT)
+    REG["CP.target_leverage"] = r; r += 1
+
+    label_row(ws, r, "Buffer сверх min cash", "mln")
+    input_cell(ws, r, 3, cfg.get("cash_buffer", 200), FMT_MLN0)
+    REG["CP.buffer"] = r; r += 1
+
+    label_row(ws, r, "Refi % (облигации)", "%", "Сценарный параметр")
+    input_cell(ws, r, 3, cfg.get("refi_pct_bonds", 1.0), FMT_PCT)
+    REG["CP.refi_pct_bonds"] = r; r += 1
+
+    label_row(ws, r, "Refi % (банковский долг)", "%", "Сценарный параметр")
+    input_cell(ws, r, 3, cfg.get("refi_pct_bank", 1.0), FMT_PCT)
+    REG["CP.refi_pct_bank"] = r; r += 1
+
+    label_row(ws, r, "RC trigger (% лимита для нового транша)", "%")
+    input_cell(ws, r, 3, 0.60, FMT_PCT)
+    REG["CP.rc_trigger"] = r; r += 1
+
+    label_row(ws, r, "Тенор нового транша (лет)", "yr")
+    input_cell(ws, r, 3, cfg.get("term_tenor", 5), FMT_INT)
+    REG["CP.term_tenor"] = r; r += 1
+
+    label_row(ws, r, "Spread base (новый долг)", "%")
+    input_cell(ws, r, 3, cfg.get("spread_base", 0.03), FMT_PCT)
+    REG["CP.spread_base"] = r; r += 1
+
+    label_row(ws, r, "Spread step (за оборот ND/EBITDA)", "%")
+    input_cell(ws, r, 3, cfg.get("spread_step", 0.005), FMT_PCT2)
+    REG["CP.spread_step"] = r; r += 2
 
     # ── I. НАЛОГИ ──
     section_header(ws, r, "I. НАЛОГИ"); r += 1
