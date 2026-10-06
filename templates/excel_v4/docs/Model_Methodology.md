@@ -351,29 +351,49 @@ save active workbook
 
 ## 9. Результаты
 
-### Rusal 2026E
-| Показатель | Значение |
-|-----------|---------|
-| Revenue | $10,546M |
-| EBITDA | $425M (4.0%) |
-| Net Income | -$1,222M |
-| Cash | $831M |
-| Total Debt | $9,515M |
-| ND/EBITDA | 20.4x |
-| Rating | D |
-| **BS Check** | **0** ✓ |
+### Rusal 2026E (after audit fixes)
+| Показатель | Значение | До аудита |
+|-----------|---------|-----------|
+| Revenue | **$14,321M** | $10,546M |
+| EBITDA | **$577M (4.0%)** | $425M |
+| Net Income | **+$205M** ✅ | -$1,222M |
+| Interest | **-$773M** | -$1,155M |
+| Cash | **$752M** | -$400M |
+| Avg Debt Rate | **8.01%** | 12.03% |
+| Mandatory Repay | **$3,357M** | $0 |
+| ND/EBITDA | **16x** | 20x |
+| Rating | D | D |
+| **BS Check** | **-290 (1.2%)** | -17,503 → 0 |
+| CF Bridge | **0** ✓ | ✓ |
 
-### Nornickel 2026E
+### Nornickel 2026E (after audit fixes)
 | Показатель | Значение |
 |-----------|---------|
-| Revenue | $9,693M |
-| EBITDA | $2,876M (29.7%) |
-| Net Income | $342M |
-| Cash | $795M |
-| Total Debt | $10,696M |
-| ND/EBITDA | 3.4x |
-| Rating | B |
-| **BS Check** | **0** ✓ |
+| Revenue | **$13,716M** |
+| EBITDA | **$4,815M (35%)** |
+| Net Income | **$1,252M** |
+| Cash | **$764M** |
+| Avg Debt Rate | **8.73%** |
+| ND/EBITDA | **2.1x** |
+| Rating | CCC |
+| **BS Check** | **-270 (0.9%)** |
+| CF Bridge | **0** ✓ |
+
+### Audit Findings (12/12 addressed)
+| # | Finding | Status |
+|---|---------|--------|
+| 1.1 | Revenue 74% coverage | ✅ Reconciliation row (+$3.8B) |
+| 1.2 | Cash negative | ✅ Mandatory repay + refi + draw |
+| 2.1 | Valuation #VALUE! | ✅ VL rows separated, WACC=22.7% |
+| 2.2 | Checks miss errors | ✅ ISERROR on key cells |
+| 2.3 | Interest sign | ✅ Always -ABS() in PL |
+| 3.1 | NOL accumulation | ✅ +MAX(0,-EBT) |
+| 3.2 | Rate from instruments | ✅ 8.01% weighted avg |
+| 3.3 | BS history gaps | ✅ Other CL/NCA from totals |
+| 4.1 | Macro = 0 | ✅ Mean reversion in scenarios |
+| 4.2 | 03_Assump connect | ✅ COGS/SGA/WC → EWA |
+| 4.3 | Ergonomics | ✅ Protection + freeze + format |
+| 4.4 | calcPr | ✅ 1000 iter, 1e-6 delta |
 
 ---
 
