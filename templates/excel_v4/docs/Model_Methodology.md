@@ -252,18 +252,32 @@ Commit_fee = (limit - avg_balance) × fee_rate
 ```
 Per currency (CNY, RUB): FX_effect = -Σ(instrument_close) × FX_change_YoY
 Flows: DT.close (+), PL.other_fin (-loss), CF.fx (+reversal)
-BS=0 verified under FX stress (CNY+10%: NI=-525M, debt+633M)
+BS=0 verified under FX stress.
+Revenue/Cost FX (natural hedge from IFRS Note 4):
+  Rev_FX = Revenue × rev_ccy_share × (-FX_change)   [real cash effect, NOT reversed in CF]
+  Cost_FX = -COGS × cost_rub_share × (-USDRUB_change)
+  Rusal: CNY rev=35%, RUB rev=26%, RUB cost=55% → CNY+10% NI=-24M (was -525M without hedge)
 ```
 
 **E. Covenant Circuit:**
 ```
 IF prev_ND/EBITDA > covenant_max:
-  - Block new term draws
+  - Block new term draws (DT.new_term = 0)
   - Block dividends (EQ.div = 0)
 ```
 
-**F. Historical Calibration (informational):**
-- ST share, maint CapEx share, spread, avg tenor, debt/capex ratio
+**F. Voluntary Repayment Waterfall:**
+```
+Available = MAX(0, est_cash - min_cash - buffer - RC_open)
+Priority 1: RC repay (cash sweep, already in RC module)
+Priority 2: ST term = MIN(available × sweep_pct, ST_balance)  — no prepay premium
+Priority 3: LT term = remaining / (1 + prepay_premium)
+Stops: covenant breach, NI < 0, ND/EBITDA ≤ target
+```
+
+**G. Historical Calibration (informational):**
+- ST share (67.7% Rusal — anomaly flag), maint CapEx share (46.1%)
+- Spread to base, avg tenor, debt/capex ratio
 - ST flag: ⚠ if model ST/LT deviates >15pp from historical
 
 **Per-instrument schedule (_Debt_Schedule):**
@@ -275,17 +289,34 @@ Instruments + Synthetic "New Term 20XX" rows (per forecast year)
   Total: SUM(instruments) + SUM(synthetics) — non-contiguous
 ```
 
-**20 CP parameters:** rc_limit, rc_rate, commit_fee, maint_share, sweep_pct,
+**23 CP parameters:** rc_limit, rc_rate, commit_fee, maint_share, sweep_pct,
 target_leverage, buffer, refi_pct_bonds/bank, new_debt_available, term_tenor,
-spread_base/step, prepay_premium, cov_nd_ebitda, cov_icr, fx_usdcny/usdrub_chg
+spread_base/step, prepay_premium, cov_nd_ebitda, cov_icr,
+fx_usdcny/usdrub_chg, rev_cny/rub_share, cost_rub_share
 
-**Stress tests verified:**
+**12 Checks in 90_Checks:**
+| # | Check | Type |
+|---|-------|------|
+| 1 | BS: TA - TL - TE = 0 | integrity |
+| 2 | CF: ΔCash = CFO+CFI+CFF | integrity |
+| 3 | PPE rollforward | integrity |
+| 4 | Debt rollforward (term + RC) | integrity |
+| 5 | Equity rollforward | integrity |
+| 6 | ST + LT = DT.close | integrity |
+| 7 | Schedule: DT.close = term + RC + FX | integrity |
+| 8 | Interest: total = term + RC + fee | integrity |
+| 9 | RC ≤ limit | flag |
+| 10 | Funding gap = 0 | flag |
+| 11 | Cash ≥ min_cash OR gap > 0 | flag |
+| 12 | Maint capex not debt-financed | flag |
+
+**Stress tests verified (Rusal):**
 | Scenario | RC | Funding Gap | NI | BS |
 |----------|-----|------------|-----|-----|
 | Base (refi=100%) | 0 | 0 | +80M | 0 |
 | Stress (refi=50%) | 1,270 | 0 | +69M | 0 |
 | Severe (refi=0%) | 2,500 (limit) | 292M Y1, 5,503M Y2 | +69M | 0 |
-| FX (CNY+10%) | 0 | 0 | -525M | 0 |
+| FX (CNY+10%, with hedge) | 0 | 0 | **-24M** | 0 |
 
 ### 4.4 Equity (24_Equity)
 ```
