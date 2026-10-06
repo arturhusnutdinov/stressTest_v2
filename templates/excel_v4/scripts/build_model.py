@@ -1293,7 +1293,10 @@ def build_checks(wb, cfg):
         ("funding_gap", "Funding gap = 0", None, None),
         ("su_balance", "S&U: Gap = RC_draw + NewTerm + FundGap", None, None),
         ("st_lt_check", "ST + LT = DT.close", None, None),
-        ("schedule_check", "DT.close = Term + RC", None, None),
+        ("schedule_check", "DT.close = Term + RC + FX", None, None),
+        ("cash_min", "Cash ≥ min_cash ИЛИ FundGap > 0", None, None),
+        ("maint_debt", "Подд. CapEx не финансируется долгом", None, None),
+        ("interest_check", "Int = Term + RC + Fee", None, None),
     ]
     for key, label, _, _ in new_checks:
         r = REG.get(f"CK.{key}")
@@ -1323,11 +1326,35 @@ def build_checks(wb, cfg):
                      f"+'{NAME['DT']}'!{cl}${REG['DT.lt']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.close']}",
                      FMT_RATIO)
-        # Schedule: close = term + RC
+        # Schedule: close = term + RC + FX
         formula_cell(ws, REG["CK.schedule_check"], c_idx,
                      f"='{NAME['DT']}'!{cl}${REG['DT.close']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.term_close']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_close']}",
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_close']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
+                     FMT_RATIO)
+
+        # #6 Cash ≥ min_cash OR FundingGap > 0 (both = OK, neither = fail)
+        # Returns 0 if OK, 1 if fail (cash < min AND gap = 0)
+        cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
+        formula_cell(ws, REG["CK.cash_min"], c_idx,
+                     f"=IF(OR('{NAME['BS']}'!{cl}${REG['BS.cash']}>={cp_min},"
+                     f"'{NAME['DT']}'!{cl}${REG['DT.funding_gap']}>0),0,1)",
+                     FMT_INT)
+
+        # #7 Maintenance capex not financed by new debt
+        # su_maint_gap > 0 AND new_term > 0 = problem
+        formula_cell(ws, REG["CK.maint_debt"], c_idx,
+                     f"=IF(AND('{NAME['DT']}'!{cl}${REG['DT.su_maint_gap']}>0,"
+                     f"'{NAME['DT']}'!{cl}${REG['DT.new_term']}>0),1,0)",
+                     FMT_INT)
+
+        # #8 Interest = term + RC + fee (verify decomposition)
+        formula_cell(ws, REG["CK.interest_check"], c_idx,
+                     f"='{NAME['DT']}'!{cl}${REG['DT.interest']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.interest_term']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.interest_rc']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.commit_fee']}",
                      FMT_RATIO)
 
     # Error count: check integrity + detect errors in key cells
@@ -1336,14 +1363,16 @@ def build_checks(wb, cfg):
     ws.cell(r_err, 1).font = F_LABEL_B
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
-        # Part 1: integrity checks > tolerance
+        # Part 1: integrity checks > tolerance (should be 0)
         check_rows = [REG["CK.bs_check"], REG["CK.cf_check"], REG["CK.ppe_roll"],
                       REG["CK.debt_roll"], REG["CK.equity_roll"],
-                      REG["CK.st_lt_check"], REG["CK.schedule_check"]]
+                      REG["CK.st_lt_check"], REG["CK.schedule_check"],
+                      REG["CK.interest_check"]]
         parts = [f"IF(ISERROR({cl}{r}),1,IF(ABS({cl}{r})>1,1,0))" for r in check_rows]
-        # Part 2: RC limit breach and funding gap
-        parts.append(f"IF({cl}{REG['CK.rc_limit']}>1,1,0)")
-        parts.append(f"IF({cl}{REG['CK.funding_gap']}>1,1,0)")
+        # Part 2: flag checks (should be 0)
+        flag_rows = [REG["CK.rc_limit"], REG["CK.funding_gap"],
+                     REG["CK.cash_min"], REG["CK.maint_debt"]]
+        parts += [f"IF(IFERROR({cl}{r},0)>0,1,0)" for r in flag_rows]
         # Part 3: ISERROR on key model cells
         key_cells = [
             f"'{NAME['PL']}'!{cl}${REG['PL.ni']}",
@@ -1747,19 +1776,30 @@ def build_debt(wb, cfg):
         vol_available = (f"MAX(0,({est_cash_before_rc})"
                          f"-{cp_min_cash}-{cp_buffer}"
                          f"-{cl}{REG['DT.rc_open']})")
-        # Voluntary: with covenant stops and prepay premium
-        # Stop 1: not if covenant breach (need liquidity)
+        # Voluntary: waterfall RC → ST → LT, with covenant stops
+        # Stop 1: not if covenant breach
         # Stop 2: not if NI < 0
         # Stop 3: only if overleveraged (ND/EBITDA > target)
-        # Priority: RC already repaid via cash sweep, this is term only
+        # Priority: RC already repaid via cash sweep.
+        #   Then: ST term first (cheaper to prepay, reduces refi peak)
+        #   Then: LT (with prepay premium)
         cp_prepay_prem = f"'Control_Panel'!$C${REG.get('CP.prepay_premium', 72)}"
-        # Net of prepay premium: effective amount = voluntary / (1 + premium)
+        # Max voluntary by leverage target
+        vol_max_lev = f"MAX(0,{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))"
+        # Total available
+        vol_total = f"MIN({vol_available}*{cp_sweep_pct},{vol_max_lev})"
+        # ST balance proxy: prev year ST debt (from DT.st)
+        st_balance = f"IFERROR({prev}{REG['DT.st']},0)"
+        # vol_st = MIN(total, ST balance) — repay ST first, no premium
+        vol_st = f"MIN({vol_total},{st_balance})"
+        # vol_lt = remaining × (1/(1+premium)) — LT with prepay cost
+        vol_lt = f"MAX(0,{vol_total}-{vol_st})/(1+{cp_prepay_prem})"
+        # voluntary_term = vol_st + vol_lt
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
                      f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,"
                      f"NOT({cov_breach}),"
                      f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev}),"
-                     f"MAX(0,MIN({vol_available}*{cp_sweep_pct}/(1+{cp_prepay_prem}),"
-                     f"{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))),"
+                     f"MAX(0,{vol_st}+{vol_lt}),"
                      f"0),0)",
                      FMT_MLN)
 

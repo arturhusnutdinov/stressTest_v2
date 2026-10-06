@@ -363,6 +363,9 @@
   "CK.su_balance": 16,
   "CK.st_lt_check": 17,
   "CK.schedule_check": 18,
-  "CK.error_count": 20,
+  "CK.cash_min": 19,
+  "CK.maint_debt": 20,
+  "CK.interest_check": 21,
+  "CK.error_count": 23,
   "RV.recon": 19
 }
