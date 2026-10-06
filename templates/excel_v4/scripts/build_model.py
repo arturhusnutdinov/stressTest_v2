@@ -1742,7 +1742,8 @@ def build_debt(wb, cfg):
         input_cell(ws, REG["DT.refi"], c_idx, 0, FMT_MLN)
 
         # ── est_cash: non-circular cash estimate (foundation for RC and new_term) ──
-        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_term_est}))*0.25"
+        cp_tax_rate_dt = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_term_est}))*{cp_tax_rate_dt}"
         # est_cash WITHOUT new_term (for gap_after_rc calculation)
         est_cash_base = (
             f"{cash_prev}+{ebitda_ref}"
@@ -1993,7 +1994,8 @@ def build_lease(wb, cfg):
         formula_cell(ws, REG["LS.liab_open"], c_idx, f"={prev}{REG['LS.liab_close']}", FMT_MLN)
         # Interest = open × discount_rate (input)
         formula_cell(ws, REG["LS.liab_int"], c_idx,
-                     f"={cl}{REG['LS.liab_open']}*0.06", FMT_MLN)
+                     f"={cl}{REG['LS.liab_open']}*'Control_Panel'!$C${REG.get('CP.rc_rate', 56)}*0.5",
+                     FMT_MLN)  # Lease discount ≈ 50% of RC rate as proxy
         # Payment (input)
         input_cell(ws, REG["LS.liab_pay"], c_idx, 0, FMT_MLN)
         # Close = open + interest - payment
@@ -2238,15 +2240,17 @@ def build_tax(wb, cfg):
                  f"='{NAME['PL']}'!{cl}${REG['PL.ebt']}", FMT_MLN)
         # NOL open = prev close
         formula_cell(ws, REG["TX.nol_open"], c_idx, f"={prev}{REG['TX.nol_close']}", FMT_MLN)
-        # NOL used = min(NOL_open, EBT × 80%)
+        # NOL used = min(NOL_open, EBT × NOL_cap) — from CP
+        cp_nol_cap = f"'Control_Panel'!$C${REG.get('CP.nol_cap', 82)}"
         formula_cell(ws, REG["TX.nol_used"], c_idx,
-                     f"=MIN({cl}{REG['TX.nol_open']},MAX(0,{cl}{REG['TX.ebt']})*0.8)", FMT_MLN)
+                     f"=MIN({cl}{REG['TX.nol_open']},MAX(0,{cl}{REG['TX.ebt']})*{cp_nol_cap})", FMT_MLN)
         # Taxable = EBT - NOL_used
         formula_cell(ws, REG["TX.taxable"], c_idx,
                      f"=MAX(0,{cl}{REG['TX.ebt']}-{cl}{REG['TX.nol_used']})", FMT_MLN)
-        # Current tax = taxable × 25%
+        # Current tax = taxable × statutory rate — from CP
+        cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
         formula_cell(ws, REG["TX.current"], c_idx,
-                     f"={cl}{REG['TX.taxable']}*0.25", FMT_MLN)
+                     f"={cl}{REG['TX.taxable']}*{cp_tax_rate}", FMT_MLN)
         # Total = current + deferred
         formula_cell(ws, REG["TX.total"], c_idx,
                      f"={cl}{REG['TX.current']}+{cl}{REG['TX.deferred']}", FMT_MLN, bold=True)
@@ -2279,16 +2283,25 @@ def build_valuation(wb, cfg):
 
     # ── A. WACC ──
     section_header(ws, 6, "A. WACC (Cost of Capital: CAPM)")
-    for key, label, default in [
-        ("rf", "Risk-free rate (Rf, нормализованная ОФЗ 10Y)", 0.10),
-        ("beta", "Beta (отрасль)", 1.1),
-        ("erp", "Equity Risk Premium (ERP)", 0.07),
-        ("crp", "Country Risk Premium (CRP)", 0.04),
-        ("scp", "Size/Company Premium (SCP)", 0.01),
-    ]:
+    # WACC params: reference Control_Panel (single source of truth)
+    wacc_params = [
+        ("rf", "Risk-free rate (Rf)", "CP.wacc_rf"),
+        ("beta", "Beta (отрасль)", "CP.wacc_beta"),
+        ("erp", "Equity Risk Premium (ERP)", "CP.wacc_erp"),
+        ("crp", "Country Risk Premium (CRP)", "CP.wacc_crp"),
+        ("scp", "Size/Company Premium (SCP)", "CP.wacc_scp"),
+    ]
+    for key, label, cp_key in wacc_params:
         r = REG[f"VL.{key}"]
         label_row(ws, r, label, "%" if key != "beta" else "x")
-        input_cell(ws, r, 3, default, FMT_PCT2 if key != "beta" else FMT_RATIO)
+        cp_row = REG.get(cp_key)
+        if cp_row:
+            ref_cell(ws, r, 3, f"='Control_Panel'!$C${cp_row}",
+                     FMT_PCT2 if key != "beta" else FMT_RATIO)
+        else:
+            # Fallback: local input
+            defaults = {"rf": 0.10, "beta": 1.1, "erp": 0.07, "crp": 0.04, "scp": 0.01}
+            input_cell(ws, r, 3, defaults[key], FMT_PCT2 if key != "beta" else FMT_RATIO)
 
     r_wacc = REG["VL.wacc"]
     label_row(ws, r_wacc, "WACC = Rf + β×ERP + CRP + SCP", "%", "Ke для DCF")
@@ -2477,14 +2490,14 @@ def build_score(wb, cfg):
 
     # Profitability: EBITDA margin → score (TTC-adjusted)
     r_prof = REG["SC.profit"]
-    cycle_m = cfg.get("rating_cycle_margin", 0.20)
     label_row(ws, r_prof, "Profitability Score (EBITDA margin TTC) [20%]", "балл",
-              f"Cycle avg={cycle_m*100:.0f}%, cap 1.5×")
+              "Cycle avg from CP, cap 1.5×")
+    cp_cycle = f"'Control_Panel'!$C${REG.get('CP.sc_cycle_margin', 103)}"
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         margin = f"'{NAME['RA']}'!{cl}${REG['RA.ebitda_margin']}"
         formula_cell(ws, r_prof, c,
-                     f"=MAX(5,MIN(82,MIN({margin},{cycle_m}*1.5)*400))", FMT_RATIO1)
+                     f"=MAX(5,MIN(82,MIN({margin},{cp_cycle}*1.5)*400))", FMT_RATIO1)
 
     # Liquidity: Current ratio + Cash/Debt
     r_liq = REG["SC.liquidity"]
@@ -2499,18 +2512,33 @@ def build_score(wb, cfg):
     section_header(ws, REG["SC.base"] - 1, "ИТОГОВЫЙ РЕЙТИНГ")
     r_base = REG["SC.base"]
     label_row(ws, r_base, "Базовый балл (взвешенный)", "балл")
+    # Weights from CP (not hardcoded)
+    cp_wl = f"'Control_Panel'!$C${REG.get('CP.sc_w_lev', 98)}"
+    cp_wc = f"'Control_Panel'!$C${REG.get('CP.sc_w_cov', 99)}"
+    cp_wp = f"'Control_Panel'!$C${REG.get('CP.sc_w_prof', 100)}"
+    cp_wq = f"'Control_Panel'!$C${REG.get('CP.sc_w_liq', 101)}"
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         formula_cell(ws, r_base, c,
-                     f"=0.35*{cl}{r_lev}+0.30*{cl}{r_cov}+0.20*{cl}{r_prof}+0.15*{cl}{r_liq}",
+                     f"={cp_wl}*{cl}{r_lev}+{cp_wc}*{cl}{r_cov}+"
+                     f"{cp_wp}*{cl}{r_prof}+{cp_wq}*{cl}{r_liq}",
                      FMT_RATIO1, bold=True)
 
     r_ind = REG["SC.ind_adj"]
     r_size = REG["SC.size_adj"]
     label_row(ws, r_ind, "Отраслевая корректировка", "балл")
-    input_cell(ws, r_ind, 3, cfg.get("rating_ind_adj", -6), FMT_RATIO1)
+    # From CP
+    cp_ind = REG.get("CP.sc_ind_adj")
+    if cp_ind:
+        ref_cell(ws, r_ind, 3, f"='Control_Panel'!$C${cp_ind}", FMT_RATIO1)
+    else:
+        input_cell(ws, r_ind, 3, cfg.get("rating_ind_adj", -6), FMT_RATIO1)
     label_row(ws, r_size, "Размерная корректировка", "балл")
-    input_cell(ws, r_size, 3, cfg.get("rating_size_adj", 2), FMT_RATIO1)
+    cp_size = REG.get("CP.sc_size_adj")
+    if cp_size:
+        ref_cell(ws, r_size, 3, f"='Control_Panel'!$C${cp_size}", FMT_RATIO1)
+    else:
+        input_cell(ws, r_size, 3, cfg.get("rating_size_adj", 2), FMT_RATIO1)
 
     r_final = REG["SC.final"]
     label_row(ws, r_final, "Итоговый балл", "балл")
@@ -2858,11 +2886,14 @@ def build_control_panel(wb, cfg):
     # ── I. НАЛОГИ ──
     section_header(ws, r, "I. НАЛОГИ"); r += 1
     label_row(ws, r, "Statutory tax rate")
-    input_cell(ws, r, 3, 0.25, FMT_PCT); r += 1
+    input_cell(ws, r, 3, 0.25, FMT_PCT)
+    REG["CP.tax_rate"] = r; r += 1
     label_row(ws, r, "NOL opening balance", "mln")
-    input_cell(ws, r, 3, 0, FMT_MLN0); r += 1
+    input_cell(ws, r, 3, 0, FMT_MLN0)
+    REG["CP.nol_open"] = r; r += 1
     label_row(ws, r, "NOL max utilization (%)")
-    input_cell(ws, r, 3, 0.80, FMT_PCT); r += 2
+    input_cell(ws, r, 3, 0.80, FMT_PCT)
+    REG["CP.nol_cap"] = r; r += 2
 
     # ── J. ДИВИДЕНДЫ И КАПИТАЛ ──
     section_header(ws, r, "J. ДИВИДЕНДЫ И КАПИТАЛ"); r += 1
@@ -2875,31 +2906,35 @@ def build_control_panel(wb, cfg):
 
     # ── K. ОЦЕНКА (DCF) ──
     section_header(ws, r, "K. ОЦЕНКА (DCF)"); r += 1
-    for param, val, fmt in [
-        ("Risk-free rate (Rf)", 0.10, FMT_PCT),
-        ("Beta", 1.1, FMT_RATIO),
-        ("Equity Risk Premium", 0.07, FMT_PCT),
-        ("Country Risk Premium", 0.04, FMT_PCT),
-        ("Size Premium", 0.01, FMT_PCT),
-        ("Terminal growth (g)", 0.03, FMT_PCT),
-        ("Terminal EV/EBITDA", 6.0, FMT_MULT),
+    for param, val, fmt, key in [
+        ("Risk-free rate (Rf)", 0.10, FMT_PCT, "CP.wacc_rf"),
+        ("Beta", 1.1, FMT_RATIO, "CP.wacc_beta"),
+        ("Equity Risk Premium", 0.07, FMT_PCT, "CP.wacc_erp"),
+        ("Country Risk Premium", 0.04, FMT_PCT, "CP.wacc_crp"),
+        ("Size Premium", 0.01, FMT_PCT, "CP.wacc_scp"),
+        ("Terminal growth (g)", 0.03, FMT_PCT, "CP.terminal_g"),
+        ("Terminal EV/EBITDA", 6.0, FMT_MULT, "CP.terminal_mult"),
     ]:
         label_row(ws, r, param)
-        input_cell(ws, r, 3, val, fmt); r += 1
+        input_cell(ws, r, 3, val, fmt)
+        REG[key] = r; r += 1
     r += 1
 
     # ── L. СКОРКАРТА ──
     section_header(ws, r, "L. СКОРКАРТА (S&P 4-FACTOR)"); r += 1
-    for param, val in [
-        ("Leverage weight", 0.35), ("Coverage weight", 0.30),
-        ("Profitability weight", 0.20), ("Liquidity weight", 0.15),
-        ("Industry adjustment", cfg.get("rating_ind_adj", -6)),
-        ("Size adjustment", cfg.get("rating_size_adj", 2)),
-        ("Cycle avg EBITDA margin", cfg.get("rating_cycle_margin", 0.20)),
+    for param, val, key in [
+        ("Leverage weight", 0.35, "CP.sc_w_lev"),
+        ("Coverage weight", 0.30, "CP.sc_w_cov"),
+        ("Profitability weight", 0.20, "CP.sc_w_prof"),
+        ("Liquidity weight", 0.15, "CP.sc_w_liq"),
+        ("Industry adjustment", cfg.get("rating_ind_adj", -6), "CP.sc_ind_adj"),
+        ("Size adjustment", cfg.get("rating_size_adj", 2), "CP.sc_size_adj"),
+        ("Cycle avg EBITDA margin", cfg.get("rating_cycle_margin", 0.20), "CP.sc_cycle_margin"),
     ]:
         label_row(ws, r, param)
         fmt = FMT_PCT if "weight" in param or "margin" in param else FMT_RATIO1
-        input_cell(ws, r, 3, val, fmt); r += 1
+        input_cell(ws, r, 3, val, fmt)
+        REG[key] = r; r += 1
 
     # ── РЕЗУЛЬТАТ: СВОДКА ──
     r += 1

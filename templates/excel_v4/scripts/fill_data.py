@@ -57,6 +57,23 @@ def discover_cp_rows(wb):
         "доля выручки в cny": "CP.rev_cny_share",
         "доля выручки в rub": "CP.rev_rub_share",
         "доля затрат в rub": "CP.cost_rub_share",
+        "statutory tax": "CP.tax_rate",
+        "nol opening": "CP.nol_open",
+        "nol max": "CP.nol_cap",
+        "risk-free": "CP.wacc_rf",
+        "beta": "CP.wacc_beta",
+        "equity risk": "CP.wacc_erp",
+        "country risk": "CP.wacc_crp",
+        "size premium": "CP.wacc_scp",
+        "terminal growth": "CP.terminal_g",
+        "terminal ev": "CP.terminal_mult",
+        "leverage weight": "CP.sc_w_lev",
+        "coverage weight": "CP.sc_w_cov",
+        "profitability weight": "CP.sc_w_prof",
+        "liquidity weight": "CP.sc_w_liq",
+        "industry adj": "CP.sc_ind_adj",
+        "size adj": "CP.sc_size_adj",
+        "cycle avg": "CP.sc_cycle_margin",
     }
     for r in range(4, 100):
         val = ws.cell(r, 1).value
