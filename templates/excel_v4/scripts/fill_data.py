@@ -262,6 +262,54 @@ def load_source_data(company: str) -> Dict[str, Any]:
                         val = row[col_idx] if col_idx < len(row) else None
                         if val is not None and isinstance(val, (int, float)):
                             data["macro"].append({"factor": factor, "year": year, "value": float(val)})
+            # Also load debt_instruments from supplementary
+            if "debt_instruments" in wb2.sheetnames and not data["debt"]:
+                ws_di = wb2["debt_instruments"]
+                for row in ws_di.iter_rows(min_row=2, values_only=True):
+                    if row[0] is None:
+                        continue
+                    # Explicit column mapping (template_v3 format):
+                    # 0=id, 1=name, 2=db_type, 3=ccy, 4=balance_mUSD, 5=maturity/rate_shifted,
+                    # 6=rate_type_shifted, 7=rate_type, 8=base_rate
+                    bal_raw = row[4] if len(row) > 4 else 0
+                    # Detect shifted columns: if col 5 is float < 1 → it's rate, not maturity
+                    col5 = row[5] if len(row) > 5 else None
+                    col6 = row[6] if len(row) > 6 else None
+                    col7 = row[7] if len(row) > 7 else None
+
+                    if isinstance(col5, (int, float)) and col5 < 1:
+                        # Shifted: col5=rate, col6=rate_type
+                        rate = float(col5)
+                        rate_type = str(col6 or "fixed")
+                        maturity = ""
+                    else:
+                        maturity = str(col5 or "")
+                        rate = float(col6 or 0)
+                        rate_type = str(col7 or "fixed")
+
+                    # Infer maturity from instrument name (1yr → 2026, 3yr → 2028)
+                    name = str(row[1] or "")
+                    if not maturity:
+                        if "1y" in name.lower():
+                            maturity = "2026"
+                        elif "3y" in name.lower():
+                            maturity = "2028"
+                        elif "5y" in name.lower():
+                            maturity = "2030"
+
+                    inst = {
+                        "instrument_id": str(row[0] or ""),
+                        "instrument_name": name,
+                        "db_type": str(row[2] or ""),
+                        "currency": str(row[3] or "USD"),
+                        "opening_balance": float(bal_raw or 0) * 1e6,
+                        "interest_rate": rate,
+                        "rate_type": rate_type.lower(),
+                        "maturity_date": maturity,
+                    }
+                    data["debt"].append(inst)
+                print(f"    Supplementary debt: {len(data['debt'])} instruments loaded")
+
             wb2.close()
             print(f"    Supplementary segments: {len(data['segments'])} rows")
 
@@ -789,9 +837,12 @@ def fill_debt_schedule(wb, data: dict, company: str):
 
     # Now link 17_Debt totals FROM _Debt_Schedule
     ws_dt = wb["17_Debt"]
-    r_total = 5 + max_inst + (1 if other_balance > 0 else 0) + 1  # after Other + 1
-    # Actually use the pre-computed total row from build_debt_schedule
-    total_r = REG.get("DS.total_row", r_total)
+    # Find total row by searching for "ИТОГО" in column B
+    total_r = 27  # default from build (5 + 20 + 2)
+    for r in range(5, 30):
+        if ws.cell(r, 2).value == "ИТОГО":
+            total_r = r
+            break
 
     for yr_idx, yr in enumerate(fc_years):
         c_dt = COL_START + N_HIST_DISPLAY + yr_idx  # forecast col in 17_Debt
