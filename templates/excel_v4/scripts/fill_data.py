@@ -1584,19 +1584,40 @@ def fill_statement_history(wb, data: dict, company: str):
         "tax_expense": "tax", "net_income": "ni",
         "total_da": "da",
     }
+    # PL ← 02_Hist reference mapping
+    pl_to_hi = {
+        "revenue": "revenue", "cogs": "cogs", "gp": "gp",
+        "sga": "sga", "ebitda": "ebitda", "ebit": "ebit",
+        "interest": "interest", "ebt": "ebt",
+        "tax": "tax", "ni": "ni", "da": "da",
+    }
+    ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
     hist_3 = src["hist_years"][-N_HIST_DISPLAY:]
+    pl_refs = 0
     for yr in hist_3:
         col = COL_START + hist_3.index(yr)
+        cl = get_column_letter(col)
         for src_key, reg_suffix in pl_map.items():
             val = is_d.get(src_key, {}).get(yr)
             if val is not None:
                 r = REG.get(f"PL.{reg_suffix}")
                 if r:
-                    ws_pl.cell(r, col, round(val, 1)).font = F_INPUT
-                    ws_pl.cell(r, col).number_format = FMT_MLN
+                    # Write to 02_Hist and create ref
+                    hi_key = pl_to_hi.get(reg_suffix)
+                    hi_row = REG.get(f"HI.{hi_key}") if hi_key else None
+                    if hi_row and ws_hi:
+                        ws_hi.cell(hi_row, col, round(val, 1)).font = F_INPUT
+                        ws_hi.cell(hi_row, col).number_format = FMT_MLN
+                        ws_pl.cell(r, col).value = f"='02_Hist'!{cl}${hi_row}"
+                        ws_pl.cell(r, col).font = F_REF
+                        ws_pl.cell(r, col).number_format = FMT_MLN
+                        pl_refs += 1
+                    else:
+                        ws_pl.cell(r, col, round(val, 1)).font = F_INPUT
+                        ws_pl.cell(r, col).number_format = FMT_MLN
 
     print(f"    CF history: {filled} metrics for {last_yr}, cash={cash_close}")
-    print(f"    PL history: {len(pl_map)} metrics × {len(hist_3)} years")
+    print(f"    PL history: {len(pl_map)} metrics × {len(hist_3)} years ({pl_refs} refs to 02_Hist)")
 
 
 def fill_bs_history(wb, data: dict, company: str):
@@ -1630,9 +1651,23 @@ def fill_bs_history(wb, data: dict, company: str):
     # Accumulate values for keys that map to same BS row (e.g., investments_lt + other_nca → other_nca)
     hist_3 = src["hist_years"][-N_HIST_DISPLAY:]
 
+    # BS → HI mapping for reference formulas (20_BS ← 02_Hist)
+    bs_to_hi = {
+        "cash": "cash", "ar": "ar", "inv": "inv",
+        "ppe": "ppe_net", "goodwill": "goodwill", "intang": "intang",
+        "dta": "dta", "ap": "ap", "st_debt": "st_debt",
+        "lt_debt": "lt_debt", "dtl": "dtl", "re": "re",
+        "tca": "tca", "tnca": "tnca", "ta": "ta",
+        "tl": "tl", "equity": "te",
+    }
+
     filled = 0
     for yr_idx, yr in enumerate(hist_3):
         col = COL_START + yr_idx
+        cl = get_column_letter(col)
+        # First: write values to 02_Hist (if not already there)
+        ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
+
         # Accumulate per-row
         row_accum: Dict[int, float] = {}
         for src_key, bs_key in bs_map.items():
@@ -1641,9 +1676,28 @@ def fill_bs_history(wb, data: dict, company: str):
                 r = REG.get(f"BS.{bs_key}")
                 if r:
                     row_accum[r] = row_accum.get(r, 0) + val
+
         for r, val in row_accum.items():
-            ws.cell(r, col, round(val, 1)).font = F_INPUT
-            ws.cell(r, col).number_format = FMT_MLN
+            # Try to create reference to 02_Hist instead of literal
+            # Find corresponding HI row
+            bs_key_name = None
+            for bk, hk in bs_to_hi.items():
+                if REG.get(f"BS.{bk}") == r:
+                    hi_row = REG.get(f"HI.{hk}")
+                    if hi_row and ws_hi:
+                        # Write value to 02_Hist
+                        ws_hi.cell(hi_row, col, round(val, 1)).font = F_INPUT
+                        ws_hi.cell(hi_row, col).number_format = FMT_MLN
+                        # 20_BS references 02_Hist
+                        ws.cell(r, col).value = f"='02_Hist'!{cl}${hi_row}"
+                        ws.cell(r, col).font = F_REF
+                        ws.cell(r, col).number_format = FMT_MLN
+                        bs_key_name = bk
+                        break
+            if not bs_key_name:
+                # Fallback: write literal directly
+                ws.cell(r, col, round(val, 1)).font = F_INPUT
+                ws.cell(r, col).number_format = FMT_MLN
             filled += 1
 
     # Also compute missing totals
