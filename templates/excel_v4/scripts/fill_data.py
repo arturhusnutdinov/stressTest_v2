@@ -27,6 +27,40 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SV2_ROOT = BASE_DIR.parent.parent  # stressTest_v2 root
 REG = json.loads((BASE_DIR / "reg.json").read_text(encoding="utf-8"))
 
+
+def discover_cp_rows(wb):
+    """Find Control_Panel parameter rows by label search.
+    CP.* keys are set at runtime by build_model, not in reg.json.
+    This function discovers them from the built workbook."""
+    ws = wb["Control_Panel"]
+    label_map = {
+        "min cash": "CP.min_cash",
+        "rc лимит": "CP.rc_limit",
+        "rc ставка": "CP.rc_rate",
+        "commitment fee": "CP.commit_fee_rate",
+        "maint_share": "CP.maint_share",
+        "sweep": "CP.sweep_pct",
+        "target nd": "CP.target_leverage",
+        "buffer": "CP.buffer",
+        "refi % (облигации": "CP.refi_pct_bonds",
+        "refi % (банковский": "CP.refi_pct_bank",
+        "rc trigger": "CP.rc_trigger",
+        "тенор нового": "CP.term_tenor",
+        "spread base": "CP.spread_base",
+        "spread step": "CP.spread_step",
+    }
+    for r in range(4, 100):
+        val = ws.cell(r, 1).value
+        if not val:
+            continue
+        val_lower = str(val).lower()
+        for pattern, key in label_map.items():
+            if pattern in val_lower and key not in REG:
+                REG[key] = r
+    found = sum(1 for k in label_map.values() if k in REG)
+    if found > 0:
+        print(f"    CP rows discovered: {found}/{len(label_map)}")
+
 # ── Unified column layout (must match build_model.py) ────────────────────────
 # ALL sheets: C-E = 3 hist years (2023-2025), F-H = 3 forecast years (2026E-2028E)
 N_HIST_DISPLAY = 3   # last 3 years shown in model sheets
@@ -1805,6 +1839,9 @@ def fill_all(company: str, model_path: str):
 
     print(f"\n2. Opening model: {model_file.name}")
     wb = openpyxl.load_workbook(str(model_file))
+
+    # Discover CP parameter rows from built workbook
+    discover_cp_rows(wb)
 
     # Fill sheets
     print("\n3. Filling 02_Hist (IS/BS/CF)...")
