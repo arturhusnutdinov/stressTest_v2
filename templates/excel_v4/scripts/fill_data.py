@@ -682,6 +682,7 @@ def fill_debt_hist(wb, data: dict, company: str):
     src = SOURCES[company]
     hist_years = src["hist_years"]
     last_yr = hist_years[-1]
+    fc_years = src["fc_years"]
     # History last column = 3 + len(hist_years[-3:]) - 1
     hc = 3 + len(hist_years[-3:]) - 1  # col index for last hist year
 
@@ -702,21 +703,40 @@ def fill_debt_hist(wb, data: dict, company: str):
         ws.cell(REG["DT.lt"], hc).number_format = FMT_MLN
         print(f"    Debt opening: ST={abs(st):.0f} LT={abs(lt):.0f} Total={total:.0f}")
 
-    # Avg rate from interest / avg debt
+    # Avg rate: compute weighted average from instrument table (not implied)
     is_data = data.get("is", {})
+    debt_instruments = data.get("debt", [])
+    if debt_instruments:
+        w_bal = w_int = 0
+        for inst in debt_instruments:
+            b = abs(float(inst.get("opening_balance", 0) or 0))
+            r = float(inst.get("interest_rate", 0) or 0)
+            if b > 0 and r > 0:
+                w_bal += b
+                w_int += b * r
+        if w_bal > 0:
+            avg_rate = w_int / w_bal
+        else:
+            avg_rate = 0.08  # fallback
+    else:
+        # Fallback: implied from IS interest / debt
+        interest = abs(is_data.get("interest_expense", {}).get(last_yr, 0))
+        if interest == 0:
+            interest = abs(is_data.get("finance_cost_net", {}).get(last_yr, 0))
+        avg_rate = interest / total if total > 0 and interest > 0 else 0.08
+
+    fc_start_col = hc + 1
+    for c in range(fc_start_col, fc_start_col + len(fc_years)):
+        ws.cell(REG["DT.avg_rate"], c, round(avg_rate, 4)).font = F_INPUT
+        ws.cell(REG["DT.avg_rate"], c).number_format = FMT_PCT
+    # Also fill history col
+    ws.cell(REG["DT.avg_rate"], hc, round(avg_rate, 4)).font = F_INPUT
+    print(f"    Avg rate (weighted from instruments): {avg_rate*100:.2f}%")
+
+    # Fill interest in history col (from IS data)
     interest = abs(is_data.get("interest_expense", {}).get(last_yr, 0))
     if interest == 0:
-        # Try alternative metric names (Nornickel: finance_cost_net)
         interest = abs(is_data.get("finance_cost_net", {}).get(last_yr, 0))
-    if total > 0 and interest > 0:
-        avg_rate = interest / total
-        fc_start_col = hc + 1
-        for c in range(fc_start_col, fc_start_col + len(src["fc_years"])):
-            ws.cell(REG["DT.avg_rate"], c, round(avg_rate, 4)).font = F_INPUT
-            ws.cell(REG["DT.avg_rate"], c).number_format = FMT_PCT
-        print(f"    Avg rate (implied): {avg_rate*100:.1f}%")
-
-    # Fill interest in history col
     if total > 0 and interest > 0:
         ws.cell(REG["DT.interest"], hc, round(interest, 1)).font = F_INPUT
         ws.cell(REG["DT.interest"], hc).number_format = FMT_MLN
@@ -1363,7 +1383,35 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             ws.cell(row, c).number_format = '#,##0.00' if abs(forecast_val) < 1000 else '#,##0'
             filled += 1
 
-    print(f"    Macro forecasts: {filled} cells filled (mean reversion)")
+    # Also fill SCENARIO section (rows 8-13) with base scenario forecasts
+    # Map factor names to scenario rows
+    factor_row_map = {}
+    for r in range(8, 20):
+        label = ws.cell(r, 1).value
+        if label and isinstance(label, str):
+            factor_row_map[label.strip()] = r
+
+    scenario_filled = 0
+    for factor_name, row in factor_row_map.items():
+        series = factors.get(factor_name, {})
+        if not series:
+            continue
+        recent = sorted(series.items())[-5:]
+        if not recent:
+            continue
+        vals = [v for _, v in recent]
+        median_val = sorted(vals)[len(vals) // 2]
+        last_val = recent[-1][1]
+        reversion = 0.3
+        forecast_val = last_val
+        for i, yr in enumerate(fc_years):
+            c = fc_start_col + i
+            forecast_val = forecast_val + reversion * (median_val - forecast_val)
+            ws.cell(row, c, round(forecast_val, 2)).font = F_INPUT
+            ws.cell(row, c).number_format = '#,##0.00' if abs(forecast_val) < 1000 else '#,##0'
+            scenario_filled += 1
+
+    print(f"    Macro forecasts: {filled} historical + {scenario_filled} scenario cells")
 
 
 def fill_all(company: str, model_path: str):

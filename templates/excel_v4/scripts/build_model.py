@@ -2675,8 +2675,8 @@ def build(company: str, output: str):
         from openpyxl.workbook.properties import CalcProperties
         wb.calculation = CalcProperties()
     wb.calculation.iterate = True
-    wb.calculation.iterateCount = 100
-    wb.calculation.iterateDelta = 0.001
+    wb.calculation.iterateCount = 1000
+    wb.calculation.iterateDelta = 0.000001  # 1e-6 like bank model
     # fullCalcOnLoad=False — preserve cached values (critical for bank model pattern)
     wb.calculation.fullCalcOnLoad = False
 
