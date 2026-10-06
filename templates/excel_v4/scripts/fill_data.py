@@ -632,6 +632,50 @@ def fill_revenue(wb, data: dict, company: str):
                 ws.cell(price_r, c).number_format = FMT_INT
 
 
+def fill_revenue_reconciliation(wb, data: dict, company: str):
+    """Fill reconciliation row: Reported Revenue - Σ segments for history years."""
+    ws = wb["10_Revenue"]
+    src = SOURCES[company]
+    hist_years = src["hist_years"][-N_HIST_DISPLAY:]
+    is_d = data.get("is", {})
+
+    r_recon = REG.get("RV.recon", 19)
+    r_total = REG.get("RV.total_rev", 20)
+
+    filled = 0
+    for yr_idx, yr in enumerate(hist_years):
+        col = COL_START + yr_idx
+        reported_rev = abs(is_d.get("revenue", {}).get(yr, 0))
+        # Σ segments = total formula evaluates to... but we can't read formula result
+        # Instead: compute segment sum from data
+        seg_sum = 0
+        for seg_key in ["seg1", "seg2", "seg3"]:
+            rev_r = REG.get(f"RV.{seg_key}_rev")
+            if rev_r:
+                cell_val = ws.cell(rev_r, col).value
+                if isinstance(cell_val, (int, float)):
+                    seg_sum += abs(cell_val)
+                elif isinstance(cell_val, str) and cell_val.startswith("="):
+                    # Formula — can't evaluate, estimate from vol × price
+                    vol_r = REG.get(f"RV.{seg_key}_vol")
+                    price_r = REG.get(f"RV.{seg_key}_price")
+                    if vol_r and price_r:
+                        v = ws.cell(vol_r, col).value
+                        p = ws.cell(price_r, col).value
+                        if isinstance(v, (int, float)) and isinstance(p, (int, float)):
+                            seg_sum += v * p / 1000
+
+        if reported_rev > 0:
+            recon = reported_rev - seg_sum
+            ws.cell(r_recon, col, round(recon, 1)).font = F_INPUT
+            ws.cell(r_recon, col).number_format = FMT_MLN
+            filled += 1
+
+    if filled > 0:
+        print(f"    Revenue reconciliation: {filled} years, last gap = {recon:,.0f}M "
+              f"({recon/reported_rev*100:.0f}% of revenue)")
+
+
 def fill_debt_hist(wb, data: dict, company: str):
     """Fill 17_Debt with opening balances from BS history."""
     ws = wb["17_Debt"]
@@ -1012,6 +1056,7 @@ def fill_bs_history(wb, data: dict, company: str):
         if tncl_src > 0:
             known_ncl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
                            ["long_term_debt", "dtl", "lease_liab_noncurrent"])
+            other_ncl = tncl_src - known_ncl
             if other_ncl > 0:
                 ws.cell(REG["BS.other_ncl"], col, round(other_ncl, 1)).font = F_INPUT
 
@@ -1340,6 +1385,9 @@ def fill_all(company: str, model_path: str):
 
     print("\n7. Filling 17_Debt (opening balances)...")
     fill_debt_hist(wb, data, company)
+
+    print("\n6a. Filling revenue reconciliation...")
+    fill_revenue_reconciliation(wb, data, company)
 
     print("\n6b. Filling macro factor forecasts...")
     fill_macro_forecasts(wb, data, company)

@@ -650,7 +650,17 @@ def build_revenue(wb, cfg):
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
-    # Total revenue
+    # Reconciliation: reported revenue - Σ segments (for history)
+    # In forecast: carry forward last reconciliation value
+    r_recon = REG.get("RV.recon", 19)
+    label_row(ws, r_recon, "Reconciliation / Other revenue", "mln",
+              "Reported total − Σ segments (captures VAP, foil, eliminations)")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        # Forecast: carry forward EWA of reconciliation
+        prev_col = get_column_letter(c - 1)
+        formula_cell(ws, r_recon, c, f"={prev_col}{r_recon}", FMT_MLN)
+
+    # Total revenue = Σ segments + reconciliation
     r_total = REG.get("RV.total_rev", 20)
     label_row(ws, r_total, "ИТОГО ВЫРУЧКА", "mln")
     ws.cell(r_total, 1).font = F_LABEL_B
@@ -661,6 +671,7 @@ def build_revenue(wb, cfg):
         for seg in cfg["segments"]:
             rev_r = REG.get(f"RV.{seg['key']}_rev", 10)
             parts.append(f"{col_l}{rev_r}")
+        parts.append(f"{col_l}{r_recon}")  # + reconciliation
         formula_cell(ws, r_total, c, "=" + "+".join(parts), FMT_MLN, bold=True)
 
     # Revenue growth
