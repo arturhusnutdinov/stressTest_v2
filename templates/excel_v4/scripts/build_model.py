@@ -133,6 +133,10 @@ COMPANY_CONFIGS = {
         "spread_base": 0.04,
         "spread_step": 0.005,
         "term_tenor": 5,
+        # FX: revenue/cost currency split from IFRS Note 4 (2025)
+        "rev_cny_share": 0.35,   # China = $5,176M / $14,812M = 34.9%
+        "rev_rub_share": 0.26,   # Russia = $3,856M / $14,812M = 26.0%
+        "cost_rub_share": 0.55,  # personnel + energy ~ 55% RUB-denominated
         "rating_ind_adj": -6.0,
         "rating_size_adj": 2.0,
         "rating_cycle_margin": 0.12,
@@ -166,6 +170,10 @@ COMPANY_CONFIGS = {
         "spread_base": 0.03,
         "spread_step": 0.005,
         "term_tenor": 5,
+        # FX: metals priced in USD globally, costs mostly RUB
+        "rev_cny_share": 0.03,   # minimal CNY exposure
+        "rev_rub_share": 0.05,   # ~5% domestic Russian sales
+        "cost_rub_share": 0.65,  # bulk of costs in RUB (labor, energy, mining)
         "rating_ind_adj": -6.0,
         "rating_size_adj": 2.0,
         "rating_cycle_margin": 0.41,
@@ -1077,10 +1085,29 @@ def build_pl(wb, cfg):
         # Interest ← 17_Debt (always negative in PL — expense)
         formula_cell(ws, REG["PL.interest"], c_idx,
                      f"=-ABS('{NAME['DT']}'!{cl}${REG['DT.interest']})", FMT_MLN)
-        # Other financial: OI.other_fin - FX revaluation (positive reval = debt up = loss)
+        # Other financial: OI.other_fin + net FX impact
+        # FX on debt: negative (positive reval = debt up = loss)
+        # FX on revenue: positive (CNY/RUB strengthening → USD revenue up from local-ccy sales)
+        # FX on costs: negative (RUB strengthening → costs up in USD)
+        # Net FX = -debt_reval + rev × rev_share × (-fx_chg) - cogs × cost_share × (-fx_chg)
+        # Simplified: rev_fx_gain = Revenue × rev_cny_share × (-USDCNY_chg) + Revenue × rev_rub_share × (-USDRUB_chg)
+        #             cost_fx_loss = ABS(COGS) × cost_rub_share × (-USDRUB_chg)
+        cp_rev_cny = f"'Control_Panel'!$C${REG.get('CP.rev_cny_share', 80)}"
+        cp_rev_rub = f"'Control_Panel'!$C${REG.get('CP.rev_rub_share', 81)}"
+        cp_cost_rub = f"'Control_Panel'!$C${REG.get('CP.cost_rub_share', 82)}"
+        cp_fx_cny = f"'Control_Panel'!$C${REG.get('CP.fx_usdcny_chg', 75)}"
+        cp_fx_rub = f"'Control_Panel'!$C${REG.get('CP.fx_usdrub_chg', 76)}"
+        rev_ref = f"'{NAME['PL']}'!{cl}${REG['PL.revenue']}"
+        cogs_ref = f"ABS('{NAME['PL']}'!{cl}${REG['PL.cogs']})"
+        # Revenue FX gain: when local ccy strengthens (negative USDXXX change), rev in USD goes up
+        rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
+                  f"+{rev_ref}*{cp_rev_rub}*(-{cp_fx_rub})")
+        # Cost FX loss: when RUB strengthens, costs in USD go up (negative impact)
+        cost_fx = f"-{cogs_ref}*{cp_cost_rub}*(-{cp_fx_rub})"
         formula_cell(ws, REG["PL.other_fin"], c_idx,
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}"
+                     f"+{rev_fx}+{cost_fx}",
                      FMT_MLN)
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
@@ -2054,8 +2081,10 @@ def build_cf(wb, cfg):
                      f"-ABS({cl}{REG['CF.div_paid']})", f"{cl}{REG['CF.other_cff']}"]
         formula_cell(ws, r_cff, c_idx, "=" + "+".join(cff_parts), FMT_MLN, bold=True)
 
-        # FX effect on cash: reverse non-cash FX loss from NI (add back debt reval)
-        # DT.fx_reval > 0 = debt increased = loss in PL = add back in CF
+        # FX effect: reverse non-cash FX from NI
+        # Debt reval: add back (was subtracted from PL.other_fin)
+        # Revenue/cost FX: these ARE real cash effects (priced in local ccy) → do NOT reverse
+        # Only reverse the debt reval component (non-cash translation)
         formula_cell(ws, REG["CF.fx"], c_idx,
                      f"='{NAME['DT']}'!{cl}${REG['DT.fx_reval']}", FMT_MLN)
 
@@ -2763,7 +2792,19 @@ def build_control_panel(wb, cfg):
 
     label_row(ws, r, "FX USDRUB change YoY", "%", "Δ курса: >0 = USD усиливается")
     input_cell(ws, r, 3, 0.0, FMT_PCT)
-    REG["CP.fx_usdrub_chg"] = r; r += 2
+    REG["CP.fx_usdrub_chg"] = r; r += 1
+
+    label_row(ws, r, "Доля выручки в CNY", "%", "Из МСФО Note 4: geography")
+    input_cell(ws, r, 3, cfg.get("rev_cny_share", 0.0), FMT_PCT)
+    REG["CP.rev_cny_share"] = r; r += 1
+
+    label_row(ws, r, "Доля выручки в RUB", "%", "Из МСФО Note 4: geography")
+    input_cell(ws, r, 3, cfg.get("rev_rub_share", 0.0), FMT_PCT)
+    REG["CP.rev_rub_share"] = r; r += 1
+
+    label_row(ws, r, "Доля затрат в RUB", "%", "Персонал + энергия + прочие внутр.")
+    input_cell(ws, r, 3, cfg.get("cost_rub_share", 0.0), FMT_PCT)
+    REG["CP.cost_rub_share"] = r; r += 2
 
     cov = cfg.get("covenants", {})
     label_row(ws, r, "Ковенант: ND/EBITDA max", "x", "При нарушении — блок дивидендов и новых выборок")

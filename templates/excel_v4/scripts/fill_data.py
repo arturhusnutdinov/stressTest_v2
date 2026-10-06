@@ -54,6 +54,9 @@ def discover_cp_rows(wb):
         "ковенант: icr": "CP.cov_icr",
         "fx usdcny": "CP.fx_usdcny_chg",
         "fx usdrub": "CP.fx_usdrub_chg",
+        "доля выручки в cny": "CP.rev_cny_share",
+        "доля выручки в rub": "CP.rev_rub_share",
+        "доля затрат в rub": "CP.cost_rub_share",
     }
     for r in range(4, 100):
         val = ws.cell(r, 1).value
