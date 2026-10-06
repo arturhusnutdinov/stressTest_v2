@@ -1149,16 +1149,15 @@ def fill_wc_days(wb, data: dict, company: str):
             ws.cell(REG["WC.dpo"], col).number_format = FMT_DAYS
         computed += 1
 
-    # Forecast: carry forward last historical values
+    # Forecast: link to 03_Assump EWA-calibrated days (rows 13/14/15)
     fc_years = src["fc_years"]
-    last_yr = hist_years[-1]
-    for metric_key in ["dso", "dio", "dpo"]:
-        last_val = ws.cell(REG[f"WC.{metric_key}"], 3 + len(hist_years) - 1).value
-        if last_val and isinstance(last_val, (int, float)):
-            for i, yr in enumerate(fc_years):
-                c = 3 + len(hist_years) + i
-                ws.cell(REG[f"WC.{metric_key}"], c, last_val).font = F_INPUT
-                ws.cell(REG[f"WC.{metric_key}"], c).number_format = FMT_DAYS
+    assump_rows = {"dso": 13, "dio": 14, "dpo": 15}
+    for metric_key, assump_row in assump_rows.items():
+        for i, yr in enumerate(fc_years):
+            c = COL_START + N_HIST_DISPLAY + i
+            cl = get_column_letter(c)
+            formula_cell(ws, REG[f"WC.{metric_key}"], c,
+                         f"='03_Assump'!{cl}${assump_row}", FMT_DAYS)
 
     # Fill WC balances (AR, INV, AP) for history years
     bs_d = data.get("bs", {})
@@ -1265,14 +1264,16 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
     # Forecast SGA: ratio × Revenue
     last_sga = (sga_hist.get(hist_years[-1], 0) + dist_hist.get(hist_years[-1], 0))
     sga_ratio = abs(last_sga) / abs(last_rev) if last_rev else 0.08
+    # SGA forecast: use ratio from 03_Assump (EWA calibrated, row 8)
     for i, yr in enumerate(fc_years):
         c = 3 + len(hist_years) + i
         cl = get_column_letter(c)
         rev_ref = f"'{wb['10_Revenue'].title}'!{cl}${REG['RV.total_rev']}"
+        sga_ref = f"'03_Assump'!{cl}$8"  # SGA/Revenue from preprocessing
         formula_cell(ws_sa, REG["SA.sga_total"], c,
-                     f"=-ABS({rev_ref})*{round(sga_ratio, 4)}", FMT_MLN)
+                     f"=-ABS({rev_ref})*{sga_ref}", FMT_MLN)
 
-    print(f"    SGA: history filled, forecast ratio={sga_ratio:.1%}")
+    print(f"    SGA: history filled, forecast linked to 03_Assump EWA")
 
 
 def validate_data(wb, data: dict, company: str):

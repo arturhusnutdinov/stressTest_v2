@@ -1286,15 +1286,14 @@ def build_cogs(wb, cfg):
             # Forecast: component = Revenue × share × COGS_ratio
             # COGS_ratio from last history year
             # This ensures components scale with revenue (not absolute growth)
-            # Forecast: component scales with revenue using calibrated ratio from CP
-            # COGS_ratio is in CP (around row 20, set by fill_data from history)
-            # Component = ABS(forecast_Revenue) × calibrated_COGS_ratio × share
-            cp_cogs_ratio = "'Control_Panel'!$C$20"  # COGS ratio from CP (filled by fill_data)
+            # Forecast: component = Revenue × COGS_ratio(from 03_Assump) × share
+            # 03_Assump r7 = COGS/Revenue EWA calibrated from history
             for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
                 cl = get_column_letter(c)
                 rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
+                cogs_ratio_ref = f"'{NAME['AS']}'!{cl}$7"  # 03_Assump COGS ratio
                 formula_cell(ws, r, c,
-                             f"={rev_ref}*{cp_cogs_ratio}*{share}",
+                             f"={rev_ref}*{cogs_ratio_ref}*{share}",
                              FMT_MLN)
 
         # D&A in COGS (if applicable)
@@ -2690,18 +2689,39 @@ def build(company: str, output: str):
     dn = DefinedName("calc_reset", attr_text="'Control_Panel'!$K$1")
     wb.defined_names.add(dn)
 
-    # Freeze panes on key sheets (row 5 = after title+subtitle+blank+year header)
-    for sname in ["02_Hist", "20_BS", "21_PL", "23_CF", "30_Ratios", "Model_Output",
-                   "10_Revenue", "15_PPE", "16_WC", "17_Debt", "31_Score", "32_Covenants"]:
-        if sname in wb.sheetnames:
-            wb[sname].freeze_panes = "C5"
+    # ── Ergonomics ──
 
-    # Tab colors (already set during sheet creation, but ensure)
-    # Column widths for all sheets
+    # 1. Freeze panes on ALL sheets with data
+    for sname in wb.sheetnames:
+        ws = wb[sname]
+        if ws.max_row > 5:
+            ws.freeze_panes = "C5"
+
+    # 2. Column widths for all sheets
     for sname in wb.sheetnames:
         ws = wb[sname]
         if ws.column_dimensions['A'].width is None or ws.column_dimensions['A'].width < 10:
             apply_col_widths(ws)
+
+    # 3. Sheet protection (protect formula sheets, unlock input sheets)
+    from openpyxl.worksheet.protection import SheetProtection
+    input_sheets = {"00_Cover", "Control_Panel", "01_Macro", "02_Hist",
+                    "Raw_IFRS", "10_Revenue", "11_Segments", "14_OtherIS",
+                    "33_RevStress", "40_Scen", "Changelog"}
+    for sname in wb.sheetnames:
+        ws = wb[sname]
+        if sname not in input_sheets:
+            ws.protection = SheetProtection(sheet=True, password='vertex',
+                                           formatCells=False, formatColumns=False,
+                                           formatRows=False, sort=True, autoFilter=True)
+
+    # 4. Number format fix: ensure no General format on data cells
+    for sname in wb.sheetnames:
+        ws = wb[sname]
+        for row in ws.iter_rows(min_row=5, max_row=ws.max_row, min_col=3, max_col=11):
+            for c in row:
+                if isinstance(c.value, (int, float)) and c.number_format == 'General':
+                    c.number_format = FMT_MLN
 
     # Set metadata
     wb.properties.creator = "Vertex Corporate Model v4"
