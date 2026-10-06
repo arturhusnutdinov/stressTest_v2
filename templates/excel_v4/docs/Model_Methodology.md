@@ -129,18 +129,29 @@ Control_Panel (130+ INPUT параметров)
     ↓
 15_PPE: Corkscrew (CapEx = sustaining DA×1.8 + expansion)
 16_WC: DSO/DIH/DPO → AR/INV/AP (days × Revenue/COGS / 365)
-17_Debt: Corkscrew + Circular optimizer (draw if cash < min_cash)
+17_Debt (6 секций):
+    A. Sources & Uses: EBITDA-tax vs CapEx/mandatory/div/interest
+    B. Term Debt: schedule-driven corkscrew (open-mandatory+refi+new-vol=close)
+    C. RC (Revolving Credit): single plug, limited, funding gap flag
+    D. Total Debt = term + RC + FX revaluation
+    E. Interest = term (schedule) + RC (avg×rate) + commitment fee
+    F. ST/LT: maturity-based from schedule + RC (residual)
+    G. Historical calibration (ST share, maint%, tenor, spread, flag)
 18_Lease: IFRS 16 ROU + Liability (interest + payment)
 19_Tax: IAS 12 (NOL → Taxable → Current×25% + Deferred), DTA/DTL carry
     ↓
-21_PL: Revenue ← 10_Rev, COGS ← 12, SGA ← 13, DA ← 15_PPE, Interest ← 17_Debt, Tax ← 19
-    GP = Rev + COGS, EBITDA = GP + SGA, EBIT = EBITDA - DA, EBT = EBIT - Interest, NI = EBT - Tax
+21_PL: Revenue ← 10_Rev, COGS ← 12, SGA ← 13, DA ← 15_PPE
+    Interest ← 17_Debt (term + RC + fee)
+    Other_fin ← OI - FX_revaluation (IAS 21 debt retranslation)
+    Tax ← 19_Tax
+    GP = Rev + COGS, EBITDA = GP + SGA, EBIT = EBITDA - DA, NI = EBT - Tax
     ↓
 23_CF (indirect):
-    CFO = NI + DA + WC_change + other
+    CFO = NI + DA + ΔTaxPay + WC_change + other
     CFI = -CapEx + disposals
-    CFF = Debt_draw - Debt_repay - Lease_pay - Dividends
-    Net_change = CFO + CFI + CFF
+    CFF = Refi + NewTerm + RC_draw - Mandatory - Voluntary - RC_repay - Lease - Div
+    FX = DT.fx_reval reversal (non-cash)
+    Net_change = CFO + CFI + CFF + FX
     Cash_close = Cash_open + Net_change
     ↓
 20_BS:
@@ -158,19 +169,21 @@ Model_Output (12 секций, 144 зелёных ссылок)
 
 ### 3.4 Circular Dependencies
 ```
-17_Debt.draw → 17_Debt.close → 17_Debt.interest
-    → 21_PL.interest → 21_PL.NI
-    → 23_CF.NI → 23_CF.CFO → 23_CF.CFF → 23_CF.cash_close
-    → 20_BS.cash → 17_Debt.draw (CIRCULAR)
+RC_draw → DT.close → DT.interest → PL.interest → NI
+    → Voluntary_term (checks NI>0) → term_close → DT.close (CIRCULAR)
 ```
 
-**Решение:**
-1. Named range `calc_reset` = `'Control_Panel'!$K$1`
-2. Seed phase (`calc_reset=1`): draw = estimated draw (from EBITDA-based cash, no circular)
-3. Iterate phase (`calc_reset=0`): draw = CF-based (circular, converges in 3-4 iterations)
-4. AppleScript: `calc_reset=1 → recalc → calc_reset=0 → recalc ×20`
-5. IFERROR fallback: if circular errors, use seed estimate
-6. MEDIAN clamp: draw ∈ [0, 3× opening_debt]
+**Решение (non-circular est_cash):**
+1. est_cash_base = prev_cash + EBITDA - interest_term_est - CapEx - ΔWC - tax_est - div - mandatory + refi
+   (interest_term_est uses opening balance × avg_rate — NO circular dependency)
+2. RC_draw = MIN(limit - open, MAX(0, min_cash - est_cash))
+3. Voluntary_term = IFERROR(IF(NI>0 AND overleveraged, sweep, 0), 0)
+4. IFERROR wrappers on all iterative cells for first-evaluation safety
+5. Excel iterative calc: 100 iterations, delta 0.001
+6. AppleScript: seed K1=1 → recalc → K1=0 → recalc ×20
+
+**Key principle:** RC is the ONLY plug. Term debt is deterministic from schedule.
+Funding gap shown when RC exhausted — model never forces negative cash.
 
 ---
 
@@ -202,44 +215,85 @@ NWC = AR + INV - AP
 ΔNWC = NWC(t) - NWC(t-1) → CFO adjustment
 ```
 
-### 4.3 Debt (17_Debt + _Debt_Schedule)
+### 4.3 Debt Module (17_Debt + _Debt_Schedule)
 
-**Aggregate corkscrew (17_Debt):**
-```
-Open + Draw - Mandatory - Voluntary + Refi = Close
-Draw: circular optimizer (see §3.4)
-Voluntary: MAX(0, est_cash - 1.5×min_cash) × IF(NI>0)
-```
+**Architecture (per TASK_debt_module.md):**
+- RC — единственный plug (single balancing item, always ST)
+- Term debt — deterministic from _Debt_Schedule
+- Funding gap shown when RC exhausted (model never forces negative cash)
 
-**Per-instrument schedule (_Debt_Schedule — hidden technical sheet):**
+**A. Sources & Uses:**
 ```
-Per instrument (20 for Rusal, 10 for Nornickel):
-  Opening → Mandatory (if maturity_year = forecast_year) → Refi → Interest → Close
-  Canonical kinds: BOND_BULLET, BOND_FLOAT, TERM_AMORT, RC
-  Interest = AVG(Open, Close) × Rate
-    BOND_FLOAT: Rate = KeyRate_proxy + Spread
-    BOND_BULLET: Rate = contract_rate (from $F column)
-  Total row: SUM per column → linked to 17_Debt.interest
+USES: Maint_CapEx + Growth_CapEx + ΔNWC + Mandatory + Interest + Dividends
+SOURCES: EBITDA - Tax + Refi + Excess_Cash
+GAP = Uses - Sources → covered by RC, new term, or funding gap flag
 ```
 
-**Mandatory repay from instrument maturities:**
-| Year | Rusal | Nornickel |
-|------|-------|-----------|
-| 2026 | $3,357M (35%) | $2,000M (21%) |
-| 2027 | $5,629M (59%) | $0M |
-| 2028 | $140M (1%) | $2,000M (21%) |
-
-**Weighted avg rate (from instruments, not implied):**
-- Rusal: **8.01%** (71 instruments: CNY 4.75-8.5%, RUB 14-15%)
-- Nornickel: **5.62%** (10 instruments: USD 5.75-7%, RUB 3.5-12%)
+**B. Term Debt corkscrew:**
 ```
+Term_close = Term_open - Mandatory + Refi + New_term - Voluntary_term
+Mandatory: from _Debt_Schedule maturity dates
+Refi: Mandatory × refi_pct (bonds vs bank, scenario parameter)
+New_term: covers gap_after_RC, blocked by covenant breach
+Voluntary: with prepay premium, sweep_pct, covenant stops
+```
+
+**C. RC (Revolving Credit):**
+```
+RC_draw = MIN(limit - open, MAX(0, min_cash - est_cash))
+RC_repay = MIN(open, MAX(0, est_cash - min_cash))  (cash sweep)
+RC_close = open + draw - repay
+Funding_gap = MAX(0, min_cash - est_cash - available_RC - new_term)
+Interest_RC = AVG(open, close) × rc_rate
+Commit_fee = (limit - avg_balance) × fee_rate
+```
+
+**D. FX Revaluation (IAS 21):**
+```
+Per currency (CNY, RUB): FX_effect = -Σ(instrument_close) × FX_change_YoY
+Flows: DT.close (+), PL.other_fin (-loss), CF.fx (+reversal)
+BS=0 verified under FX stress (CNY+10%: NI=-525M, debt+633M)
+```
+
+**E. Covenant Circuit:**
+```
+IF prev_ND/EBITDA > covenant_max:
+  - Block new term draws
+  - Block dividends (EQ.div = 0)
+```
+
+**F. Historical Calibration (informational):**
+- ST share, maint CapEx share, spread, avg tenor, debt/capex ratio
+- ST flag: ⚠ if model ST/LT deviates >15pp from historical
+
+**Per-instrument schedule (_Debt_Schedule):**
+```
+Instruments + Synthetic "New Term 20XX" rows (per forecast year)
+  Opening → Mandatory → Refi(×refi_pct) → Interest → Close
+  Refi: BOND_* → CP.refi_pct_bonds, bank → CP.refi_pct_bank
+  New term rate: avg_rate + spread_base + spread_step × MAX(0, ND/EBITDA - target)
+  Total: SUM(instruments) + SUM(synthetics) — non-contiguous
+```
+
+**20 CP parameters:** rc_limit, rc_rate, commit_fee, maint_share, sweep_pct,
+target_leverage, buffer, refi_pct_bonds/bank, new_debt_available, term_tenor,
+spread_base/step, prepay_premium, cov_nd_ebitda, cov_icr, fx_usdcny/usdrub_chg
+
+**Stress tests verified:**
+| Scenario | RC | Funding Gap | NI | BS |
+|----------|-----|------------|-----|-----|
+| Base (refi=100%) | 0 | 0 | +80M | 0 |
+| Stress (refi=50%) | 1,270 | 0 | +69M | 0 |
+| Severe (refi=0%) | 2,500 (limit) | 292M Y1, 5,503M Y2 | +69M | 0 |
+| FX (CNY+10%) | 0 | 0 | -525M | 0 |
 
 ### 4.4 Equity (24_Equity)
 ```
 RE_open + NI(parent) - Dividends - Buybacks + Other = RE_close
-Dividends = MAX(0, NI) × payout_ratio (from CP)
+Dividends = IF(covenant_breach, 0, MAX(0, NI) × payout_ratio)
 NI(parent) = NI × (1 - nci_pct) — for companies with NCI
 AOCI/NCI: grows by NI × nci_pct each year
+Covenant: ND/EBITDA > max → dividends blocked
 ```
 
 ### 4.5 Tax (19_Tax)
