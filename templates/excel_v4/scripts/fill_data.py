@@ -974,7 +974,38 @@ def fill_bs_history(wb, data: dict, company: str):
         if other_nca > 0 and REG.get("BS.other_nca"):
             ws.cell(REG["BS.other_nca"], 3, round(other_nca, 1)).font = F_INPUT
 
-    print(f"    BS history: {filled} metrics filled for {last_yr}")
+    # Compute Other_CL and Other_NCL from totals (not source line items)
+    # Other_CL = TCL - (AP + STD + Lease_CL + Tax_Pay) — absorbs unmapped CL items
+    # Other_NCL = TNCL - (LTD + Lease_NCL + Provisions + DTL) — absorbs unmapped NCL items
+    # Other_CA = TCA - (Cash + AR + INV) — absorbs unmapped CA items
+    for yr_idx, yr in enumerate(hist_3):
+        col = COL_START + yr_idx
+        tca = abs(bs.get("total_ca", bs.get("total_current_assets", {})).get(yr, 0))
+        tcl = abs(bs.get("total_cl", bs.get("total_current_liabilities", {})).get(yr, 0))
+        tncl_src = abs(bs.get("total_ncl", bs.get("total_non_current_liabilities", {})).get(yr, 0))
+
+        if tca > 0:
+            known_ca = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
+                          ["cash", "accounts_receivable", "inventory"])
+            other_ca = tca - known_ca
+            if other_ca > 0:
+                ws.cell(REG["BS.other_ca"], col, round(other_ca, 1)).font = F_INPUT
+
+        if tcl > 0:
+            known_cl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
+                          ["accounts_payable", "short_term_debt"]) + bs.get("taxes_payable", {}).get(yr, 0)
+            other_cl = tcl - known_cl
+            if other_cl > 0:
+                ws.cell(REG["BS.other_cl"], col, round(other_cl, 1)).font = F_INPUT
+
+        if tncl_src > 0:
+            known_ncl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
+                           ["long_term_debt", "dtl"])
+            other_ncl = tncl_src - known_ncl
+            if other_ncl > 0:
+                ws.cell(REG["BS.other_ncl"], col, round(other_ncl, 1)).font = F_INPUT
+
+    print(f"    BS history: {filled} metrics filled, Other CL/NCL/CA from totals")
 
 
 def fill_wc_days(wb, data: dict, company: str):

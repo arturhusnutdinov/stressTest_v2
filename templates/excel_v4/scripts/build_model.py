@@ -956,10 +956,16 @@ def build_bs(wb, cfg):
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
-        # Tax Payable = current year tax (not carry forward; avoid negative tax receivable)
+        # Tax Payable = current tax if positive, else carry forward prev (receivable)
         formula_cell(ws, REG["BS.tax_pay"], c_idx,
-                     f"='{NAME['TX']}'!{cl}${REG['TX.current']}", FMT_MLN)
+                     f"=IF('{NAME['TX']}'!{cl}${REG['TX.current']}>0,"
+                     f"'{NAME['TX']}'!{cl}${REG['TX.current']},"
+                     f"{prev}{REG['BS.tax_pay']})",
+                     FMT_MLN)
 
+        # Other CL = TCL(history) - known_CL (plug to preserve total)
+        # In history: other_cl includes lease, provisions, etc.
+        # In forecast: carry forward
         for key in ["other_ca", "goodwill", "intang", "other_nca",
                      "other_cl", "lease_ncl", "prov",
                      "other_ncl", "sc", "apic", "aoci"]:
