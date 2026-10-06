@@ -668,6 +668,11 @@ def fill_debt_hist(wb, data: dict, company: str):
             ws.cell(REG["DT.avg_rate"], c).number_format = FMT_PCT
         print(f"    Avg rate (implied): {avg_rate*100:.1f}%")
 
+    # Fill interest in history col
+    if total > 0 and interest > 0:
+        ws.cell(REG["DT.interest"], hc, round(interest, 1)).font = F_INPUT
+        ws.cell(REG["DT.interest"], hc).number_format = FMT_MLN
+
     # Also fill ND in history col
     nd = total - cash
     ws.cell(REG["DT.nd"], hc, round(nd, 1)).font = F_FORMULA

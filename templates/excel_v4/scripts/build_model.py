@@ -1176,7 +1176,7 @@ def build_checks(wb, cfg):
         # 3. PPE roll = net_close - (gross_close - dep_close)
         formula_cell(ws, REG["CK.ppe_roll"], c_idx,
                      f"='{NAME['PP']}'!{cl}${REG['PP.net_close']}"
-                     f"-({cl}'{NAME['PP']}'!{cl}${REG['PP.gross_close']}"
+                     f"-('{NAME['PP']}'!{cl}${REG['PP.gross_close']}"
                      f"-'{NAME['PP']}'!{cl}${REG['PP.dep_close']})",
                      FMT_RATIO)
 
@@ -1447,19 +1447,55 @@ def build_debt(wb, cfg):
         # When calc_reset=0 (iterate): normal optimizer formulas
         cp_min_cash = "'Control_Panel'!$C$55"
 
-        # Draw = IF(calc_reset=1, 0, MAX(0, min_cash - pre_cash))
+        # ── Draw = MAX(0, min_cash - estimated_cash) ──
+        # Avoid circular through CF by estimating cash directly:
+        # est_cash = prev_cash + EBITDA - Interest - CapEx - ΔNWC - Tax - mandatory
+        # This is a simplified CFO+CFI without circular dependency
+        ebitda_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
+        capex_ref = f"'{NAME['PP']}'!{cl}${REG['PP.capex']}"
+        wc_ref = f"'{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}"
+        interest_self = f"({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']}"
+
+        # est_cash = prev_cash + EBITDA - interest_est - capex - ΔWC - mandatory
+        # Full cash estimate: EBITDA - interest - capex - ΔWC - tax - div - mandatory
+        # Interest: opening_debt × avg_rate (no circular)
+        # Tax: use statutory rate × MAX(0, EBITDA - interest - DA)
+        interest_est = f"{cl}{REG['DT.open']}*{cl}{REG['DT.avg_rate']}"
+        da_ref = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
+        # Estimated EBT = EBITDA - DA - Interest
+        # Tax = MAX(0, EBT) × 25%
+        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_est}))*0.25"
+        # Dividends from equity sheet
+        div_ref = f"ABS('{NAME['EQ']}'!{cl}${REG['EQ.div']})"
+        est_cash = (f"{cash_prev}+{ebitda_ref}"
+                    f"-({interest_est})"
+                    f"-ABS({capex_ref})"
+                    f"-{wc_ref}"
+                    f"-({tax_est})"
+                    f"-{div_ref}"
+                    f"-ABS({cl}{REG['DT.mandatory']})")
+
+        # Draw with calc_reset seed pattern:
+        # calc_reset=1: seed = est_cash based draw (no circular)
+        # calc_reset=0: iterate = CF-based draw (circular, converges in 3-4 iters)
+        seed_draw = f"MAX(0,{cp_min_cash}-({est_cash}))"
+        # pre_cash = prev_cash + CFO + CFI + CFF (full cash flow)
+        # CFF includes interest_paid, debt draw/repay, div
+        cff_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cff']}"
+        iter_draw = (f"IFERROR(MEDIAN(0,"
+                     f"MAX(0,{cp_min_cash}-({cash_prev}+{cfo_ref}+{cfi_ref}+{cff_ref})),"
+                     f"{cl}{REG['DT.open']}*3),{seed_draw})")
         formula_cell(ws, REG["DT.draw"], c_idx,
-                     f"=IF(calc_reset=1,0,"
-                     f"IFERROR(MAX(0,{cp_min_cash}-({cash_prev}+{cfo_ref}+{cfi_ref}"
-                     f"-ABS({cl}{REG['DT.mandatory']}))),0))",
+                     f"=IF(calc_reset=1,{seed_draw},{iter_draw})",
                      FMT_MLN)
 
-        # Voluntary = IF(calc_reset=1, 0, MAX(0, post_cash - 1.5×min_cash))
+        # Voluntary = MAX(0, post-draw-cash - 1.5×min_cash) × IF(NI>0)
+        # Only repay if company is profitable and has excess cash
+        ni_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ni']}"
         formula_cell(ws, REG["DT.voluntary"], c_idx,
-                     f"=IF(calc_reset=1,0,"
-                     f"IFERROR(MAX(0,({cash_prev}+{cfo_ref}+{cfi_ref}"
-                     f"-ABS({cl}{REG['DT.mandatory']})+{cl}{REG['DT.draw']})"
-                     f"-{cp_min_cash}*1.5),0))",
+                     f"=IF({ni_ref}>0,"
+                     f"MAX(0,({cash_prev}+{cfo_ref}+{cfi_ref}+{cff_ref})-{cp_min_cash}*1.5),"
+                     f"0)",
                      FMT_MLN)
 
         # Refi = 0 (simplified; manual override)
@@ -1472,9 +1508,10 @@ def build_debt(wb, cfg):
                      f"+{cl}{REG['DT.refi']}",
                      FMT_MLN, bold=True)
 
-        # Interest = avg(open, close) × rate — CIRCULAR (close depends on draw depends on cash)
+        # Interest = avg(open, close) × rate — IFERROR seed fallback for circular convergence
         formula_cell(ws, REG["DT.interest"], c_idx,
-                     f"=({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']}",
+                     f"=IFERROR(({cl}{REG['DT.open']}+{cl}{REG['DT.close']})/2*{cl}{REG['DT.avg_rate']},"
+                     f"{cl}{REG['DT.open']}*{cl}{REG['DT.avg_rate']})",
                      FMT_MLN)
 
         # Avg rate — input (linked to implied rate from preprocessing)
