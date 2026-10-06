@@ -1492,22 +1492,51 @@ def fill_debt_hist(wb, data: dict, company: str):
         accdep = abs(bs.get("ppe_accum_dep", {}).get(last_yr, 0))
         ppe_net = abs(bs.get("ppe_net", {}).get(last_yr, 0))
         if ppe_net > 0:
-            ws_p.cell(REG["PP.gross_open"], hc, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.gross_open"], hc).number_format = FMT_MLN
-            ws_p.cell(REG["PP.gross_close"], hc, round(ppe_gross or ppe_net * 2, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.dep_open"], hc, round(accdep or ppe_net, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.dep_close"], hc, round(accdep or ppe_net, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.net_open"], hc, round(ppe_net, 1)).font = F_INPUT
-            ws_p.cell(REG["PP.net_close"], hc, round(ppe_net, 1)).font = F_INPUT
-            # Fill DA history for sustaining CapEx calculation
+            ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
+            cl_h = get_column_letter(hc)
+            gross_val = round(ppe_gross or ppe_net * 2, 1)
+            dep_val = round(accdep or ppe_net, 1)
+            net_val = round(ppe_net, 1)
+            # Write to 02_Hist and create refs
+            if ws_hi:
+                ws_hi.cell(REG["HI.ppe_gross"], hc, gross_val).font = F_INPUT
+                ws_hi.cell(REG["HI.accdep"], hc, dep_val).font = F_INPUT
+                ws_hi.cell(REG["HI.ppe_net"], hc, net_val).font = F_INPUT
+                ws_p.cell(REG["PP.gross_open"], hc).value = f"='02_Hist'!{cl_h}${REG['HI.ppe_gross']}"
+                ws_p.cell(REG["PP.gross_open"], hc).font = F_REF
+                ws_p.cell(REG["PP.gross_close"], hc).value = f"='02_Hist'!{cl_h}${REG['HI.ppe_gross']}"
+                ws_p.cell(REG["PP.gross_close"], hc).font = F_REF
+                ws_p.cell(REG["PP.dep_open"], hc).value = f"='02_Hist'!{cl_h}${REG['HI.accdep']}"
+                ws_p.cell(REG["PP.dep_open"], hc).font = F_REF
+                ws_p.cell(REG["PP.dep_close"], hc).value = f"='02_Hist'!{cl_h}${REG['HI.accdep']}"
+                ws_p.cell(REG["PP.dep_close"], hc).font = F_REF
+                ws_p.cell(REG["PP.net_open"], hc).value = f"='02_Hist'!{cl_h}${REG['HI.ppe_net']}"
+                ws_p.cell(REG["PP.net_open"], hc).font = F_REF
+                ws_p.cell(REG["PP.net_close"], hc).value = f"='02_Hist'!{cl_h}${REG['HI.ppe_net']}"
+                ws_p.cell(REG["PP.net_close"], hc).font = F_REF
+            else:
+                ws_p.cell(REG["PP.gross_open"], hc, gross_val).font = F_INPUT
+                ws_p.cell(REG["PP.gross_close"], hc, gross_val).font = F_INPUT
+                ws_p.cell(REG["PP.dep_open"], hc, dep_val).font = F_INPUT
+                ws_p.cell(REG["PP.dep_close"], hc, dep_val).font = F_INPUT
+                ws_p.cell(REG["PP.net_open"], hc, net_val).font = F_INPUT
+                ws_p.cell(REG["PP.net_close"], hc, net_val).font = F_INPUT
+            # DA history → 02_Hist refs
             da_hist = is_data.get("total_da", is_data.get("dep_ppe", {}))
             for yr_offset, yr in enumerate(hist_years[-N_HIST_DISPLAY:]):
                 da_val = da_hist.get(yr, 0)
                 if da_val:
                     col_pp = COL_START + yr_offset
-                    ws_p.cell(REG["PP.dep_charge"], col_pp, round(abs(da_val), 1)).font = F_INPUT
+                    cl_pp = get_column_letter(col_pp)
+                    abs_da = round(abs(da_val), 1)
+                    if ws_hi:
+                        ws_hi.cell(REG["HI.da"], col_pp, abs_da).font = F_INPUT
+                        ws_p.cell(REG["PP.dep_charge"], col_pp).value = f"='02_Hist'!{cl_pp}${REG['HI.da']}"
+                        ws_p.cell(REG["PP.dep_charge"], col_pp).font = F_REF
+                    else:
+                        ws_p.cell(REG["PP.dep_charge"], col_pp, abs_da).font = F_INPUT
                     ws_p.cell(REG["PP.dep_charge"], col_pp).number_format = FMT_MLN
-            print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f}")
+            print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f} (→ 02_Hist refs)")
 
     # Fill Equity opening
     if "24_Equity" in wb.sheetnames:

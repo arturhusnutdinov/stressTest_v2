@@ -2393,13 +2393,21 @@ def build_tax(wb, cfg):
                      f"={cl}{REG['TX.nol_open']}-{cl}{REG['TX.nol_used']}"
                      f"+MAX(0,-{cl}{REG['TX.ebt']})", FMT_MLN)
 
-        # DTA/DTL: carry forward from previous year (simplified — no deferred tax calculation)
-        # In Python engine: DTA/DTL change = deferred tax expense
-        # Here: DTA_close = DTA_open (carry forward), DTL_close = DTL_open
+        # DTA/DTL: deferred tax from PPE timing difference
+        # DTL grows when book depreciation < tax depreciation (accelerated)
+        # Simplified: deferred_tax = (book_DA - tax_DA) × tax_rate
+        # Tax DA ≈ book DA × 1.2 (accelerated as proxy)
         formula_cell(ws, REG["TX.dta_open"], c_idx, f"={prev}{REG['TX.dta_close']}", FMT_MLN)
-        formula_cell(ws, REG["TX.dta_close"], c_idx, f"={cl}{REG['TX.dta_open']}", FMT_MLN)
         formula_cell(ws, REG["TX.dtl_open"], c_idx, f"={prev}{REG['TX.dtl_close']}", FMT_MLN)
-        formula_cell(ws, REG["TX.dtl_close"], c_idx, f"={cl}{REG['TX.dtl_open']}", FMT_MLN)
+        # Deferred tax expense = (tax_DA - book_DA) × tax_rate (DTL increasing)
+        book_da = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
+        formula_cell(ws, REG["TX.deferred"], c_idx,
+                     f"=({book_da}*1.2-{book_da})*{cp_tax_rate}", FMT_MLN)
+        # DTA_close = DTA_open (simplified — no new DTA sources)
+        formula_cell(ws, REG["TX.dta_close"], c_idx, f"={cl}{REG['TX.dta_open']}", FMT_MLN)
+        # DTL_close = DTL_open + deferred_tax_expense
+        formula_cell(ws, REG["TX.dtl_close"], c_idx,
+                     f"={cl}{REG['TX.dtl_open']}+{cl}{REG['TX.deferred']}", FMT_MLN)
 
 
 def build_valuation(wb, cfg):
@@ -3384,6 +3392,29 @@ def build_debt_schedule(wb, cfg):
     ws.sheet_state = 'hidden'
 
 
+def build_other_is(wb, cfg):
+    """14_OtherIS — other income statement items (impairment, associates, etc.)."""
+    ws = wb["14_OtherIS"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"14_OtherIS — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Прочие статьи PL: обесценение, ассоциированные, прочие финансовые").font = F_SUBTITLE
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
+
+    section_header(ws, 6, "ПРОЧИЕ ДОХОДЫ И РАСХОДЫ")
+    for key, label, unit in [
+        ("associates", "Доля в ассоциированных и СП", "mln"),
+        ("impairment", "Обесценение внеоборотных активов", "mln"),
+        ("other_opex", "Прочие операционные расходы", "mln"),
+        ("interest_income", "Процентный доход (по депозитам)", "mln"),
+        ("other_fin", "Прочие финансовые доходы/расходы", "mln"),
+    ]:
+        r = REG[f"OI.{key}"]
+        label_row(ws, r, label, unit)
+        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+            input_cell(ws, r, c, 0, FMT_MLN)
+
+
 def build_changelog(wb, cfg):
     """Changelog — version history."""
     ws = wb["Changelog"]
@@ -3430,6 +3461,7 @@ def build(company: str, output: str):
         ("10_Revenue",      build_revenue),
         ("12_COGS",         build_cogs),
         ("13_SGA",          build_sga),
+        ("14_OtherIS",      build_other_is),
         ("15_PPE",          build_ppe),
         ("16_WC",           build_wc),
         ("17_Debt",         build_debt),
