@@ -1701,11 +1701,11 @@ def build_debt(wb, cfg):
                          f"-{cp_min_cash}-{cp_buffer}"
                          f"-{cl}{REG['DT.rc_open']})")
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
-                     f"=IF(AND({ni_ref}>0,"
+                     f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,"
                      f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev}),"
                      f"MAX(0,MIN({vol_available}*{cp_sweep_pct},"
                      f"{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))),"
-                     f"0)",
+                     f"0),0)",
                      FMT_MLN)
 
         # term_close = open - mandatory + refi + new_term - voluntary
@@ -1732,15 +1732,16 @@ def build_debt(wb, cfg):
                          f"-ABS({cl}{REG['DT.voluntary_term']})")
 
         # RC draw = MIN(limit - open, MAX(0, min_cash - est_cash))
+        # IFERROR: on first iteration voluntary_term may error (circular via NI)
         formula_cell(ws, REG["DT.rc_draw"], c_idx,
-                     f"=MAX(0,MIN({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']},"
-                     f"MAX(0,{cp_min_cash}-({est_cash_full}))))",
+                     f"=IFERROR(MAX(0,MIN({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']},"
+                     f"MAX(0,{cp_min_cash}-({est_cash_full})))),0)",
                      FMT_MLN)
 
         # RC repay = MIN(open, MAX(0, est_cash - min_cash))
         formula_cell(ws, REG["DT.rc_repay"], c_idx,
-                     f"=MIN({cl}{REG['DT.rc_open']},"
-                     f"MAX(0,({est_cash_full})-{cp_min_cash}))",
+                     f"=IFERROR(MIN({cl}{REG['DT.rc_open']},"
+                     f"MAX(0,({est_cash_full})-{cp_min_cash})),0)",
                      FMT_MLN)
 
         # RC close = open + draw - repay

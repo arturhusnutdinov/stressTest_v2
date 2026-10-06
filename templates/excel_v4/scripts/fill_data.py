@@ -810,8 +810,16 @@ def fill_debt_schedule(wb, data: dict, company: str):
             else:
                 formula_cell(ws, r, bc + 1, "=0", FMT_MLN)
 
-            # Refi = Mandatory (auto-rollover)
-            formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
+            # Refi = Mandatory × refi_pct (scenario-dependent, by instrument type)
+            # BOND_* → CP.refi_pct_bonds, others (TERM/bank) → CP.refi_pct_bank
+            refi_pct_row = REG.get("CP.refi_pct_bonds") if kind.startswith("BOND") \
+                else REG.get("CP.refi_pct_bank")
+            if refi_pct_row:
+                formula_cell(ws, r, bc + 2,
+                             f"={cl_mand}{r}*'Control_Panel'!$C${refi_pct_row}",
+                             FMT_MLN)
+            else:
+                formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
 
             # Interest = AVG(open, close) × rate
             # BOND_FLOAT: rate = KeyRate(from row 3) + spread (from $F = contract spread)
@@ -918,9 +926,18 @@ def fill_debt_schedule(wb, data: dict, company: str):
         cl = get_column_letter(c_dt)
         close_col = get_column_letter(bc + 4)
 
-        # 17_Debt interest = _Debt_Schedule total interest
+        # 17_Debt ← _Debt_Schedule totals (mandatory, refi, interest)
+        mand_col = get_column_letter(bc + 1)
+        refi_col = get_column_letter(bc + 2)
         int_col = get_column_letter(bc + 3)
-        formula_cell(ws_dt, REG["DT.interest"], c_dt,
+        # Mandatory from schedule
+        formula_cell(ws_dt, REG["DT.mandatory"], c_dt,
+                     f"='_Debt_Schedule'!{mand_col}${total_r}", FMT_MLN)
+        # Refi from schedule (= Σ instrument mandatory × refi_pct per type)
+        formula_cell(ws_dt, REG["DT.refi"], c_dt,
+                     f"='_Debt_Schedule'!{refi_col}${total_r}", FMT_MLN)
+        # Interest (term only — RC interest computed in build_model)
+        formula_cell(ws_dt, REG["DT.interest_term"], c_dt,
                      f"='_Debt_Schedule'!{int_col}${total_r}", FMT_MLN)
 
         # 17_Debt ST = schedule_ST + RC_close
@@ -937,57 +954,25 @@ def fill_debt_schedule(wb, data: dict, company: str):
     # ── Target ND/EBITDA voluntary repay ──
     # Voluntary = IF(ND/EBITDA > target AND NI > 0,
     #               MIN(excess_cash, NetDebt - target×EBITDA), 0)
-    cp_target_row = None
+    # Find Target ND/EBITDA row from REG or by searching CP
     ws_cp = wb["Control_Panel"]
-    for r in range(50, 60):
-        if ws_cp.cell(r, 1).value and "target" in str(ws_cp.cell(r, 1).value).lower() and "nd" in str(ws_cp.cell(r, 1).value).lower():
-            cp_target_row = r
-            break
+    cp_target_row = REG.get("CP.target_leverage")
     if cp_target_row is None:
-        # Write target ND/EBITDA to CP
-        cp_target_row = 54  # near min_cash
+        for r in range(50, 80):
+            val = ws_cp.cell(r, 1).value
+            if val and "target" in str(val).lower() and "nd" in str(val).lower():
+                cp_target_row = r
+                break
+    if cp_target_row is None:
+        cp_target_row = 60  # safe fallback
         ws_cp.cell(cp_target_row, 1, "Target ND/EBITDA").font = F_LABEL
         ws_cp.cell(cp_target_row, 3, target_nd_ebitda).font = F_INPUT
         ws_cp.cell(cp_target_row, 3).number_format = FMT_MULT
 
-    for yr_idx, yr in enumerate(fc_years):
-        c_dt = COL_START + N_HIST_DISPLAY + yr_idx
-        cl = get_column_letter(c_dt)
-        prev = get_column_letter(c_dt - 1)
+    # Voluntary_term: formula already set by build_model with proper S&U integration
+    # No override needed — build_model references CP rows correctly via REG
 
-        # Override voluntary formula with target-leverage version
-        ni_ref = f"'{NAME_PL}'!{cl}${REG['PL.ni']}"
-        nd_ref = f"{cl}{REG['DT.nd']}"
-        ebitda_ref = f"'{NAME_PL}'!{cl}${REG['PL.ebitda']}"
-        target_ref = f"'Control_Panel'!$C${cp_target_row}"
-        cash_prev = f"'20_BS'!{prev}${REG['BS.cash']}"
-
-        # Voluntary = IF(NI>0 AND ND/EBITDA > target,
-        #   MIN(Cash - min_cash, NetDebt - target×EBITDA), 0)
-        # Use est_cash (no circular) for available cash
-        cp_min_cash = "'Control_Panel'!$C$55"
-        # Estimated ND for target check (from opening, no circular)
-        est_nd = f"({cl}{REG['DT.open']}-{cash_prev})"
-        # est_cash = prev_cash + EBITDA - interest(opening×rate) - capex - WC
-        capex_ref = f"ABS('{NAME_PPE}'!{cl}${REG['PP.capex']})"
-        wc_ref = f"'16_WC'!{cl}${REG['WC.delta_nwc']}"
-        int_est = f"{cl}{REG['DT.open']}*{cl}{REG['DT.avg_rate']}"
-        available_cash = f"({cash_prev}+{ebitda_ref}-({int_est})-{capex_ref}-{wc_ref}-{cp_min_cash})"
-        # Cap voluntary at 50% of available cash (conservative — don't drain all cash)
-        # Also respect max_voluntary_prepay_pct_fcf (30% default)
-        formula_cell(ws_dt, REG["DT.voluntary_term"], c_dt,
-                     f"=IF(AND({ni_ref}>0,"
-                     f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{target_ref},"
-                     f"{available_cash}>0),"
-                     f"MAX(0,MIN({available_cash}*0.3,"
-                     f"{est_nd}-{target_ref}*ABS({ebitda_ref}))),"
-                     f"0)",
-                     FMT_MLN)
-
-    # Store PL sheet name for formulas
-    NAME_PL = "21_PL"
-
-    print(f"    17_Debt: interest + ST/LT + voluntary linked to _Debt_Schedule")
+    print(f"    17_Debt: mandatory + refi + interest + ST/LT linked to _Debt_Schedule")
     print(f"    Floating rate: KeyRate from row {kr_row} + spread per instrument")
     print(f"    Target ND/EBITDA: {target_nd_ebitda}x (CP row {cp_target_row})")
 
@@ -1112,6 +1097,9 @@ def fill_debt_hist(wb, data: dict, company: str):
     if interest == 0:
         interest = abs(is_data.get("finance_cost_net", {}).get(last_yr, 0))
     if total > 0 and interest > 0:
+        ws.cell(REG["DT.interest_term"], hc, round(interest, 1)).font = F_INPUT
+        ws.cell(REG["DT.interest_term"], hc).number_format = FMT_MLN
+        # Total interest = term (RC=0 in history)
         ws.cell(REG["DT.interest"], hc, round(interest, 1)).font = F_INPUT
         ws.cell(REG["DT.interest"], hc).number_format = FMT_MLN
 
@@ -1136,10 +1124,8 @@ def fill_debt_hist(wb, data: dict, company: str):
             if repay > 0:
                 ws.cell(REG["DT.mandatory"], c, round(repay, 1)).font = F_INPUT
                 ws.cell(REG["DT.mandatory"], c).number_format = FMT_MLN
-                # Refinancing = mandatory (assumed full refi)
-                ws.cell(REG["DT.refi"], c).value = f"={get_column_letter(c)}{REG['DT.mandatory']}"
-                ws.cell(REG["DT.refi"], c).font = F_FORMULA
-                ws.cell(REG["DT.refi"], c).number_format = FMT_MLN
+                # Refi: linked to _Debt_Schedule total refi (which uses per-instrument refi_pct)
+                # Will be overridden below when linking DT to _Debt_Schedule
 
         if repay_by_year:
             print(f"    Mandatory repay: " + ", ".join(f"{yr}={repay_by_year[yr]/1e6:,.0f}M" for yr in sorted(repay_by_year)))
@@ -1617,10 +1603,8 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
     ws_cp.cell(20, 1, "COGS ratio (калиброванный)").font = F_LABEL
 
     # Ensure min_cash is set (row 55)
-    if ws_cp.cell(55, 3).value is None:
-        ws_cp.cell(55, 3, 500).font = F_INPUT
-        ws_cp.cell(55, 3).number_format = FMT_MLN0
-        ws_cp.cell(55, 1, "Min cash target").font = F_LABEL
+    # Min cash already set by build_control_panel via REG["CP.min_cash"]
+    # No hardcoded fallback needed
 
     print(f"    COGS: ratio={cogs_ratio:.1%} → CP!C20")
 
