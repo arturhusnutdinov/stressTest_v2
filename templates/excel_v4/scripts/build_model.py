@@ -1678,14 +1678,11 @@ def build_debt(wb, cfg):
         input_cell(ws, REG["DT.mandatory"], c_idx, 0, FMT_MLN)
         # Refi — input, filled by fill_data (= mandatory × refi_pct)
         input_cell(ws, REG["DT.refi"], c_idx, 0, FMT_MLN)
-        # New term — input (0 default; analyst or fill_data adds if needed)
-        input_cell(ws, REG["DT.new_term"], c_idx, 0, FMT_MLN)
 
-        # Voluntary term: waterfall after RC repay
-        # Available = MAX(0, est_cash_before_RC - min_cash - buffer - RC_open)
-        # i.e., after fully repaying RC AND maintaining min_cash + buffer
+        # ── est_cash: non-circular cash estimate (foundation for RC and new_term) ──
         tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_term_est}))*0.25"
-        est_cash_before_rc = (
+        # est_cash WITHOUT new_term (for gap_after_rc calculation)
+        est_cash_base = (
             f"{cash_prev}+{ebitda_ref}"
             f"-({interest_term_est})"
             f"-ABS({capex_ref})"
@@ -1693,17 +1690,42 @@ def build_debt(wb, cfg):
             f"-({tax_est})"
             f"-{div_ref}"
             f"-ABS({cl}{REG['DT.mandatory']})"
-            f"+{cl}{REG['DT.refi']}"
-            f"+{cl}{REG['DT.new_term']}")
+            f"+{cl}{REG['DT.refi']}")
+        # est_cash WITH new_term (for voluntary and RC calc)
+        est_cash_before_rc = f"({est_cash_base})+{cl}{REG['DT.new_term']}"
+
+        # ── Covenant check ──
+        cp_new_debt = f"'Control_Panel'!$C${REG.get('CP.new_debt_available', 70)}"
+        cp_cov_nd = f"'Control_Panel'!$C${REG.get('CP.cov_nd_ebitda', 71)}"
+        prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/'{NAME['PL']}'!{prev}${REG['PL.ebitda']},0)"
+        cov_breach = f"({prev_nd_ebitda}>{cp_cov_nd})"
+
+        # ── New term: covers gap after RC exhaustion ──
+        gap_after_rc = (f"MAX(0,{cp_min_cash}-({est_cash_base})"
+                        f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']}))")
+        formula_cell(ws, REG["DT.new_term"], c_idx,
+                     f"=IFERROR(IF(AND({cp_new_debt}=1,NOT({cov_breach})),"
+                     f"{gap_after_rc},0),0)",
+                     FMT_MLN)
+
+        # ── Voluntary term: after RC repay, with covenant stops ──
         # est_nd from opening (non-circular)
         est_nd = f"({cl}{REG['DT.term_open']}-{cash_prev})"
         vol_available = (f"MAX(0,({est_cash_before_rc})"
                          f"-{cp_min_cash}-{cp_buffer}"
                          f"-{cl}{REG['DT.rc_open']})")
+        # Voluntary: with covenant stops and prepay premium
+        # Stop 1: not if covenant breach (need liquidity)
+        # Stop 2: not if NI < 0
+        # Stop 3: only if overleveraged (ND/EBITDA > target)
+        # Priority: RC already repaid via cash sweep, this is term only
+        cp_prepay_prem = f"'Control_Panel'!$C${REG.get('CP.prepay_premium', 72)}"
+        # Net of prepay premium: effective amount = voluntary / (1 + premium)
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
                      f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,"
+                     f"NOT({cov_breach}),"
                      f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev}),"
-                     f"MAX(0,MIN({vol_available}*{cp_sweep_pct},"
+                     f"MAX(0,MIN({vol_available}*{cp_sweep_pct}/(1+{cp_prepay_prem}),"
                      f"{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))),"
                      f"0),0)",
                      FMT_MLN)
@@ -1756,10 +1778,11 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # Funding gap = MAX(0, min_cash - est_cash - available_RC)
+        # Funding gap = gap_after_rc - new_term (residual after all sources)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=MAX(0,{cp_min_cash}-({est_cash_full})"
-                     f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']}))",
+                     f"=IFERROR(MAX(0,{cp_min_cash}-({est_cash_full})"
+                     f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
+                     f"-{cl}{REG['DT.new_term']}),0)",
                      FMT_MLN)
 
         # ── D. TOTAL DEBT ──
@@ -1795,8 +1818,12 @@ def build_debt(wb, cfg):
                      f"+{cl}{REG['DT.interest_rc']}"
                      f"+{cl}{REG['DT.commit_fee']}",
                      FMT_MLN, bold=True)
-        # Avg rate
+        # Avg rate: base from schedule (fill_data overrides with weighted avg)
+        # New debt premium: spread_base + spread_step × MAX(0, prev_ND/EBITDA - target)
+        # Blended: (term_rate × term_balance + new_rate × new_balance) / total
+        # Simplified: keep as input, fill_data computes from instruments
         input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
+        # Note: new term rate computed in _Debt_Schedule synthetic row
 
         # ── F. ST/LT ──
         # ST = schedule_ST + RC (fill_data overrides schedule_ST from _Debt_Schedule)
@@ -2045,18 +2072,28 @@ def build_equity(wb, cfg):
             ref_cell(ws, REG["EQ.ni"], c_idx,
                      f"='{NAME['PL']}'!{cl}${REG['PL.ni']}", FMT_MLN)
         # Dividends = NI × payout_ratio (from CP)
-        # CP payout row is dynamic — find it
+        # Covenant circuit: blocked if ND/EBITDA > covenant max
         cp_payout_row = REG.get("CP.payout_ratio")
+        cp_cov_nd = REG.get("CP.cov_nd_ebitda")
+        # Covenant check on PREVIOUS year ND/EBITDA
+        if cp_cov_nd:
+            cov_check = (f"IFERROR('{NAME['DT']}'!{prev}${REG['DT.nd']}"
+                         f"/'{NAME['PL']}'!{prev}${REG['PL.ebitda']},0)"
+                         f">'Control_Panel'!$C${cp_cov_nd}")
+        else:
+            cov_check = "FALSE"
         if cp_payout_row:
             formula_cell(ws, REG["EQ.div"], c_idx,
-                         f"=MAX(0,{cl}{REG['EQ.ni']})*'Control_Panel'!$C${cp_payout_row}",
+                         f"=IF({cov_check},0,"
+                         f"MAX(0,{cl}{REG['EQ.ni']})*'Control_Panel'!$C${cp_payout_row})",
                          FMT_MLN)
         else:
-            # Fallback: fixed payout from config
             payout = 0.6 if "Nornickel" in cfg.get("name", "") else 0.0
             if payout > 0:
                 formula_cell(ws, REG["EQ.div"], c_idx,
-                             f"=MAX(0,{cl}{REG['EQ.ni']})*{payout}", FMT_MLN)
+                             f"=IF({cov_check},0,"
+                             f"MAX(0,{cl}{REG['EQ.ni']})*{payout})",
+                             FMT_MLN)
 
         # RE close = open + NI - div - buyback + other
         formula_cell(ws, REG["EQ.re_close"], c_idx,
@@ -2680,7 +2717,24 @@ def build_control_panel(wb, cfg):
 
     label_row(ws, r, "Spread step (за оборот ND/EBITDA)", "%")
     input_cell(ws, r, 3, cfg.get("spread_step", 0.005), FMT_PCT2)
-    REG["CP.spread_step"] = r; r += 2
+    REG["CP.spread_step"] = r; r += 1
+
+    label_row(ws, r, "Доступность нового долга (1=Да, 0=Нет)", "", "Сценарный")
+    input_cell(ws, r, 3, 1, FMT_INT)
+    REG["CP.new_debt_available"] = r; r += 1
+
+    label_row(ws, r, "Премия за досрочное погашение LT", "%")
+    input_cell(ws, r, 3, cfg.get("prepay_premium", 0.01), FMT_PCT)
+    REG["CP.prepay_premium"] = r; r += 1
+
+    cov = cfg.get("covenants", {})
+    label_row(ws, r, "Ковенант: ND/EBITDA max", "x", "При нарушении — блок дивидендов и новых выборок")
+    input_cell(ws, r, 3, cov.get("nd_ebitda_max", 4.5), FMT_MULT)
+    REG["CP.cov_nd_ebitda"] = r; r += 1
+
+    label_row(ws, r, "Ковенант: ICR min", "x")
+    input_cell(ws, r, 3, cov.get("icr_min", 1.5), FMT_MULT)
+    REG["CP.cov_icr"] = r; r += 2
 
     # ── I. НАЛОГИ ──
     section_header(ws, r, "I. НАЛОГИ"); r += 1

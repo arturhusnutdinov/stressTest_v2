@@ -48,6 +48,10 @@ def discover_cp_rows(wb):
         "тенор нового": "CP.term_tenor",
         "spread base": "CP.spread_base",
         "spread step": "CP.spread_step",
+        "доступность нового": "CP.new_debt_available",
+        "премия за досрочное": "CP.prepay_premium",
+        "ковенант: nd": "CP.cov_nd_ebitda",
+        "ковенант: icr": "CP.cov_icr",
     }
     for r in range(4, 100):
         val = ws.cell(r, 1).value
@@ -954,6 +958,95 @@ def fill_debt_schedule(wb, data: dict, company: str):
                      f"={close_col}{total_r}-{close_col}{r_st_label}",
                      FMT_MLN)
 
+    # ── Synthetic "New Term" rows per forecast year ──
+    # Rate = base_rate + spread_base + spread_step × MAX(0, ND/EBITDA - target)
+    r_synth_start = r_lt_label + 2
+    ws.cell(r_synth_start - 1, 2, "СИНТЕТИЧЕСКИЕ ТРАНШИ").font = F_LABEL_B
+    cp_spread_base = REG.get("CP.spread_base")
+    cp_spread_step = REG.get("CP.spread_step")
+    cp_target_lev = REG.get("CP.target_leverage")
+    cp_term_tenor = REG.get("CP.term_tenor")
+
+    for yr_idx, yr in enumerate(fc_years):
+        r_synth = r_synth_start + yr_idx
+        bc = yr_start + yr_idx * cols_per
+        c_dt = COL_START + N_HIST_DISPLAY + yr_idx
+        cl_dt = get_column_letter(c_dt)
+
+        ws.cell(r_synth, 2, f"New Term {yr}").font = F_LABEL
+        # Maturity = yr + tenor
+        tenor = 5
+        if cp_term_tenor:
+            tenor_ref = f"'Control_Panel'!$C${cp_term_tenor}"
+        else:
+            tenor_ref = str(tenor)
+        ws.cell(r_synth, 7, f"{yr + tenor}").font = F_LABEL
+
+        # Rate = leverage-dependent: avg_rate + spread_base + spread_step × MAX(0, ND/EBITDA - target)
+        if cp_spread_base and cp_spread_step and cp_target_lev:
+            rate_formula = (f"='17_Debt'!{cl_dt}${REG['DT.avg_rate']}"
+                           f"+'Control_Panel'!$C${cp_spread_base}"
+                           f"+'Control_Panel'!$C${cp_spread_step}"
+                           f"*MAX(0,IFERROR('17_Debt'!{cl_dt}${REG['DT.nd_ebitda']},0)"
+                           f"-'Control_Panel'!$C${cp_target_lev})")
+            ws.cell(r_synth, 6).value = rate_formula
+            ws.cell(r_synth, 6).font = F_FORMULA
+            ws.cell(r_synth, 6).number_format = FMT_PCT2
+        else:
+            ws.cell(r_synth, 6, 0.12).font = F_INPUT
+            ws.cell(r_synth, 6).number_format = FMT_PCT2
+
+        # Opening = DT.new_term from 17_Debt for THIS year (0 for prior years)
+        for prior_idx in range(yr_idx):
+            prior_bc = yr_start + prior_idx * cols_per
+            ws.cell(r_synth, prior_bc, 0).font = F_INPUT  # 0 before issuance
+            ws.cell(r_synth, prior_bc + 4, 0).font = F_INPUT  # close = 0
+
+        # Issuance year: Open = DT.new_term
+        formula_cell(ws, r_synth, bc,
+                     f"='17_Debt'!{cl_dt}${REG['DT.new_term']}", FMT_MLN)
+        formula_cell(ws, r_synth, bc + 1, "=0", FMT_MLN)  # no mandatory in year of issuance
+        formula_cell(ws, r_synth, bc + 2, "=0", FMT_MLN)  # no refi
+        cl_open_s = get_column_letter(bc)
+        cl_close_s = get_column_letter(bc + 4)
+        formula_cell(ws, r_synth, bc + 3,
+                     f"=({cl_open_s}{r_synth}+{cl_close_s}{r_synth})/2*$F${r_synth}",
+                     FMT_MLN)
+        formula_cell(ws, r_synth, bc + 4,
+                     f"={cl_open_s}{r_synth}", FMT_MLN)  # bullet: close = open
+
+        # Subsequent years: carry forward
+        for fut_idx in range(yr_idx + 1, len(fc_years)):
+            fut_bc = yr_start + fut_idx * cols_per
+            prev_close_col = get_column_letter(fut_bc - 1)
+            cl_open_f = get_column_letter(fut_bc)
+            cl_close_f = get_column_letter(fut_bc + 4)
+            formula_cell(ws, r_synth, fut_bc, f"={prev_close_col}{r_synth}", FMT_MLN)
+            formula_cell(ws, r_synth, fut_bc + 1, "=0", FMT_MLN)  # no maturity within horizon
+            formula_cell(ws, r_synth, fut_bc + 2, "=0", FMT_MLN)
+            formula_cell(ws, r_synth, fut_bc + 3,
+                         f"=({cl_open_f}{r_synth}+{cl_close_f}{r_synth})/2*$F${r_synth}",
+                         FMT_MLN)
+            formula_cell(ws, r_synth, fut_bc + 4,
+                         f"={cl_open_f}{r_synth}", FMT_MLN)
+
+    # Update total row: SUM(instruments) + SUM(synthetics) — non-contiguous to skip ST/LT rows
+    n_synth = len(fc_years)
+    r_synth_end = r_synth_start + n_synth - 1
+    # Instrument rows: 5 to total_r-1 (before ИТОГО)
+    r_inst_end = total_r - 1
+    for yr_idx in range(len(fc_years)):
+        bc = yr_start + yr_idx * cols_per
+        for j in range(cols_per):
+            col = bc + j
+            cl = get_column_letter(col)
+            formula_cell(ws, total_r, col,
+                         f"=SUM({cl}5:{cl}{r_inst_end})+SUM({cl}{r_synth_start}:{cl}{r_synth_end})",
+                         FMT_MLN, bold=True)
+
+    print(f"    Synthetic terms: {n_synth} rows ({r_synth_start}-{r_synth_end}), "
+          f"leverage-dependent rate")
+
     for yr_idx, yr in enumerate(fc_years):
         c_dt = COL_START + N_HIST_DISPLAY + yr_idx
         bc = yr_start + yr_idx * cols_per
@@ -964,13 +1057,13 @@ def fill_debt_schedule(wb, data: dict, company: str):
         mand_col = get_column_letter(bc + 1)
         refi_col = get_column_letter(bc + 2)
         int_col = get_column_letter(bc + 3)
-        # Mandatory from schedule
+        # Mandatory from schedule (includes synthetics via extended SUM)
         formula_cell(ws_dt, REG["DT.mandatory"], c_dt,
                      f"='_Debt_Schedule'!{mand_col}${total_r}", FMT_MLN)
-        # Refi from schedule (= Σ instrument mandatory × refi_pct per type)
+        # Refi from schedule
         formula_cell(ws_dt, REG["DT.refi"], c_dt,
                      f"='_Debt_Schedule'!{refi_col}${total_r}", FMT_MLN)
-        # Interest (term only — RC interest computed in build_model)
+        # Interest (term only)
         formula_cell(ws_dt, REG["DT.interest_term"], c_dt,
                      f"='_Debt_Schedule'!{int_col}${total_r}", FMT_MLN)
 
