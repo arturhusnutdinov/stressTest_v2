@@ -3475,6 +3475,10 @@ def build(company: str, output: str):
     ws_cp = wb["Control_Panel"]
     ws_cp.cell(1, 11, 0)  # K1 = 0 (iterate mode)
     ws_cp.cell(1, 11).font = F_NOTE
+    ws_cp.cell(1, 12, "calc_reset: 0=iterate, 1=seed").font = F_NOTE
+    ws_cp.cell(2, 11, "relax (демпфирование)").font = F_NOTE
+    ws_cp.cell(2, 12, 1.0).font = F_INPUT
+    ws_cp.cell(2, 12).number_format = FMT_RATIO
     dn = DefinedName("calc_reset", attr_text="'Control_Panel'!$K$1")
     wb.defined_names.add(dn)
 
