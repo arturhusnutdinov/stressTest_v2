@@ -1960,8 +1960,10 @@ def build_debt(wb, cfg):
         # ── Covenant check ──
         cp_new_debt = f"'Control_Panel'!$C${REG.get('CP.new_debt_available', 70)}"
         cp_cov_nd = f"'Control_Panel'!$C${REG.get('CP.cov_nd_ebitda', 71)}"
-        prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/'{NAME['PL']}'!{prev}${REG['PL.ebitda']},0)"
-        cov_breach = f"({prev_nd_ebitda}>{cp_cov_nd})"
+        # Covenant breach: EBITDA ≤ 0 is ALWAYS breach (negative ratio ≠ "OK")
+        prev_ebitda = f"'{NAME['PL']}'!{prev}${REG['PL.ebitda']}"
+        prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/{prev_ebitda},99)"
+        cov_breach = f"OR({prev_ebitda}<=0,{prev_nd_ebitda}>{cp_cov_nd})"
 
         cbrc = f"{cl}{REG['DT.cash_before_rc']}"
 
@@ -2124,7 +2126,7 @@ def build_debt(wb, cfg):
         # Next year mandatory: from _Debt_Schedule next year block (fill_data sets)
         # Default: use mandatory from this year as proxy
         cp_cov_reclass = f"'Control_Panel'!$C${REG.get('CP.cov_reclass', 75)}"
-        cov_breached = f"OR({prev_nd_ebitda}>{cp_cov_nd},{prev_icr}<{cp_cov_icr})"
+        cov_breached = f"OR({prev_ebitda}<=0,{prev_nd_ebitda}>{cp_cov_nd},{prev_icr}<{cp_cov_icr})"
         reclass = f"AND({cp_cov_reclass}=1,{cov_breached})"
         # Normal ST = mandatory(this year, proxy for next) + RC + new_term_short
         st_normal = (f"{cl}{REG['DT.mandatory']}"
@@ -2759,8 +2761,10 @@ def build_score(wb, cfg):
         # Audit v7: linear scale 0-16x turnovers, monotonically decreasing
         # 0x→80, 4x→61, 8x→42, 12x→24, 16x→5
         # score = MAX(5, 80 - ND/EBITDA × 4.7)
+        # IF EBITDA ≤ 0: floor score 5 (negative EBITDA = worst leverage, not best)
         formula_cell(ws, r_lev, c,
-                     f"=MAX(5,MIN(80,80-MAX(0,{nd_ebitda})*4.7))", FMT_RATIO1)
+                     f"=IF('{NAME['PL']}'!{cl}${REG['PL.ebitda']}<=0,5,"
+                     f"MAX(5,MIN(80,80-{nd_ebitda}*4.7)))", FMT_RATIO1)
 
     # Coverage: ICR → score
     r_cov = REG["SC.coverage"]
