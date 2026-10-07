@@ -2058,14 +2058,21 @@ def build_debt(wb, cfg):
         util_after = f"IFERROR(({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})/{cl}{REG['DT.rc_limit']},0)"
         term_out = f"IF({util_after}>{cp_rc_trigger},({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})-{cp_rc_trigger}*{cl}{REG['DT.rc_limit']},0)"
 
-        # ── NEW TERM: ALWAYS covers residual + term-out ──
-        # Gate determines RATE, not ACCESS: model always finances the company
-        # When covenant breach → debt attracted at penalty_rate (not blocked)
+        # ── NEW TERM: covers residual + term-out ──
+        # Gate determines RATE, not ACCESS: model finances the company
+        # When covenant breach → debt at penalty_rate, capped by penalty_limit
+        # If penalty_limit > 0 AND gate closed: new_term ≤ penalty_limit, rest → real gap
         cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
         prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},99)"
         gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
+        cp_pen_limit = f"'Control_Panel'!$C${REG.get('CP.penalty_limit', 73)}"
+        full_need = f"({residual}+{term_out})"
+        # Gate open: full amount at normal rate
+        # Gate closed, limit=0: full amount at penalty rate (unlimited)
+        # Gate closed, limit>0: MIN(need, limit) at penalty, rest = unfunded gap
+        gated_amount = f"IF({cp_pen_limit}>0,MIN({full_need},{cp_pen_limit}),{full_need})"
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR({residual}+{term_out},0)",
+                     f"=IFERROR(IF({gate},{full_need},{gated_amount}),0)",
                      FMT_MLN)
 
         # ── Voluntary term: after RC repay, with covenant stops ──
@@ -2136,10 +2143,8 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # Penalty-financed portion = new_term attracted when gate is closed
-        # Gate open → normal rate, penalty = 0
-        # Gate closed → debt attracted at penalty_rate, penalty = new_term amount
-        residual_after_rc = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
+        # Penalty-financed portion = new_term attracted at penalty_rate
+        # Gate open → 0; Gate closed → new_term (= capped by penalty_limit if set)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
                      f"=IFERROR(IF({gate},0,{cl}{REG['DT.new_term']}),0)",
                      FMT_MLN)
@@ -2204,9 +2209,15 @@ def build_debt(wb, cfg):
         # Normal ST = mandatory(NEXT year per IAS 1) + RC close
         # IAS 1: current liabilities = due within 12 months from balance date
         # On 31.12.2026, ST = mandatory_2027 + RC
-        # Last forecast year: fall back to current year mandatory (no next col)
-        st_mand = f"{next_cl}{REG['DT.mandatory']}"
-        st_normal = f"{st_mand}+{cl}{REG['DT.rc_close']}"
+        # Last forecast year: avg ST share from prior 2 years × close (no 2029 col)
+        if is_last_fc:
+            prev2 = get_column_letter(c_idx - 2)
+            avg_st_share = (f"IFERROR(({prev}{REG['DT.st']}/{prev}{REG['DT.close']}"
+                           f"+{prev2}{REG['DT.st']}/{prev2}{REG['DT.close']})/2,0.5)")
+            st_normal = f"{cl}{REG['DT.close']}*{avg_st_share}"
+        else:
+            st_mand = f"{next_cl}{REG['DT.mandatory']}"
+            st_normal = f"{st_mand}+{cl}{REG['DT.rc_close']}"
         # LT independent = total - ST (not residual — allows real check)
         lt_normal = f"MAX(0,{cl}{REG['DT.close']}-({st_normal}))"
         # With reclass: all debt becomes ST
@@ -2525,6 +2536,14 @@ def build_equity(wb, cfg):
                              f"MAX(0,{prev}{REG['EQ.ni']})*{payout})",
                              FMT_MLN)
 
+        # Buyback = MAX(0, NI) × buyback_pct (from CP), blocked by covenant
+        cp_buyback = REG.get("CP.buyback_pct")
+        if cp_buyback:
+            formula_cell(ws, REG["EQ.buyback"], c_idx,
+                         f"=IF({cov_check},0,"
+                         f"MAX(0,{cl}{REG['EQ.ni']})*'Control_Panel'!$C${cp_buyback})",
+                         FMT_MLN)
+
         # RE close = open + NI - div - buyback + other
         formula_cell(ws, REG["EQ.re_close"], c_idx,
                      f"={cl}{REG['EQ.re_open']}+{cl}{REG['EQ.ni']}"
@@ -2663,10 +2682,19 @@ def build_valuation(wb, cfg):
 
     # ── B. TERMINAL VALUE ──
     section_header(ws, REG["VL.tg"] - 1, "B. TERMINAL VALUE PARAMETERS")
-    input_cell(ws, REG["VL.tg"], 3, 0.03, FMT_PCT)
+    # Terminal params: reference CP (single source of truth)
+    cp_tg = REG.get("CP.terminal_g")
+    cp_tm = REG.get("CP.terminal_mult")
     label_row(ws, REG["VL.tg"], "Terminal growth rate (g)", "%", "Долгосрочный рост ~ ном. ВВП")
-    input_cell(ws, REG["VL.tm"], 3, 6.0, FMT_MULT)
+    if cp_tg:
+        ref_cell(ws, REG["VL.tg"], 3, f"='Control_Panel'!$C${cp_tg}", FMT_PCT)
+    else:
+        input_cell(ws, REG["VL.tg"], 3, 0.03, FMT_PCT)
     label_row(ws, REG["VL.tm"], "Terminal EV/EBITDA multiple", "x", "Peer median")
+    if cp_tm:
+        ref_cell(ws, REG["VL.tm"], 3, f"='Control_Panel'!$C${cp_tm}", FMT_MULT)
+    else:
+        input_cell(ws, REG["VL.tm"], 3, 6.0, FMT_MULT)
 
     # ── C. DCF — FCFF CALCULATION ──
     r = REG["VL.ev"] - 8  # space for FCFF rows
@@ -3397,6 +3425,10 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.24, FMT_PCT)
     REG["CP.penalty_rate"] = r; r += 1
 
+    label_row(ws, r, "Лимит штрафного привлечения", "mln", "0 = без лимита; >0 = потолок штрафного долга/год")
+    input_cell(ws, r, 3, 0, FMT_MLN)  # 0 = unlimited (current behavior)
+    REG["CP.penalty_limit"] = r; r += 1
+
     label_row(ws, r, "Covenant reclass LT→ST (1=Да, 0=Нет)", "", "IAS 1.74: opt-in (default=0, waiver assumed)")
     input_cell(ws, r, 3, 0, FMT_INT)  # Default 0: assume waiver. Analyst enables for stress
     REG["CP.cov_reclass"] = r; r += 1
@@ -3448,8 +3480,9 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Dividend payout ratio")
     input_cell(ws, r, 3, payout, FMT_PCT)
     REG["CP.payout_ratio"] = r; r += 1
-    label_row(ws, r, "Buyback (% FCF)")
-    input_cell(ws, r, 3, 0.0, FMT_PCT); r += 2
+    label_row(ws, r, "Buyback (% FCF)", "%", "→ 24_Equity buyback = FCF × %")
+    input_cell(ws, r, 3, 0.0, FMT_PCT)
+    REG["CP.buyback_pct"] = r; r += 2
 
     # ── K. ОЦЕНКА (DCF) ──
     section_header(ws, r, "K. ОЦЕНКА (DCF)"); r += 1
