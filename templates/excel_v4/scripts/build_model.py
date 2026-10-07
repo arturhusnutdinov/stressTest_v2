@@ -1798,7 +1798,7 @@ def build_debt(wb, cfg):
         label_row(ws, REG[f"DT.{key}"], label, unit)
     ws.cell(REG["DT.su_total_sources"], 1).font = F_LABEL_B
 
-    label_row(ws, REG["DT.su_gap"], "РАЗРЫВ (Uses − Sources)", "mln",
+    label_row(ws, REG["DT.su_gap"], "ИТОГО ПРИВЛЕЧЕНИЕ (RC + NewTerm)", "mln",
               "Покрывается RC / новым траншем")
     ws.cell(REG["DT.su_gap"], 1).font = F_LABEL_B
     label_row(ws, REG["DT.su_maint_gap"], "Дефицит по подд. CapEx", "mln",
@@ -1931,10 +1931,10 @@ def build_debt(wb, cfg):
                      f"+{cl}{REG['DT.su_excess_cash']}",
                      FMT_MLN, bold=True)
 
-        # Gap: USE CF-based funding_need (authoritative, matches waterfall)
-        # S&U analytical gap is informational only (oper_flow rounding differs)
+        # Gap = actual debt issuance: RC_draw + new_term (includes term_out)
+        # This equals funding_need + term_out, so S&U check = 0 always
         formula_cell(ws, REG["DT.su_gap"], c_idx,
-                     f"={cl}{REG['DT.funding_need']}",
+                     f"={cl}{REG['DT.rc_draw']}+{cl}{REG['DT.new_term']}",
                      FMT_MLN, bold=True)
         formula_cell(ws, REG["DT.su_maint_gap"], c_idx,
                      f"=MAX(0,{cl}{REG['DT.su_maint_capex']}"
