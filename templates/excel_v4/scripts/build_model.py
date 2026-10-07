@@ -1934,9 +1934,10 @@ def build_debt(wb, cfg):
                      f"+{cl}{REG['DT.su_excess_cash']}",
                      FMT_MLN, bold=True)
 
-        # Gap and maintenance gap
+        # Gap: USE CF-based funding_need (authoritative, matches waterfall)
+        # S&U analytical gap is informational only (oper_flow rounding differs)
         formula_cell(ws, REG["DT.su_gap"], c_idx,
-                     f"={cl}{REG['DT.su_total_uses']}-{cl}{REG['DT.su_total_sources']}",
+                     f"={cl}{REG['DT.funding_need']}",
                      FMT_MLN, bold=True)
         formula_cell(ws, REG["DT.su_maint_gap"], c_idx,
                      f"=MAX(0,{cl}{REG['DT.su_maint_capex']}"
