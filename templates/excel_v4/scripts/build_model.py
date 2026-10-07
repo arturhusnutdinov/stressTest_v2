@@ -1798,7 +1798,7 @@ def build_debt(wb, cfg):
               "Флаг: опер. поток < подд. CapEx")
 
     label_row(ws, REG["DT.funding_need"], "ПОТРЕБНОСТЬ В ФИНАНСИРОВАНИИ", "mln",
-              "= MAX(0, min_cash − ДС до RC)")
+              "MAX(0, min_cash - cash_before_RC) / (1-r/2(1-t))")
     ws.cell(REG["DT.funding_need"], 1).font = F_LABEL_B
 
     # ── B. TERM DEBT ──
