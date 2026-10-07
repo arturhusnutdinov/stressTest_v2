@@ -1043,9 +1043,9 @@ def build_bs(wb, cfg):
                      f"={cl}{r_ta}-{cl}{r_tl}-{cl}{r_te}", FMT_RATIO)
 
         # ── Cross-sheet links: BS items ← corkscrews ──
-        # Cash ← CF cash_close
-        ref_cell(ws, REG["BS.cash"], c_idx,
-                 f"='{NAME['CF']}'!{cl}${REG['CF.cash_close']}", FMT_MLN)
+        # Cash ← MAX(0, CF cash_close) — never negative
+        formula_cell(ws, REG["BS.cash"], c_idx,
+                     f"=MAX(0,'{NAME['CF']}'!{cl}${REG['CF.cash_close']})", FMT_MLN)
         # AR ← WC
         ref_cell(ws, REG["BS.ar"], c_idx,
                  f"='{NAME['WC']}'!{cl}${REG['WC.ar']}", FMT_MLN)
@@ -1797,6 +1797,10 @@ def build_debt(wb, cfg):
     label_row(ws, REG["DT.su_maint_gap"], "Дефицит по подд. CapEx", "mln",
               "Флаг: опер. поток < подд. CapEx")
 
+    label_row(ws, REG["DT.funding_need"], "ПОТРЕБНОСТЬ В ФИНАНСИРОВАНИИ", "mln",
+              "= MAX(0, min_cash − ДС до RC)")
+    ws.cell(REG["DT.funding_need"], 1).font = F_LABEL_B
+
     # ── B. TERM DEBT ──
     section_header(ws, REG["DT.term_open"] - 1, "B. СРОЧНЫЙ ДОЛГ (из _Debt_Schedule)")
     for key, label, unit in [
@@ -1817,13 +1821,15 @@ def build_debt(wb, cfg):
         ("rc_limit", "Лимит RC", "mln"),
         ("rc_open", "RC, начало", "mln"),
         ("rc_draw", "RC draw", "mln"),
-        ("rc_repay", "RC repay (cash sweep)", "mln"),
+        ("rc_repay", "RC repay (cash sweep + term-out)", "mln"),
         ("rc_close", "RC, конец", "mln"),
         ("rc_util", "Utilization (RC / лимит)", "%"),
-        ("funding_gap", "РАЗРЫВ ФИНАНСИРОВАНИЯ", "mln"),
+        ("funding_gap", "Разрыв за год", "mln"),
+        ("funding_gap_accum", "Непокрытая потребность (накопл.)", "mln"),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, unit)
     ws.cell(REG["DT.funding_gap"], 1).font = F_LABEL_B
+    ws.cell(REG["DT.funding_gap_accum"], 1).font = F_LABEL_B
 
     # ── D. TOTAL DEBT ──
     section_header(ws, REG["DT.open"] - 1, "D. ИТОГО ДОЛГ")
@@ -1950,15 +1956,32 @@ def build_debt(wb, cfg):
         prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/'{NAME['PL']}'!{prev}${REG['PL.ebitda']},0)"
         cov_breach = f"({prev_nd_ebitda}>{cp_cov_nd})"
 
-        # cash_before_rc ref for all downstream formulas
         cbrc = f"{cl}{REG['DT.cash_before_rc']}"
 
-        # ── New term: covers gap after RC exhaustion ──
-        gap_after_rc = (f"MAX(0,{cp_min_cash}-{cbrc}"
-                        f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']}))")
+        # ── FUNDING NEED (единая потребность) ──
+        need = f"{cl}{REG['DT.funding_need']}"
+        formula_cell(ws, REG["DT.funding_need"], c_idx,
+                     f"=MAX(0,{cp_min_cash}-{cbrc})", FMT_MLN)
+
+        # ── RC DRAW: covers need up to free limit ──
+        free_limit = f"MAX(0,{cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
+        formula_cell(ws, REG["DT.rc_draw"], c_idx,
+                     f"=IFERROR(MIN({free_limit},{need}),0)", FMT_MLN)
+
+        # ── Residual after RC ──
+        residual = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
+
+        # ── TERM-OUT: if utilization > trigger, convert RC to term ──
+        cp_rc_trigger = f"'Control_Panel'!$C${REG.get('CP.rc_trigger', 65)}"
+        util_after = f"IFERROR(({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})/{cl}{REG['DT.rc_limit']},0)"
+        term_out = f"IF({util_after}>{cp_rc_trigger},({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})-{cp_rc_trigger}*{cl}{REG['DT.rc_limit']},0)"
+
+        # ── NEW TERM: residual + term-out, gated by covenant + availability ──
+        cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
+        prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},99)"
+        gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR(IF(AND({cp_new_debt}=1,NOT({cov_breach})),"
-                     f"{gap_after_rc},0),0)",
+                     f"=IFERROR(IF({gate},{residual}+{term_out},0),0)",
                      FMT_MLN)
 
         # ── Voluntary term: after RC repay, with covenant stops ──
@@ -2008,15 +2031,13 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.rc_open"], c_idx,
                      f"={prev}{REG['DT.rc_close']}", FMT_MLN)
 
-        # RC draw/repay from cash_before_RC (NO circular — reads from CF totals)
-        formula_cell(ws, REG["DT.rc_draw"], c_idx,
-                     f"=IFERROR(MAX(0,MIN({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']},"
-                     f"MAX(0,{cp_min_cash}-{cbrc}))),0)",
-                     FMT_MLN)
-
+        # RC repay = cash sweep + term-out
+        # Cash sweep: if cash_before_RC > min_cash, repay RC
+        sweep = f"MIN({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']},MAX(0,{cbrc}-{cp_min_cash}))"
+        # Term-out portion: if new_term includes term-out, reduce RC
+        term_out_actual = f"IF({cl}{REG['DT.new_term']}>0,MIN({term_out},{cl}{REG['DT.new_term']}),0)"
         formula_cell(ws, REG["DT.rc_repay"], c_idx,
-                     f"=IFERROR(MIN({cl}{REG['DT.rc_open']},"
-                     f"MAX(0,{cbrc}-{cp_min_cash})),0)",
+                     f"=IFERROR({sweep}+{term_out_actual},0)",
                      FMT_MLN)
 
         # RC close = open + draw - repay
@@ -2031,11 +2052,13 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # Funding gap = MAX(0, min_cash - cash_before_RC - available_RC - new_term)
+        # Funding gap = need - RC_draw - new_term (residual unpaid)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(MAX(0,{cp_min_cash}-{cbrc}"
-                     f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
-                     f"-{cl}{REG['DT.new_term']}),0)",
+                     f"=IFERROR(MAX(0,{need}-{cl}{REG['DT.rc_draw']}-{cl}{REG['DT.new_term']}),0)",
+                     FMT_MLN)
+        # Accumulated gap = prev + current year gap
+        formula_cell(ws, REG["DT.funding_gap_accum"], c_idx,
+                     f"={prev}{REG['DT.funding_gap_accum']}+{cl}{REG['DT.funding_gap']}",
                      FMT_MLN)
 
         # ── D. TOTAL DEBT ──
@@ -2107,6 +2130,8 @@ def build_debt(wb, cfg):
     input_cell(ws, REG["DT.close"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.funding_gap_accum"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.funding_need"], 3, 0, FMT_MLN)
     input_cell(ws, REG["DT.fx_reval"], 3, 0, FMT_MLN)
 
     # ── G. HISTORICAL CALIBRATION (informational) ──
