@@ -79,6 +79,8 @@ def discover_cp_rows(wb):
         "доля energy": "CP.cogs_energy",
         "доля labour": "CP.cogs_labour",
         "доля other": "CP.cogs_other",
+        "useful life": "CP.useful_life",
+        "disposal %": "CP.disposal_pct",
         "dso (дни": "CP.wc_dso",
         "dih (дни": "CP.wc_dio",
         "dpo (дни": "CP.wc_dpo",
@@ -1616,7 +1618,20 @@ def fill_debt_hist(wb, data: dict, company: str):
                     else:
                         ws_p.cell(REG["PP.dep_charge"], col_pp, abs_da).font = F_INPUT
                     ws_p.cell(REG["PP.dep_charge"], col_pp).number_format = FMT_MLN
-            print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f} (→ 02_Hist refs)")
+            # Calibrate useful life = Gross / DA (write to CP)
+            da_last = abs(is_data.get("total_da", is_data.get("dep_ppe", {})).get(last_yr, 0))
+            if da_last > 0 and (ppe_gross or ppe_net * 2) > 0:
+                cal_ul = round((ppe_gross or ppe_net * 2) / da_last, 0)
+                cp_ul_row = REG.get("CP.useful_life")
+                if cp_ul_row:
+                    ws_cp = wb["Control_Panel"]
+                    ws_cp.cell(cp_ul_row, 3, int(cal_ul)).font = F_INPUT
+                    ws_cp.cell(cp_ul_row, 3).number_format = FMT_INT
+                    print(f"    PPE: Gross={ppe_gross:.0f} Net={ppe_net:.0f} DA={da_last:.0f} → UL={cal_ul:.0f}yr (calibrated)")
+                else:
+                    print(f"    PPE: Gross={ppe_gross:.0f} Net={ppe_net:.0f} (CP.useful_life not found)")
+            else:
+                print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f}")
 
     # Fill Equity opening
     if "24_Equity" in wb.sheetnames:

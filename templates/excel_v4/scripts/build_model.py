@@ -1088,8 +1088,20 @@ def build_bs(wb, cfg):
                          f"={prev}{REG['BS.aoci']}+'{NAME['PL']}'!{cl}${REG['PL.ni']}*{nci_pct}",
                          FMT_MLN)
 
+        # Lease: link to LS sheet (not carry-forward)
+        # lease_cl ≈ next year's payment, lease_ncl = total - CL
+        formula_cell(ws, REG["BS.lease_cl"], c_idx,
+                     f"=MIN(ABS('{NAME['LS']}'!{cl}${REG['LS.liab_pay']}),"
+                     f"'{NAME['LS']}'!{cl}${REG['LS.liab_close']})", FMT_MLN)
+        formula_cell(ws, REG["BS.lease_ncl"], c_idx,
+                     f"=MAX(0,'{NAME['LS']}'!{cl}${REG['LS.liab_close']}"
+                     f"-{cl}{REG['BS.lease_cl']})", FMT_MLN)
+        # ROU → LS sheet
+        formula_cell(ws, REG["BS.rou"], c_idx,
+                     f"='{NAME['LS']}'!{cl}${REG['LS.rou_close']}", FMT_MLN)
+
         for key in ["other_ca", "goodwill", "intang", "other_nca",
-                     "other_cl", "lease_cl", "lease_ncl", "prov",
+                     "other_cl", "prov",
                      "other_ncl", "sc", "apic"] + (["aoci"] if nci_pct == 0 else []):
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
 
@@ -2253,9 +2265,11 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
-        # Other non-cash: change in tax payable (BS item not in WC)
+        # Other non-cash: ΔTaxPay + ROU dep + lease interest (non-cash items not in WC)
         formula_cell(ws, REG["CF.other_noncash"], c_idx,
-                     f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}",
+                     f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}"
+                     f"+ABS('{NAME['LS']}'!{cl}${REG['LS.rou_dep']})"
+                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}",
                      FMT_MLN)
         # Interest paid: 0 in CFF (interest flows through NI in CFO)
         # US GAAP style: interest is operating, not financing
@@ -2269,6 +2283,11 @@ def build_cf(wb, cfg):
                      f"{cl}{REG['CF.other_noncash']}"]
         formula_cell(ws, r_cfo, c_idx, "=" + "+".join(cfo_parts), FMT_MLN, bold=True)
 
+        # Disposal proceeds = gross disposal - accumulated dep portion (net book value)
+        formula_cell(ws, REG["CF.disp_proceeds"], c_idx,
+                     f"='{NAME['PP']}'!{cl}${REG['PP.disp_gross']}"
+                     f"-'{NAME['PP']}'!{cl}${REG['PP.dep_disp']}",
+                     FMT_MLN)
         # CFI = -capex + disp + other
         formula_cell(ws, r_cfi, c_idx,
                      f"=-ABS({cl}{REG['CF.capex']})+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
@@ -3045,7 +3064,7 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 16, FMT_INT)
     REG["CP.useful_life"] = r; r += 1
     label_row(ws, r, "Disposal % of CapEx", "%", "→ 15_PPE выбытия")
-    input_cell(ws, r, 3, 0.02, FMT_PCT)
+    input_cell(ws, r, 3, 0.0, FMT_PCT)  # 0 default — avoids BS imbalance unless proceeds connected
     REG["CP.disposal_pct"] = r; r += 2
 
     # ── G. ОБОРОТНЫЙ КАПИТАЛ ──
