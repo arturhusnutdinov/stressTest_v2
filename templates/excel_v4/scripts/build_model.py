@@ -778,9 +778,13 @@ def build_revenue(wb, cfg):
             f"{col_l}{REG.get('RV.' + seg['key'] + '_rev', 10)}"
             for seg in cfg["segments"])
         seg_total = f"{seg_total}+{col_l}{r_recon}"  # method 1
-        # Method 2: macro OLS = prev × (1 + growth from 03_Assump)
-        assump_growth = f"'{NAME['AS']}'!{col_l}${REG.get('AS.rev_growth', 7)}"
-        method2 = f"{prev_col}{r_total}*(1+{assump_growth})"
+        # Method 2: macro OLS = prev × (1 + β × Δln(macro_factor))
+        # β from CP.rev_elasticity, macro_factor from 01_Macro active row
+        cp_beta = f"'Control_Panel'!$C${REG.get('CP.rev_elasticity', 20)}"
+        act_base = REG.get("MA.act_base", 36)
+        macro_t = f"'{NAME['MA']}'!{col_l}${act_base}"
+        macro_prev = f"'{NAME['MA']}'!{prev_col}${act_base}"
+        method2 = f"{prev_col}{r_total}*(1+{cp_beta}*LN(MAX(1,{macro_t})/MAX(1,{macro_prev})))"
         # Method 3: EWA = carry-forward growth (simpler, from prev year)
         method3 = f"{prev_col}{r_total}*(1+IFERROR(({prev_col}{r_total}/{get_column_letter(c-2)}{r_total}-1),0))"
         formula_cell(ws, r_total, c,
@@ -1666,7 +1670,10 @@ def build_cogs(wb, cfg):
             comp_sum = "+".join(f"{cl}{REG.get(f'CG.{k}', 8)}" for k in comp_keys)
             method1 = f"-{rev_ref}*{cp_cogs_ratio}"  # ratio
             method2 = f"-({comp_sum})"  # component
-            method3 = f"{prev_cl}{r_total}*(1+0.03)"  # PPI uplift (simplified)
+            # PPI uplift: prev × (1 + ppi_beta × dampening × macro_ppi_growth)
+            cp_ppi = f"'Control_Panel'!$C${REG.get('CP.ppi_beta', 20)}"
+            cp_damp = f"'Control_Panel'!$C${REG.get('CP.mr_dampening', 20)}"
+            method3 = f"{prev_cl}{r_total}*(1+{cp_ppi}*{cp_damp}*0.05)"  # 5% PPI proxy
             formula_cell(ws, r_total, c,
                          f"=IF({cp_cogs_method}=1,{method1},"
                          f"IF({cp_cogs_method}=2,{method2},{method3}))",
@@ -1707,12 +1714,18 @@ def build_sga(wb, cfg):
             for c in range(3, 3 + n_hist):
                 cl = get_column_letter(c)
                 ref_cell(ws, r, c, f"='{NAME['PL']}'!{cl}${REG['PL.sga']}", FMT_MLN)
+            # Forecast: SGA = -Revenue × SGA_ratio (from CP)
+            cp_sga = f"'Control_Panel'!$C${REG.get('CP.sga_ratio', 30)}"
+            for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+                cl = get_column_letter(c)
+                rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
+                formula_cell(ws, r, c, f"=-{rev_ref}*{cp_sga}", FMT_MLN)
         else:
             for c in range(3, 3 + n_hist):
                 input_cell(ws, r, c, 0, FMT_MLN)
-        # Forecast: input (fill_data overrides with formula)
-        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
-            input_cell(ws, r, c, 0, FMT_MLN)
+            # Sub-components: input for fill_data override
+            for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+                input_cell(ws, r, c, 0, FMT_MLN)
 
     r_ratio = REG["SA.sga_ratio"]
     label_row(ws, r_ratio, "SGA / Revenue", "%")
@@ -3237,7 +3250,8 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 1, FMT_INT)
     REG["CP.rev_method"] = r; r += 1
     label_row(ws, r, "Эластичность Revenue к macro-фактору", "", "β × Δln(factor)")
-    input_cell(ws, r, 3, 1.0, FMT_RATIO); r += 1
+    input_cell(ws, r, 3, 1.0, FMT_RATIO)
+    REG["CP.rev_elasticity"] = r; r += 1
     label_row(ws, r, "R² (коэфф. детерминации)")
     ref_cell(ws, r, 3, f"='{NAME['MA']}'!$C${REG.get('MA.econ_r2', 53)}", FMT_PCT2); r += 2
 
@@ -3259,16 +3273,20 @@ def build_control_panel(wb, cfg):
     else:
         pass  # ratio mode uses CP.cogs_ratio directly
     label_row(ws, r, "PPI beta (COGS ~ PPI)")
-    input_cell(ws, r, 3, 0.85, FMT_RATIO); r += 1
+    input_cell(ws, r, 3, 0.85, FMT_RATIO)
+    REG["CP.ppi_beta"] = r; r += 1
     label_row(ws, r, "Mean reversion dampening")
-    input_cell(ws, r, 3, 0.30, FMT_RATIO); r += 2
+    input_cell(ws, r, 3, 0.30, FMT_RATIO)
+    REG["CP.mr_dampening"] = r; r += 2
 
     # ── E. SGA / ОПЕКС ──
     section_header(ws, r, "E. SGA / ОПЕРАЦИОННЫЕ РАСХОДЫ"); r += 1
-    label_row(ws, r, "SGA ratio (EWA)")
-    input_cell(ws, r, 3, 0.08, FMT_PCT); r += 1
-    label_row(ws, r, "EWA halflife (лет)")
-    input_cell(ws, r, 3, 5, FMT_INT); r += 2
+    label_row(ws, r, "SGA ratio (EWA)", "%", "→ 13_SGA forecast = Revenue × ratio")
+    input_cell(ws, r, 3, 0.08, FMT_PCT)
+    REG["CP.sga_ratio"] = r; r += 1
+    label_row(ws, r, "EWA halflife (лет)", "yr", "Информационно (preprocessing)")
+    input_cell(ws, r, 3, 5, FMT_INT)
+    REG["CP.ewa_halflife"] = r; r += 2
 
     # ── F. CAPEX / PP&E ──
     cp_da_rate_row = r + 1  # save for ref from PPE sheet
