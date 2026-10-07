@@ -723,9 +723,14 @@ def fill_revenue(wb, data: dict, company: str):
                                   f"({len(dx)} obs, factor={factor_name})")
 
         # Forecast: DON'T override — build_model creates formulas in 11_Segments
-        # (volume = carry-forward, price = 01_Macro active scenario)
+        # Write OLS β to CP.rev_elasticity (for Revenue method 2)
         if factor_name and beta_price != 1.0:
-            print(f"    {seg_label} OLS β={beta_price:.3f} (reference only, formulas in 11_Segments)")
+            cp_elast_row = REG.get("CP.rev_elasticity")
+            if cp_elast_row:
+                ws_cp = wb["Control_Panel"]
+                ws_cp.cell(cp_elast_row, 3, round(beta_price, 3)).font = F_INPUT
+                ws_cp.cell(cp_elast_row, 3).number_format = FMT_RATIO
+            print(f"    {seg_label} OLS β={beta_price:.3f} → CP.rev_elasticity")
 
 
 def fill_debt_schedule(wb, data: dict, company: str):
