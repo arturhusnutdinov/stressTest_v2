@@ -82,6 +82,8 @@ def discover_cp_rows(wb):
         "useful life": "CP.useful_life",
         "тенор refi": "CP.term_tenor",
         "тенор capex": "CP.term_tenor_capex",
+        "штрафная ставка": "CP.penalty_rate",
+        "covenant reclass": "CP.cov_reclass",
         "disposal %": "CP.disposal_pct",
         "dso (дни": "CP.wc_dso",
         "dih (дни": "CP.wc_dio",
@@ -1512,16 +1514,15 @@ def fill_debt_hist(wb, data: dict, company: str):
     # Fill lease opening from BS (Д10: load actual lease data)
     if "18_Lease" in wb.sheetnames:
         ws_l = wb["18_Lease"]
-        # Try last year, fall back to prior year if not separately disclosed
+        # Only load if last year has separate disclosure (avoids double-count with PPE/Loans)
         rou = abs(bs.get("rou_asset", {}).get(last_yr, 0))
         lease_cl = abs(bs.get("lease_liab_current", {}).get(last_yr, 0))
         lease_ncl = abs(bs.get("lease_liab_noncurrent", {}).get(last_yr, 0))
         if rou == 0 and lease_cl == 0 and lease_ncl == 0:
-            # 2025 not disclosed separately — use 2024
-            prev_yr = last_yr - 1
-            rou = abs(bs.get("rou_asset", {}).get(prev_yr, 0))
-            lease_cl = abs(bs.get("lease_liab_current", {}).get(prev_yr, 0))
-            lease_ncl = abs(bs.get("lease_liab_noncurrent", {}).get(prev_yr, 0))
+            print(f"    Lease: not separately disclosed in {last_yr} BS → skipped (in PPE/Loans)")
+            rou = 0
+            lease_cl = 0
+            lease_ncl = 0
         lease_total = lease_cl + lease_ncl
         if rou > 0 or lease_total > 0:
             ws_l.cell(REG["LS.rou_open"], hc, round(rou, 1)).font = F_INPUT
@@ -1541,28 +1542,35 @@ def fill_debt_hist(wb, data: dict, company: str):
                 fc_c = hc + 1 + fc_i
                 ws_l.cell(REG["LS.rou_dep"], fc_c, rou_dep).font = F_INPUT
                 ws_l.cell(REG["LS.liab_pay"], fc_c, liab_pay).font = F_INPUT
-            # Also fill BS.lease_cl and BS.lease_ncl in history
+            # BS history: ROU/lease NOT set separately (already in PPE/Loans per IFRS)
+            # Forecast: BS.rou ← LS.rou_close, BS.lease ← LS.liab
+            # History totals (TA/TL) from МСФО already include them
+            # Setting them separately would double-count
             ws_bs = wb["20_BS"]
-            ws_bs.cell(REG["BS.lease_cl"], hc, round(lease_cl, 1)).font = F_INPUT
-            ws_bs.cell(REG["BS.lease_ncl"], hc, round(lease_ncl, 1)).font = F_INPUT
             print(f"    Lease (Д10): ROU={rou:.0f} Liab={lease_total:.0f} (CL={lease_cl:.0f} NCL={lease_ncl:.0f})")
             print(f"    Lease forecast: dep={rou_dep:.0f}/yr, pay={liab_pay:.0f}/yr")
 
-    # Fill lease for ALL history years (not just last)
+    # Fill lease for ALL history years — ONLY if last year has separate disclosure
+    # Rusal 2025: ROU/lease in PPE/Loans (not separate) → don't load → avoids double-count
     if "18_Lease" in wb.sheetnames:
         ws_l = wb["18_Lease"]
-        for yr_idx, yr in enumerate(hist_years[-N_HIST_DISPLAY:]):
-            col_l = COL_START + yr_idx
-            rou_yr = abs(bs.get("rou_asset", {}).get(yr, 0))
-            lcl_yr = abs(bs.get("lease_liab_current", {}).get(yr, 0))
-            lncl_yr = abs(bs.get("lease_liab_noncurrent", {}).get(yr, 0))
-            ltot_yr = lcl_yr + lncl_yr
-            if rou_yr > 0:
-                ws_l.cell(REG["LS.rou_open"], col_l, round(rou_yr, 1)).font = F_INPUT
-                ws_l.cell(REG["LS.rou_close"], col_l, round(rou_yr, 1)).font = F_INPUT
-            if ltot_yr > 0:
-                ws_l.cell(REG["LS.liab_open"], col_l, round(ltot_yr, 1)).font = F_INPUT
-                ws_l.cell(REG["LS.liab_close"], col_l, round(ltot_yr, 1)).font = F_INPUT
+        rou_last = abs(bs.get("rou_asset", {}).get(last_yr, 0))
+        lcl_last = abs(bs.get("lease_liab_current", {}).get(last_yr, 0))
+        lncl_last = abs(bs.get("lease_liab_noncurrent", {}).get(last_yr, 0))
+        # Only fill if last year has separate disclosure
+        if rou_last > 0 or lcl_last > 0 or lncl_last > 0:
+            for yr_idx, yr in enumerate(hist_years[-N_HIST_DISPLAY:]):
+                col_l = COL_START + yr_idx
+                rou_yr = abs(bs.get("rou_asset", {}).get(yr, 0))
+                lcl_yr = abs(bs.get("lease_liab_current", {}).get(yr, 0))
+                lncl_yr = abs(bs.get("lease_liab_noncurrent", {}).get(yr, 0))
+                ltot_yr = lcl_yr + lncl_yr
+                if rou_yr > 0:
+                    ws_l.cell(REG["LS.rou_open"], col_l, round(rou_yr, 1)).font = F_INPUT
+                    ws_l.cell(REG["LS.rou_close"], col_l, round(rou_yr, 1)).font = F_INPUT
+                if ltot_yr > 0:
+                    ws_l.cell(REG["LS.liab_open"], col_l, round(ltot_yr, 1)).font = F_INPUT
+                    ws_l.cell(REG["LS.liab_close"], col_l, round(ltot_yr, 1)).font = F_INPUT
 
     # Fill 14_OtherIS — interest income, associates, impairment (Д10)
     if "14_OtherIS" in wb.sheetnames:

@@ -1851,8 +1851,9 @@ def build_debt(wb, cfg):
 
     # ── F. ST/LT ──
     section_header(ws, REG["DT.st"] - 1, "F. ST / LT РАЗБИВКА")
-    label_row(ws, REG["DT.st"], "Краткосрочный долг (ST = schedule_ST + RC)", "mln")
-    label_row(ws, REG["DT.lt"], "Долгосрочный долг (LT = schedule_LT)", "mln")
+    label_row(ws, REG["DT.st"], "Краткосрочный долг (ST)", "mln",
+              "schedule_ST + RC + covenant reclass")
+    label_row(ws, REG["DT.lt"], "Долгосрочный долг (LT)", "mln")
     label_row(ws, REG["DT.nd"], "Чистый долг (ND)", "mln")
     label_row(ws, REG["DT.nd_ebitda"], "ND / EBITDA", "x")
 
@@ -2116,14 +2117,18 @@ def build_debt(wb, cfg):
         input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
         # Note: new term rate computed in _Debt_Schedule synthetic row
 
-        # ── F. ST/LT ──
-        # ST = schedule_ST + RC (fill_data overrides schedule_ST from _Debt_Schedule)
-        # Default: mandatory next year + RC
+        # ── F. ST/LT with covenant reclassification (IAS 1.74) ──
+        # If covenant breached AND reclass enabled: ALL debt becomes ST
+        cp_cov_reclass = f"'Control_Panel'!$C${REG.get('CP.cov_reclass', 75)}"
+        cov_breached = f"OR({prev_nd_ebitda}>{cp_cov_nd},{prev_icr}<{cp_cov_icr})"
+        reclass = f"AND({cp_cov_reclass}=1,{cov_breached})"
+        # ST = IF(reclass, total_debt, schedule_ST + RC)
         formula_cell(ws, REG["DT.st"], c_idx,
-                     f"={cl}{REG['DT.rc_close']}", FMT_MLN)
-        # LT = term_close (fill_data overrides with schedule_LT)
+                     f"=IF({reclass},{cl}{REG['DT.close']},"
+                     f"{cl}{REG['DT.rc_close']})", FMT_MLN)
+        # LT = IF(reclass, 0, term_close)
         formula_cell(ws, REG["DT.lt"], c_idx,
-                     f"={cl}{REG['DT.term_close']}", FMT_MLN)
+                     f"=IF({reclass},0,{cl}{REG['DT.term_close']})", FMT_MLN)
         # Net Debt
         formula_cell(ws, REG["DT.nd"], c_idx,
                      f"={cl}{REG['DT.close']}-'{NAME['BS']}'!{cl}${REG['BS.cash']}",
@@ -3206,8 +3211,12 @@ def build_control_panel(wb, cfg):
     REG["CP.prepay_premium"] = r; r += 1
 
     label_row(ws, r, "Штрафная ставка (last resort)", "%", "Для финансирования при нарушении ковенантов")
-    input_cell(ws, r, 3, 0.24, FMT_PCT)  # KeyRate + 10pp ≈ 24%
+    input_cell(ws, r, 3, 0.24, FMT_PCT)
     REG["CP.penalty_rate"] = r; r += 1
+
+    label_row(ws, r, "Covenant reclass LT→ST (1=Да, 0=Нет)", "", "IAS 1.74: breach → all LT becomes ST")
+    input_cell(ws, r, 3, 1, FMT_INT)
+    REG["CP.cov_reclass"] = r; r += 1
 
     label_row(ws, r, "FX USDCNY change YoY", "%", "Δ курса: >0 = USD усиливается")
     input_cell(ws, r, 3, 0.0, FMT_PCT)
