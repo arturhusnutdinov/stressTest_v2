@@ -132,7 +132,9 @@ Control_Panel (130+ INPUT параметров)
 17_Debt (6 секций):
     A. Sources & Uses: EBITDA-tax vs CapEx/mandatory/div/interest
     B. Term Debt: schedule-driven corkscrew (open-mandatory+refi+new-vol=close)
-    C. RC (Revolving Credit): single plug, limited, funding gap flag
+    C. RC (Revolving Credit): single plug, limited
+       New term GATED by covenant: breach → new_term=0, gap = unfunded need, cash drops
+       Penalty interest on accumulated gap at CP.penalty_rate (24% default)
     D. Total Debt = term + RC + FX revaluation
     E. Interest = term (schedule) + RC (avg×rate) + commitment fee
     F. ST/LT: ST = MIN(close, mandatory + RC), LT = MAX(0, close - (mandatory + RC))
@@ -261,7 +263,8 @@ NWC = AR + INV - AP
 ```
 USES: Maint_CapEx + Growth_CapEx + ΔNWC + Mandatory + Interest + Dividends
 SOURCES: EBITDA - Tax + Refi + Excess_Cash
-GAP = Uses - Sources → covered by RC, new term, or funding gap flag
+GAP = funding_need (CF-based, authoritative) → covered by RC, then new_term (if gate open)
+     Gate closed → new_term=0, gap = unfunded need, cash can go negative
 ```
 
 **B. Term Debt corkscrew:**
