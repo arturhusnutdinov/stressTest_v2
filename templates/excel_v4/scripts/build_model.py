@@ -276,7 +276,7 @@ def build_macro(wb, cfg):
 
     for i, factor in enumerate(factors):
         r_act = act_base + 2 + i
-        label_row(ws, r_act, factor, "", "=CHOOSE(сценарий)")
+        label_row(ws, r_act, factor, "", "IF(CP!C5) по сценарию")
         s1, s2, s3 = scenario_starts[i]
         for c in range(fc_start, fc_start + n_fc):
             cl = get_column_letter(c)
@@ -1413,11 +1413,11 @@ def build_checks(wb, cfg):
 
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
-        # RC limit: should be ≤ 0 (close - limit, negative = OK)
+        # RC limit: 0 if within limit, 1 if breach
         formula_cell(ws, REG["CK.rc_limit"], c_idx,
-                     f"='{NAME['DT']}'!{cl}${REG['DT.rc_close']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_limit']}",
-                     FMT_RATIO)
+                     f"=IF('{NAME['DT']}'!{cl}${REG['DT.rc_close']}"
+                     f"<='{NAME['DT']}'!{cl}${REG['DT.rc_limit']},0,1)",
+                     FMT_INT)
         # Funding gap: should be 0
         ref_cell(ws, REG["CK.funding_gap"], c_idx,
                  f"='{NAME['DT']}'!{cl}${REG['DT.funding_gap']}", FMT_RATIO)
@@ -1876,21 +1876,17 @@ def build_debt(wb, cfg):
         # Refi — input, filled by fill_data (= mandatory × refi_pct)
         input_cell(ws, REG["DT.refi"], c_idx, 0, FMT_MLN)
 
-        # ── est_cash: non-circular cash estimate (foundation for RC and new_term) ──
-        cp_tax_rate_dt = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
-        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_term_est}))*{cp_tax_rate_dt}"
-        # est_cash WITHOUT new_term (for gap_after_rc calculation)
-        est_cash_base = (
-            f"{cash_prev}+{ebitda_ref}"
-            f"-({interest_term_est})"
-            f"-ABS({capex_ref})"
-            f"-{wc_ref}"
-            f"-({tax_est})"
-            f"-{div_ref}"
-            f"-ABS({cl}{REG['DT.mandatory']})"
-            f"+{cl}{REG['DT.refi']}")
-        # est_cash WITH new_term (for voluntary and RC calc)
-        est_cash_before_rc = f"({est_cash_base})+{cl}{REG['DT.new_term']}"
+        # ── cash_before_RC: from CF totals, NOT duplicated P&L arithmetic ──
+        # CFF_no_RC is computed in 23_CF (refi + new_term - mand - vol - lease - div)
+        # cash_before_RC = BS.cash_prev + CF.CFO + CF.CFI + CF.CFF_no_RC
+        cff_no_rc_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cff_no_rc']}"
+        cfo_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}"
+        cfi_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfi']}"
+        cash_before_rc = f"({cash_prev}+{cfo_ref}+{cfi_ref}+{cff_no_rc_ref})"
+        # Write to dedicated row for transparency
+        label_row(ws, REG["DT.cash_before_rc"], "ДС до RC (из CF)", "mln") if c_idx == 3 + n_hist else None
+        formula_cell(ws, REG["DT.cash_before_rc"], c_idx,
+                     f"=IFERROR({cash_before_rc},0)", FMT_MLN)
 
         # ── Covenant check ──
         cp_new_debt = f"'Control_Panel'!$C${REG.get('CP.new_debt_available', 70)}"
@@ -1898,8 +1894,11 @@ def build_debt(wb, cfg):
         prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/'{NAME['PL']}'!{prev}${REG['PL.ebitda']},0)"
         cov_breach = f"({prev_nd_ebitda}>{cp_cov_nd})"
 
+        # cash_before_rc ref for all downstream formulas
+        cbrc = f"{cl}{REG['DT.cash_before_rc']}"
+
         # ── New term: covers gap after RC exhaustion ──
-        gap_after_rc = (f"MAX(0,{cp_min_cash}-({est_cash_base})"
+        gap_after_rc = (f"MAX(0,{cp_min_cash}-{cbrc}"
                         f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']}))")
         formula_cell(ws, REG["DT.new_term"], c_idx,
                      f"=IFERROR(IF(AND({cp_new_debt}=1,NOT({cov_breach})),"
@@ -1907,11 +1906,8 @@ def build_debt(wb, cfg):
                      FMT_MLN)
 
         # ── Voluntary term: after RC repay, with covenant stops ──
-        # est_nd from opening (non-circular)
         est_nd = f"({cl}{REG['DT.term_open']}-{cash_prev})"
-        vol_available = (f"MAX(0,({est_cash_before_rc})"
-                         f"-{cp_min_cash}-{cp_buffer}"
-                         f"-{cl}{REG['DT.rc_open']})")
+        vol_available = f"MAX(0,{cbrc}-{cp_min_cash}-{cp_buffer}-{cl}{REG['DT.rc_open']})"
         # Voluntary: waterfall RC → ST → LT, with covenant stops
         # Stop 1: not if covenant breach
         # Stop 2: not if NI < 0
@@ -1956,23 +1952,15 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.rc_open"], c_idx,
                      f"={prev}{REG['DT.rc_close']}", FMT_MLN)
 
-        # est_cash_before_RC: includes term activity, voluntary, no RC
-        # Reuse the same estimate (non-circular)
-        # Adjust for voluntary_term being deducted
-        est_cash_full = (f"({est_cash_before_rc})"
-                         f"-ABS({cl}{REG['DT.voluntary_term']})")
-
-        # RC draw = MIN(limit - open, MAX(0, min_cash - est_cash))
-        # IFERROR: on first iteration voluntary_term may error (circular via NI)
+        # RC draw/repay from cash_before_RC (NO circular — reads from CF totals)
         formula_cell(ws, REG["DT.rc_draw"], c_idx,
                      f"=IFERROR(MAX(0,MIN({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']},"
-                     f"MAX(0,{cp_min_cash}-({est_cash_full})))),0)",
+                     f"MAX(0,{cp_min_cash}-{cbrc}))),0)",
                      FMT_MLN)
 
-        # RC repay = MIN(open, MAX(0, est_cash - min_cash))
         formula_cell(ws, REG["DT.rc_repay"], c_idx,
                      f"=IFERROR(MIN({cl}{REG['DT.rc_open']},"
-                     f"MAX(0,({est_cash_full})-{cp_min_cash})),0)",
+                     f"MAX(0,{cbrc}-{cp_min_cash})),0)",
                      FMT_MLN)
 
         # RC close = open + draw - repay
@@ -1987,9 +1975,9 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # Funding gap = gap_after_rc - new_term (residual after all sources)
+        # Funding gap = MAX(0, min_cash - cash_before_RC - available_RC - new_term)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(MAX(0,{cp_min_cash}-({est_cash_full})"
+                     f"=IFERROR(MAX(0,{cp_min_cash}-{cbrc}"
                      f"-({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
                      f"-{cl}{REG['DT.new_term']}),0)",
                      FMT_MLN)
@@ -2014,15 +2002,13 @@ def build_debt(wb, cfg):
                      f"*{cl}{REG['DT.avg_rate']},"
                      f"{cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']})",
                      FMT_MLN)
-        # RC interest: avg(open,close) × rc_rate
+        # RC interest: opening balance × rc_rate (NOT avg — avoids circular)
         formula_cell(ws, REG["DT.interest_rc"], c_idx,
-                     f"=({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_close']})/2"
-                     f"*{cp_rc_rate}",
+                     f"={cl}{REG['DT.rc_open']}*{cp_rc_rate}",
                      FMT_MLN)
-        # Commitment fee: (limit - avg_balance) × fee_rate
+        # Commitment fee: (limit - opening) × fee_rate
         formula_cell(ws, REG["DT.commit_fee"], c_idx,
-                     f"=({cl}{REG['DT.rc_limit']}"
-                     f"-({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_close']})/2)"
+                     f"=({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
                      f"*{cp_commit_fee}",
                      FMT_MLN)
         # Total interest = term + RC + fee
@@ -2252,11 +2238,24 @@ def build_cf(wb, cfg):
                      f"=-ABS({cl}{REG['CF.capex']})+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
                      FMT_MLN, bold=True)
 
-        # CFF = draw - repay - lease - interest - div + other
-        cff_parts = [f"{cl}{REG['CF.debt_draw']}", f"-ABS({cl}{REG['CF.debt_repay']})",
-                     f"-ABS({cl}{REG['CF.lease_pay']})", f"-ABS({cl}{REG['CF.interest_paid']})",
-                     f"-ABS({cl}{REG['CF.div_paid']})", f"{cl}{REG['CF.other_cff']}"]
-        formula_cell(ws, r_cff, c_idx, "=" + "+".join(cff_parts), FMT_MLN, bold=True)
+        # CFF_без_RC: all financing flows EXCEPT RC draw/repay
+        # = refi + new_term - mandatory - voluntary_term - lease - div + other
+        cff_no_rc = (f"='{NAME['DT']}'!{cl}${REG['DT.refi']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
+                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.mandatory']})"
+                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary_term']})"
+                     f"-ABS({cl}{REG['CF.lease_pay']})"
+                     f"-ABS({cl}{REG['CF.div_paid']})"
+                     f"+{cl}{REG['CF.other_cff']}")
+        label_row(ws, REG["CF.cff_no_rc"], "CFF без RC", "mln") if c_idx == 3 + n_hist else None
+        formula_cell(ws, REG["CF.cff_no_rc"], c_idx, cff_no_rc, FMT_MLN)
+
+        # CFF = CFF_без_RC + RC_draw - RC_repay
+        formula_cell(ws, r_cff, c_idx,
+                     f"={cl}{REG['CF.cff_no_rc']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}",
+                     FMT_MLN, bold=True)
 
         # FX effect: reverse non-cash FX from NI
         # Debt reval: add back (was subtracted from PL.other_fin)
@@ -3505,8 +3504,8 @@ def build(company: str, output: str):
     wb.calculation.iterate = True
     wb.calculation.iterateCount = 1000
     wb.calculation.iterateDelta = 0.000001  # 1e-6 like bank model
-    # fullCalcOnLoad=False — preserve cached values (critical for bank model pattern)
-    wb.calculation.fullCalcOnLoad = False
+    # fullCalcOnLoad=True — ensure recalc on open (Б3 audit finding)
+    wb.calculation.fullCalcOnLoad = True
 
     # Named ranges for circular solver (bank model pattern)
     # calc_reset: 0 = iterate (normal), 1 = seed (decouple circular refs)
@@ -3611,9 +3610,11 @@ def build(company: str, output: str):
             summaryBelow=True)
         # Group S&U details (rows 7-21)
         ws_dt.row_dimensions.group(7, 21, outline_level=1, hidden=False)
-        # Group calibration (rows 59-64)
-        if REG.get("DT.cal_st_share"):
-            ws_dt.row_dimensions.group(59, 64, outline_level=1, hidden=True)
+        # Group calibration
+        cal_start = REG.get("DT.cal_st_share", 79)
+        cal_end = REG.get("DT.cal_st_flag", 84)
+        if cal_start:
+            ws_dt.row_dimensions.group(cal_start, cal_end, outline_level=1, hidden=True)
     except Exception:
         pass  # grouping is optional
 

@@ -1409,7 +1409,7 @@ def fill_debt_hist(wb, data: dict, company: str):
         instruments = sorted(debt_instruments, key=lambda x: -abs(float(x.get("opening_balance", 0) or 0)))
         top_n = min(15, len(instruments))
 
-        r_start = 60  # below new DT layout (ends at row 56)
+        r_start = 88  # below calibration block (rows 79-84)
         section_header(ws, r_start - 1, f"ИНСТРУМЕНТЫ ({len(instruments)} всего, top {top_n})")
 
         # Headers
