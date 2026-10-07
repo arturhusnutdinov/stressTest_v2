@@ -744,9 +744,16 @@ def build_revenue(wb, cfg):
     label_row(ws, r_recon, "Reconciliation / Other revenue", "mln",
               "Reported total − Σ segments (captures VAP, foil, eliminations)")
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
-        # Forecast: carry forward EWA of reconciliation
+        # Д2: Reconciliation grows proportionally to segment total (not frozen)
+        # recon_t = recon_prev × (Σseg_t / Σseg_prev)
+        cl = get_column_letter(c)
         prev_col = get_column_letter(c - 1)
-        formula_cell(ws, r_recon, c, f"={prev_col}{r_recon}", FMT_MLN)
+        seg_rev_rows = [REG.get(f"RV.{seg['key']}_rev", 10) for seg in cfg["segments"]]
+        seg_parts_t = "+".join(f"{cl}{sr}" for sr in seg_rev_rows)
+        seg_parts_p = "+".join(f"{prev_col}{sr}" for sr in seg_rev_rows)
+        formula_cell(ws, r_recon, c,
+                     f"=IFERROR({prev_col}{r_recon}*({seg_parts_t})"
+                     f"/MAX(1,{seg_parts_p}),{prev_col}{r_recon})", FMT_MLN)
 
     # Total revenue = Σ segments + reconciliation
     r_total = REG.get("RV.total_rev", 20)
@@ -845,8 +852,10 @@ def build_ppe(wb, cfg):
                      f")",
                      FMT_MLN)
 
-        # Disposals = 0 (simplified; disposal_ratio from CP if needed)
-        formula_cell(ws, REG["PP.disp_gross"], c_idx, "=0", FMT_MLN)
+        # Disposals = CapEx × disposal_pct (from CP, default 0)
+        cp_disposal = f"'Control_Panel'!$C${REG.get('CP.disposal_pct', 46)}"
+        formula_cell(ws, REG["PP.disp_gross"], c_idx,
+                     f"={cl}{REG['PP.capex']}*{cp_disposal}", FMT_MLN)
 
         # Gross close = open + capex - disposals
         formula_cell(ws, REG["PP.gross_close"], c_idx,
@@ -855,12 +864,16 @@ def build_ppe(wb, cfg):
 
         # Dep: open = prev close
         formula_cell(ws, REG["PP.dep_open"], c_idx, f"={prev}{REG['PP.dep_close']}", FMT_MLN)
-        # Dep charge = net_open × DA_rate
+        # Dep charge = gross_open / useful_life (Д5: from gross, not net × rate)
+        cp_useful_life = f"'Control_Panel'!$C${REG.get('CP.useful_life', 44)}"
         formula_cell(ws, REG["PP.dep_charge"], c_idx,
-                     f"={cl}{REG['PP.net_open']}*{cp_da_rate}",
+                     f"=IFERROR({cl}{REG['PP.gross_open']}/{cp_useful_life},"
+                     f"{cl}{REG['PP.net_open']}*{cp_da_rate})",
                      FMT_MLN)
-        # Dep on disposals = 0
-        formula_cell(ws, REG["PP.dep_disp"], c_idx, "=0", FMT_MLN)
+        # Dep on disposals = disposal_gross × (accum_dep / gross) proportion
+        formula_cell(ws, REG["PP.dep_disp"], c_idx,
+                     f"=IFERROR({cl}{REG['PP.disp_gross']}*{cl}{REG['PP.dep_open']}"
+                     f"/{cl}{REG['PP.gross_open']},0)", FMT_MLN)
         # Dep close = open + charge - disposals dep
         formula_cell(ws, REG["PP.dep_close"], c_idx,
                      f"={cl}{REG['PP.dep_open']}+{cl}{REG['PP.dep_charge']}-{cl}{REG['PP.dep_disp']}",
@@ -1537,23 +1550,37 @@ def build_cogs(wb, cfg):
             # History: input cells
             for c in range(3, 3 + n_hist):
                 input_cell(ws, r, c, 0, FMT_MLN)
-            # Forecast: component = Revenue × COGS_ratio(CP) × share(CP)
-            # COGS_ratio from Control_Panel (calibrated by fill_data from EWA)
-            # Share from Control_Panel (not hardcoded literal)
+            # Forecast: operating leverage via fixed/variable split (Д3)
+            # Material: volume-driven (aluminium volume × alumina_norm × price)
+            #   → proportional to volume, not revenue
+            # Energy/Labour: fixed per tonne (cost = volume × unit_cost)
+            #   → doesn't scale with price, only with volume
+            # Other: from revenue (transport, commissions)
             cp_cogs_ratio = f"'Control_Panel'!$C${REG.get('CP.cogs_ratio', 20)}"
-            # Find CP row for this component's share
             cp_share_key = f"CP.cogs_{comp}"
             cp_share_row = REG.get(cp_share_key)
+            vol_ref = f"'{NAME['RV']}'!{{cl}}${REG.get('RV.seg1_vol', 8)}"  # aluminium volume
+
             for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
                 cl = get_column_letter(c)
+                prev_cl = get_column_letter(c - 1)
                 rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
-                if cp_share_row:
-                    share_ref = f"'Control_Panel'!$C${cp_share_row}"
+                share_ref = f"'Control_Panel'!$C${cp_share_row}" if cp_share_row else str(share)
+
+                if comp in ("energy", "labour"):
+                    # Fixed per tonne: grow with volume, not price
+                    # base = prev_year × (volume_t / volume_t-1)
+                    vol_t = vol_ref.format(cl=cl)
+                    vol_prev = vol_ref.format(cl=prev_cl)
+                    formula_cell(ws, r, c,
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}),"
+                                 f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
+                                 FMT_MLN)
                 else:
-                    share_ref = str(share)
-                formula_cell(ws, r, c,
-                             f"={rev_ref}*{cp_cogs_ratio}*{share_ref}",
-                             FMT_MLN)
+                    # Material/Other: proportional to revenue (variable)
+                    formula_cell(ws, r, c,
+                                 f"={rev_ref}*{cp_cogs_ratio}*{share_ref}",
+                                 FMT_MLN)
 
         # D&A in COGS (if applicable)
         r_da = REG.get("CG.da_in_cogs", 13)
@@ -1610,7 +1637,16 @@ def build_sga(wb, cfg):
                        ("distrib", "Коммерческие"), ("ecl", "ECL расходы")]:
         r = REG.get(f"SA.{key}", 8)
         label_row(ws, r, label, "mln")
-        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+        # Д4: History cells for sga_total reference 21_PL (single source)
+        if key == "sga_total":
+            for c in range(3, 3 + n_hist):
+                cl = get_column_letter(c)
+                ref_cell(ws, r, c, f"='{NAME['PL']}'!{cl}${REG['PL.sga']}", FMT_MLN)
+        else:
+            for c in range(3, 3 + n_hist):
+                input_cell(ws, r, c, 0, FMT_MLN)
+        # Forecast: input (fill_data overrides with formula)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             input_cell(ws, r, c, 0, FMT_MLN)
 
     r_ratio = REG["SA.sga_ratio"]
@@ -2381,10 +2417,13 @@ def build_tax(wb, cfg):
         # Taxable = EBT - NOL_used
         formula_cell(ws, REG["TX.taxable"], c_idx,
                      f"=MAX(0,{cl}{REG['TX.ebt']}-{cl}{REG['TX.nol_used']})", FMT_MLN)
-        # Current tax = taxable × statutory rate — from CP
+        # Д7: Current tax = (taxable - timing_difference) × rate
+        # Timing diff = tax_DA - book_DA = book_DA × 0.2 (Д7: 1.2 coefficient)
         cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+        book_da = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
+        timing_diff = f"({book_da}*0.2)"  # tax DA is 20% higher than book
         formula_cell(ws, REG["TX.current"], c_idx,
-                     f"={cl}{REG['TX.taxable']}*{cp_tax_rate}", FMT_MLN)
+                     f"=MAX(0,({cl}{REG['TX.taxable']}-{timing_diff}))*{cp_tax_rate}", FMT_MLN)
         # Total = current + deferred
         formula_cell(ws, REG["TX.total"], c_idx,
                      f"={cl}{REG['TX.current']}+{cl}{REG['TX.deferred']}", FMT_MLN, bold=True)
@@ -2620,8 +2659,11 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         nd_ebitda = f"'{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}"
+        # Д9: recalibrated for high-leverage issuers
+        # <1x→80, 2x→60, 3x→45, 4x→30, 5x→20, 6x→12, 8x→5
+        # Piecewise linear: score = MAX(5, 80 - ND/EBITDA^1.3 × 5)
         formula_cell(ws, r_lev, c,
-                     f"=MAX(5,MIN(80,80-({nd_ebitda})*12.5))", FMT_RATIO1)
+                     f"=MAX(5,MIN(80,80-POWER(MAX(0,{nd_ebitda}),1.3)*5))", FMT_RATIO1)
 
     # Coverage: ICR → score
     r_cov = REG["SC.coverage"]
@@ -2630,8 +2672,10 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         icr = f"'{NAME['RA']}'!{cl}${REG['RA.icr']}"
+        # Д9: recalibrated — more resolution at low ICR
+        # 1x→12, 1.5x→20, 2x→30, 3x→42, 5x→60, 10x→80
         formula_cell(ws, r_cov, c,
-                     f"=MAX(5,MIN(88,{icr}*8.8))", FMT_RATIO1)
+                     f"=MAX(5,MIN(88,{icr}*12))", FMT_RATIO1)
 
     # Profitability: EBITDA margin → score (TTC-adjusted)
     r_prof = REG["SC.profit"]
@@ -2697,11 +2741,12 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         # Score → Rating lookup
+        # Д9: recalibrated thresholds — Rusal B/CCC should score 15-30
         formula_cell(ws, r_rating, c,
-                     f'=IF({cl}{r_final}>=95,"AAA",IF({cl}{r_final}>=85,"AA",'
-                     f'IF({cl}{r_final}>=75,"A",IF({cl}{r_final}>=63,"BBB",'
-                     f'IF({cl}{r_final}>=52,"BB",IF({cl}{r_final}>=42,"B",'
-                     f'IF({cl}{r_final}>=30,"CCC","D")))))))',
+                     f'=IF({cl}{r_final}>=85,"AAA",IF({cl}{r_final}>=75,"AA",'
+                     f'IF({cl}{r_final}>=65,"A",IF({cl}{r_final}>=55,"BBB",'
+                     f'IF({cl}{r_final}>=40,"BB",IF({cl}{r_final}>=25,"B",'
+                     f'IF({cl}{r_final}>=12,"CCC","D")))))))',
                      FMT_TEXT)
 
 
@@ -2996,10 +3041,12 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Expansion CapEx (% rev growth)")
     input_cell(ws, r, 3, 0.05, FMT_PCT)
     REG["CP.expansion_pct"] = r; r += 1
-    label_row(ws, r, "Useful life (лет)")
-    input_cell(ws, r, 3, 16, FMT_INT); r += 1
-    label_row(ws, r, "Disposal % of CapEx")
-    input_cell(ws, r, 3, 0.0, FMT_PCT); r += 2
+    label_row(ws, r, "Useful life (лет)", "yr", "→ DA = Gross / UL")
+    input_cell(ws, r, 3, 16, FMT_INT)
+    REG["CP.useful_life"] = r; r += 1
+    label_row(ws, r, "Disposal % of CapEx", "%", "→ 15_PPE выбытия")
+    input_cell(ws, r, 3, 0.02, FMT_PCT)
+    REG["CP.disposal_pct"] = r; r += 2
 
     # ── G. ОБОРОТНЫЙ КАПИТАЛ ──
     section_header(ws, r, "G. ОБОРОТНЫЙ КАПИТАЛ"); r += 1
