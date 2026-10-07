@@ -647,13 +647,11 @@ def fill_revenue(wb, data: dict, company: str):
             col = 3 + hist_years.index(year)
 
             if year in vol_data:
-                cell = ws.cell(vol_r, col, round(vol_data[year], 0))
-                cell.font = F_INPUT
-                cell.number_format = FMT_INT
+                ws.cell(vol_r, col, round(vol_data[year], 0)).font = F_INPUT
+                ws.cell(vol_r, col).number_format = FMT_INT
             if year in price_data and price_r:
-                cell = ws.cell(price_r, col, round(price_data[year], 0))
-                cell.font = F_INPUT
-                cell.number_format = FMT_INT
+                ws.cell(price_r, col, round(price_data[year], 0)).font = F_INPUT
+                ws.cell(price_r, col).number_format = FMT_INT
 
         # Forecast: macro-driven price via OLS chain-link or EWA carry-forward
         fc_years = src["fc_years"]
@@ -2044,7 +2042,6 @@ def fill_wc_days(wb, data: dict, company: str):
         ar = abs(ar_hist.get(year, 0))
         inv_ = abs(inv_hist.get(year, 0))
         ap = abs(ap_hist.get(year, 0))
-
         if rev > 0:
             dso = ar / rev * 365
             ws.cell(REG["WC.dso"], col, round(dso, 0)).font = F_INPUT
@@ -2158,16 +2155,17 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
             }
 
     if cogs_mode == "component" and cogs_components:
-        # Fill each component for history years
+        # Fill each component as FORMULA = ABS(PL.COGS) × share (not literal)
         for year in hist_years:
             col = COL_START + hist_years.index(year)
-            total_cogs = abs(cogs_hist.get(year, 0))
-            if total_cogs > 0:
-                for comp, share in cogs_components.items():
-                    r = REG.get(f"CG.{comp}", 8)
-                    ws_cg.cell(r, col, round(total_cogs * share, 1)).font = F_INPUT
-                    ws_cg.cell(r, col).number_format = FMT_MLN
-        print(f"    COGS: component mode, {len(cogs_components)} components filled")
+            cl = get_column_letter(col)
+            for comp, share in cogs_components.items():
+                r = REG.get(f"CG.{comp}", 8)
+                pl_title = "21_PL"
+                formula_cell(ws_cg, r, col,
+                             f"=ABS('{pl_title}'!{cl}${REG['PL.cogs']})*{share}",
+                             FMT_MLN)
+        print(f"    COGS: component mode, {len(cogs_components)} components as formulas")
     else:
         # Ratio mode: fill total COGS
         for year in hist_years:

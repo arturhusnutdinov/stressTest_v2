@@ -1695,7 +1695,7 @@ def build_wc(wb, cfg):
     for key, label in [("dso", "DSO (дни)"), ("dio", "DIH (дни)"), ("dpo", "DPO (дни)")]:
         r = REG[f"WC.{key}"]
         label_row(ws, r, label, "дни")
-        # History: input cells (filled by fill_data)
+        # History: input (filled by fill_data from computed values)
         for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_DAYS)
         # Forecast: reference Control_Panel if available, else carry forward
