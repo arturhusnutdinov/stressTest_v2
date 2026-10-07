@@ -3042,24 +3042,95 @@ def build_scenarios(wb, cfg):
     for i, (formula, fmt) in enumerate(base_refs):
         ref_cell(ws, r, 3 + i, formula, fmt)
 
-    # Stress rows — base + delta from 33_RevStress tornado
-    stress_scenarios = [
-        ("Revenue −20%", [-0.20, -0.20, -0.20, 0, 0, 0, 0]),
-        ("Rate +200bp", [0, 0, 0, 0, 0, 0, 0]),
-        ("FX CNY +10%", [0, 0, 0, 0, 0, 0, 0]),
-        ("Refi = 0%", [0, 0, 0, 0, 0, 0, 0]),
-        ("Combined stress", [0, 0, 0, 0, 0, 0, 0]),
-    ]
-    for j, (sc_name, _deltas) in enumerate(stress_scenarios):
-        r = 7 + j
-        label_row(ws, r, sc_name)
-        for i in range(len(headers)):
-            input_cell(ws, r, 3 + i, 0, FMT_MLN if i < 3 or i >= 5 else FMT_MULT)
+    # ── Analytical stress rows ──
+    # Each row applies a single-factor shock to base metrics using linear approx:
+    #   Revenue shock x: ΔRev = Rev*x, ΔEBITDA = Rev*x*margin, ΔNI = ΔEBITDA*(1-t)
+    #   Rate shock Δr: ΔInterest = Debt*Δr, ΔNI = -ΔInt*(1-t)
+    #   Combined: sum of individual deltas
+    cp_tax = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+    rev_base = f"C$6"       # base Revenue (row 6, col C)
+    ebitda_base = f"D$6"    # base EBITDA
+    ni_base = f"E$6"        # base NI
+    nd_base = f"F$6"        # base ND/EBITDA
+    icr_base = f"G$6"       # base ICR
+    cash_base = f"H$6"      # base Cash
+    gap_base = f"I$6"       # base FundGap
+    margin_ref = f"'{NAME['RA']}'!{last_fc}${REG['RA.ebitda_margin']}"
+    debt_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.close']}"
+    ebitda_model = f"'{NAME['PL']}'!{last_fc}${REG['PL.ebitda']}"
+    nd_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.nd']}"
+    int_ref = f"ABS('{NAME['DT']}'!{last_fc}${REG['DT.interest']})"
 
-    # Summary section
+    # Row 7: Revenue −20%
+    r = 7
+    label_row(ws, r, "Revenue −20%")
+    d_rev = f"={rev_base}*(-0.2)"
+    d_ebitda_rev = f"={rev_base}*(-0.2)*{margin_ref}"
+    d_ni_rev = f"={rev_base}*(-0.2)*{margin_ref}*(1-{cp_tax})"
+    ref_cell(ws, r, 3, f"={rev_base}+{rev_base}*(-0.2)", FMT_MLN)          # Revenue
+    ref_cell(ws, r, 4, f"={ebitda_base}+{rev_base}*(-0.2)*{margin_ref}", FMT_MLN)  # EBITDA
+    ref_cell(ws, r, 5, f"={ni_base}+{rev_base}*(-0.2)*{margin_ref}*(1-{cp_tax})", FMT_MLN)  # NI
+    ref_cell(ws, r, 6, f"=IFERROR({nd_ref}/(D{r}),0)", FMT_MULT)           # ND/EBITDA
+    ref_cell(ws, r, 7, f"=IFERROR(D{r}/{int_ref},0)", FMT_MULT)            # ICR
+    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)                           # Cash (unchanged)
+    ref_cell(ws, r, 9, f"={gap_base}", FMT_MLN)                            # Gap (approx)
+
+    # Row 8: Rate +200bp
+    r = 8
+    label_row(ws, r, "Rate +200bp")
+    d_int = f"{debt_ref}*0.02"
+    ref_cell(ws, r, 3, f"={rev_base}", FMT_MLN)
+    ref_cell(ws, r, 4, f"={ebitda_base}", FMT_MLN)
+    ref_cell(ws, r, 5, f"={ni_base}-{d_int}*(1-{cp_tax})", FMT_MLN)
+    ref_cell(ws, r, 6, f"={nd_base}", FMT_MULT)
+    ref_cell(ws, r, 7, f"=IFERROR({ebitda_base}/({int_ref}+{d_int}),0)", FMT_MULT)
+    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)
+    ref_cell(ws, r, 9, f"={gap_base}", FMT_MLN)
+
+    # Row 9: FX +10% (debt revaluation loss)
+    r = 9
+    label_row(ws, r, "FX +10%")
+    fx_debt_share = 0.3  # approx share of FX-denominated debt
+    ref_cell(ws, r, 3, f"={rev_base}", FMT_MLN)
+    ref_cell(ws, r, 4, f"={ebitda_base}", FMT_MLN)
+    ref_cell(ws, r, 5, f"={ni_base}-{debt_ref}*{fx_debt_share}*0.1*(1-{cp_tax})", FMT_MLN)
+    ref_cell(ws, r, 6, f"=IFERROR(({nd_ref}+{debt_ref}*{fx_debt_share}*0.1)/{ebitda_model},0)", FMT_MULT)
+    ref_cell(ws, r, 7, f"={icr_base}", FMT_MULT)
+    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)
+    ref_cell(ws, r, 9, f"={gap_base}", FMT_MLN)
+
+    # Row 10: Refi = 0% (no refinancing → mandatory is not rolled)
+    r = 10
+    label_row(ws, r, "Refi = 0%")
+    mand_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.mandatory']}"
+    ref_cell(ws, r, 3, f"={rev_base}", FMT_MLN)
+    ref_cell(ws, r, 4, f"={ebitda_base}", FMT_MLN)
+    ref_cell(ws, r, 5, f"={ni_base}", FMT_MLN)
+    ref_cell(ws, r, 6, f"={nd_base}", FMT_MULT)
+    ref_cell(ws, r, 7, f"={icr_base}", FMT_MULT)
+    ref_cell(ws, r, 8, f"=MAX(0,{cash_base}-{mand_ref})", FMT_MLN)
+    ref_cell(ws, r, 9, f"=MAX(0,{mand_ref}-{cash_base})", FMT_MLN)
+
+    # Row 11: Combined stress (Rev−20% + Rate+200bp + FX+10%)
+    r = 11
+    label_row(ws, r, "Combined stress")
+    ref_cell(ws, r, 3, f"=C7", FMT_MLN)  # same as Rev−20%
+    ref_cell(ws, r, 4, f"=D7", FMT_MLN)  # EBITDA from rev shock
+    ref_cell(ws, r, 5, f"=E7-{d_int}*(1-{cp_tax})-{debt_ref}*{fx_debt_share}*0.1*(1-{cp_tax})", FMT_MLN)
+    ref_cell(ws, r, 6, f"=IFERROR(({nd_ref}+{debt_ref}*{fx_debt_share}*0.1)/D{r},0)", FMT_MULT)
+    ref_cell(ws, r, 7, f"=IFERROR(D{r}/({int_ref}+{d_int}),0)", FMT_MULT)
+    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)
+    ref_cell(ws, r, 9, f"=MAX(0,I7+I8+I9+I10-3*{gap_base})", FMT_MLN)
+
+    # ── Summary section ──
     section_header(ws, 14, "КОВЕНАНТНЫЙ АНАЛИЗ")
+    cov_nd = f"'Control_Panel'!$C${REG.get('CP.cov_nd', 80)}"
+    # Count scenarios where ND/EBITDA > covenant
     label_row(ws, 15, "Сценариев с нарушением ND/EBITDA")
+    ref_cell(ws, 15, 3,
+             f"=COUNTIF(F7:F11,\">\"&{cov_nd})", "0")
     label_row(ws, 16, "Сценариев с Funding Gap > 0")
+    ref_cell(ws, 16, 3, f"=COUNTIF(I7:I11,\">0\")", "0")
     label_row(ws, 17, "Обратный стресс: breakeven Revenue shock")
     ref_cell(ws, 17, 3, f"='33_RevStress'!$C${REG.get('RS.bisect_rev', 7)}", FMT_PCT)
 
