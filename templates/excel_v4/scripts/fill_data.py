@@ -1515,6 +1515,22 @@ def fill_debt_hist(wb, data: dict, company: str):
             print(f"    Lease (Д10): ROU={rou:.0f} Liab={lease_total:.0f} (CL={lease_cl:.0f} NCL={lease_ncl:.0f})")
             print(f"    Lease forecast: dep={rou_dep:.0f}/yr, pay={liab_pay:.0f}/yr")
 
+    # Fill lease for ALL history years (not just last)
+    if "18_Lease" in wb.sheetnames:
+        ws_l = wb["18_Lease"]
+        for yr_idx, yr in enumerate(hist_years[-N_HIST_DISPLAY:]):
+            col_l = COL_START + yr_idx
+            rou_yr = abs(bs.get("rou_asset", {}).get(yr, 0))
+            lcl_yr = abs(bs.get("lease_liab_current", {}).get(yr, 0))
+            lncl_yr = abs(bs.get("lease_liab_noncurrent", {}).get(yr, 0))
+            ltot_yr = lcl_yr + lncl_yr
+            if rou_yr > 0:
+                ws_l.cell(REG["LS.rou_open"], col_l, round(rou_yr, 1)).font = F_INPUT
+                ws_l.cell(REG["LS.rou_close"], col_l, round(rou_yr, 1)).font = F_INPUT
+            if ltot_yr > 0:
+                ws_l.cell(REG["LS.liab_open"], col_l, round(ltot_yr, 1)).font = F_INPUT
+                ws_l.cell(REG["LS.liab_close"], col_l, round(ltot_yr, 1)).font = F_INPUT
+
     # Fill 14_OtherIS — interest income, associates, impairment (Д10)
     if "14_OtherIS" in wb.sheetnames:
         ws_oi = wb["14_OtherIS"]
