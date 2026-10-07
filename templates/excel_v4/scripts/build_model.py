@@ -2056,16 +2056,17 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # NEW TERM: gated by covenants. Covers residual only if gates open.
+        # NEW TERM: ALWAYS covers residual (model always finances)
+        # Gate determines RATE, not WHETHER to finance (commit 8616edc)
         residual_after_rc = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR(IF({gate},({residual_after_rc})+{term_out},0),0)",
+                     f"=IFERROR({residual_after_rc}+{term_out},0)",
                      FMT_MLN)
 
-        # Funding gap = unfunded remainder (gates closed)
-        # Cash will fall below min_cash — this is the credit analysis result
+        # Funding gap = penalty-financed portion (gates closed → penalty rate)
+        # Shows HOW MUCH is distressed, not unfunded
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(MAX(0,{need}-{cl}{REG['DT.rc_draw']}-{cl}{REG['DT.new_term']}),0)",
+                     f"=IFERROR(IF({gate},0,{residual_after_rc}),0)",
                      FMT_MLN)
         # Accumulated = total penalty financing
         formula_cell(ws, REG["DT.funding_gap_accum"], c_idx,
