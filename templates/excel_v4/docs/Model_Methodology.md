@@ -193,7 +193,13 @@ Cash = cash_open + CFO + CFI + CFF = min_cash (EXACT, one pass)
 
 **Cascade:** min_cash target → if RC insufficient → new_term → if covenants block → penalty rate
 
-**fullCalcOnLoad = False** (bank model pattern: preserve cached values after AppleScript recalc)
+**fullCalcOnLoad = True** (audit v8: cold start must match warm start)
+
+**EBITDA sign protection** (audit v9):
+- Scorecard: `IF(EBITDA<=0, 5, formula)` — floor score, not max
+- Covenant gates: `OR(EBITDA<=0, ND/EBITDA>cov)` — always breach on negative
+- Reclass: same check added
+- Prevents inverted ratings in stress scenarios
 
 **Covenant reclassification (IAS 1.74):**
 - CP.cov_reclass=1: if ND/EBITDA>cov OR ICR<cov → ALL LT debt becomes ST
