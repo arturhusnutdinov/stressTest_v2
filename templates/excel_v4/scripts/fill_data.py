@@ -1672,30 +1672,44 @@ def fill_debt_hist(wb, data: dict, company: str):
             else:
                 print(f"    PPE: Gross={ppe_gross:.0f} AccDep={accdep:.0f} Net={ppe_net:.0f}")
 
-    # Fill Equity opening
+    # Fill Equity opening → 02_Hist ref
     if "24_Equity" in wb.sheetnames:
         ws_e = wb["24_Equity"]
         re = bs.get("retained_earnings", {}).get(last_yr, 0)
         if re != 0:
-            ws_e.cell(REG["EQ.re_open"], hc, round(re, 1)).font = F_INPUT
-            ws_e.cell(REG["EQ.re_close"], hc, round(re, 1)).font = F_INPUT
-            print(f"    Retained earnings opening: {re:.0f}")
+            hi_re = REG.get("HI.re")
+            cl_h = get_column_letter(hc)
+            ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
+            if hi_re and ws_hi:
+                ws_hi.cell(hi_re, hc, round(re, 1)).font = F_INPUT
+                ws_e.cell(REG["EQ.re_open"], hc).value = f"='02_Hist'!{cl_h}${hi_re}"
+                ws_e.cell(REG["EQ.re_open"], hc).font = F_REF
+                ws_e.cell(REG["EQ.re_close"], hc).value = f"='02_Hist'!{cl_h}${hi_re}"
+                ws_e.cell(REG["EQ.re_close"], hc).font = F_REF
+            else:
+                ws_e.cell(REG["EQ.re_open"], hc, round(re, 1)).font = F_INPUT
+                ws_e.cell(REG["EQ.re_close"], hc, round(re, 1)).font = F_INPUT
+            print(f"    Retained earnings opening: {re:.0f} (→ 02_Hist)")
 
-    # Fill BS last hist year (static items for carry-forward)
+    # Fill BS last hist year (static items) → 02_Hist refs where possible
     if "20_BS" in wb.sheetnames:
         ws_bs = wb["20_BS"]
+        ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
+        # Map: BS key → (source BS keys, HI row key)
         static_keys = {
-            "other_ca": ["other_current_assets"],
-            "goodwill": ["goodwill"],
-            "intang": ["intangibles"],
-            "other_nca": ["other_non_current_assets", "investments_lt"],
-            "other_cl": ["other_current_liabilities"],
-            "other_ncl": ["other_non_current_liabilities"],
-            "sc": ["share_capital"],
-            "apic": ["additional_paid_in_capital", "apic"],
-            "aoci": ["aoci", "other_comprehensive_income"],
+            "other_ca": (["other_current_assets"], None),
+            "goodwill": (["goodwill"], "goodwill"),
+            "intang": (["intangibles"], "intang"),
+            "other_nca": (["other_non_current_assets", "investments_lt"], "other_nca"),
+            "other_cl": (["other_current_liabilities"], "other_cl"),
+            "other_ncl": (["other_non_current_liabilities"], "other_ncl"),
+            "sc": (["share_capital"], None),
+            "apic": (["additional_paid_in_capital", "apic"], None),
+            "aoci": (["aoci", "other_comprehensive_income"], None),
+            "prov": (["provisions"], "prov"),
         }
-        for bs_key, source_keys in static_keys.items():
+        cl_h = get_column_letter(hc)
+        for bs_key, (source_keys, hi_key) in static_keys.items():
             val = 0
             for sk in source_keys:
                 v = bs.get(sk, {}).get(last_yr, 0)
@@ -1703,7 +1717,13 @@ def fill_debt_hist(wb, data: dict, company: str):
                     val = v
                     break
             if val:
-                ws_bs.cell(REG[f"BS.{bs_key}"], 3, round(val, 1)).font = F_INPUT
+                hi_row = REG.get(f"HI.{hi_key}") if hi_key else None
+                if hi_row and ws_hi:
+                    ws_hi.cell(hi_row, hc, round(val, 1)).font = F_INPUT
+                    ws_bs.cell(REG[f"BS.{bs_key}"], hc).value = f"='02_Hist'!{cl_h}${hi_row}"
+                    ws_bs.cell(REG[f"BS.{bs_key}"], hc).font = F_REF
+                else:
+                    ws_bs.cell(REG[f"BS.{bs_key}"], hc, round(val, 1)).font = F_INPUT
 
 
 def fill_statement_history(wb, data: dict, company: str):
@@ -1715,31 +1735,54 @@ def fill_statement_history(wb, data: dict, company: str):
     is_d = data.get("is", {})
     cf_d = data.get("cf", {})
 
-    # Fill CF history (last year) for cash opening
+    # Fill CF history (last year) → 02_Hist refs
     ws_cf = wb["23_CF"]
+    ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
     cf_map = {
-        "cfo_total": "cfo", "cfi_total": "cfi", "cff_total": "cff",
-        "capex": "capex", "net_change": "net_change",
+        "cfo_total": ("cfo", "cfo"),
+        "cfi_total": ("cfi", "cfi"),
+        "cff_total": ("cff", "cff"),
+        "capex": ("capex", "capex"),
+        "net_change": ("net_change", "net_change"),
     }
     filled = 0
-    for src_key, reg_suffix in cf_map.items():
+    cl_h = get_column_letter(hc)
+    for src_key, (reg_suffix, hi_key) in cf_map.items():
         val = cf_d.get(src_key, {}).get(last_yr)
         if val is not None:
             r = REG.get(f"CF.{reg_suffix}")
+            hi_row = REG.get(f"HI.{hi_key}")
             if r:
-                ws_cf.cell(r, hc, round(val, 1)).font = F_INPUT
+                if hi_row and ws_hi:
+                    ws_hi.cell(hi_row, hc, round(val, 1)).font = F_INPUT
+                    ws_cf.cell(r, hc).value = f"='02_Hist'!{cl_h}${hi_row}"
+                    ws_cf.cell(r, hc).font = F_REF
+                else:
+                    ws_cf.cell(r, hc, round(val, 1)).font = F_INPUT
                 ws_cf.cell(r, hc).number_format = FMT_MLN
                 filled += 1
 
-    # Cash opening = previous year closing cash from BS
+    # Cash opening/closing → 02_Hist refs
     bs_d = data.get("bs", {})
     cash_open = bs_d.get("cash", {}).get(last_yr - 1, 0)
     cash_close = bs_d.get("cash", {}).get(last_yr, 0)
+    hi_cash = REG.get("HI.cash")
     if cash_close:
-        ws_cf.cell(REG["CF.cash_close"], hc, round(cash_close, 1)).font = F_INPUT
+        if hi_cash and ws_hi:
+            ws_hi.cell(hi_cash, hc, round(cash_close, 1)).font = F_INPUT
+            ws_cf.cell(REG["CF.cash_close"], hc).value = f"='02_Hist'!{cl_h}${hi_cash}"
+            ws_cf.cell(REG["CF.cash_close"], hc).font = F_REF
+        else:
+            ws_cf.cell(REG["CF.cash_close"], hc, round(cash_close, 1)).font = F_INPUT
         ws_cf.cell(REG["CF.cash_close"], hc).number_format = FMT_MLN
     if cash_open:
-        ws_cf.cell(REG["CF.cash_open"], hc, round(cash_open, 1)).font = F_INPUT
+        prev_cl = get_column_letter(hc - 1)
+        if hi_cash and ws_hi:
+            ws_hi.cell(hi_cash, hc - 1, round(cash_open, 1)).font = F_INPUT
+            ws_cf.cell(REG["CF.cash_open"], hc).value = f"='02_Hist'!{prev_cl}${hi_cash}"
+            ws_cf.cell(REG["CF.cash_open"], hc).font = F_REF
+        else:
+            ws_cf.cell(REG["CF.cash_open"], hc, round(cash_open, 1)).font = F_INPUT
 
     # Fill PL history (last 3 years)
     ws_pl = wb["21_PL"]
@@ -2044,14 +2087,36 @@ def fill_wc_days(wb, data: dict, company: str):
         ar_v = abs(bs_d.get("accounts_receivable", {}).get(year, 0))
         inv_v = abs(bs_d.get("inventory", {}).get(year, 0))
         ap_v = abs(bs_d.get("accounts_payable", {}).get(year, 0))
+        # WC balances → 02_Hist refs where available
+        ws_hi_wc = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
+        cl_wc = get_column_letter(col)
+        wc_hi_map = {"ar": "ar", "inv": "inv"}
         if ar_v:
-            ws.cell(REG["WC.ar"], col, round(ar_v, 1)).font = F_INPUT
+            hi_r = REG.get("HI.ar")
+            if hi_r and ws_hi_wc:
+                ws_hi_wc.cell(hi_r, col, round(ar_v, 1)).font = F_INPUT
+                ws.cell(REG["WC.ar"], col).value = f"='02_Hist'!{cl_wc}${hi_r}"
+                ws.cell(REG["WC.ar"], col).font = F_REF
+            else:
+                ws.cell(REG["WC.ar"], col, round(ar_v, 1)).font = F_INPUT
             ws.cell(REG["WC.ar"], col).number_format = FMT_MLN
         if inv_v:
-            ws.cell(REG["WC.inv"], col, round(inv_v, 1)).font = F_INPUT
+            hi_r = REG.get("HI.inv")
+            if hi_r and ws_hi_wc:
+                ws_hi_wc.cell(hi_r, col, round(inv_v, 1)).font = F_INPUT
+                ws.cell(REG["WC.inv"], col).value = f"='02_Hist'!{cl_wc}${hi_r}"
+                ws.cell(REG["WC.inv"], col).font = F_REF
+            else:
+                ws.cell(REG["WC.inv"], col, round(inv_v, 1)).font = F_INPUT
             ws.cell(REG["WC.inv"], col).number_format = FMT_MLN
         if ap_v:
-            ws.cell(REG["WC.ap"], col, round(-ap_v, 1)).font = F_INPUT
+            hi_r = REG.get("HI.ap")
+            if hi_r and ws_hi_wc:
+                ws_hi_wc.cell(hi_r, col, round(ap_v, 1)).font = F_INPUT
+                ws.cell(REG["WC.ap"], col).value = f"=-ABS('02_Hist'!{cl_wc}${hi_r})"
+                ws.cell(REG["WC.ap"], col).font = F_REF
+            else:
+                ws.cell(REG["WC.ap"], col, round(-ap_v, 1)).font = F_INPUT
             ws.cell(REG["WC.ap"], col).number_format = FMT_MLN
 
     print(f"    WC days: {computed} historical years computed, forecast carry-forwarded")
