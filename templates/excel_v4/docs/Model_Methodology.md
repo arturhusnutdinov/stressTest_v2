@@ -1,9 +1,9 @@
 # Методология финансовой модели корпоративного эмитента (v4)
 
-**Версия:** 4.1 (7 октября 2026)
+**Версия:** 4.2 — AUDIT FINAL ACCEPTED (7 октября 2026)
 **Компании:** UC RUSAL, PJSC MMC Norilsk Nickel
 **Подход:** outside-in (публичная МСФО отчётность), 3-statement Excel-driven model
-**Статус:** ALL 15 CHECKS = 0 · BS 0/0/0 · S&U 0/0/0 · Cash 500/500/500 · Err 0/0/0
+**Статус:** AUDIT FINAL ACCEPTED · 15/15 checks = 0 · Cash=500 always · OLS β=0.828 · 11_Segments live
 
 ---
 
@@ -308,20 +308,26 @@ python3 -B scripts/verify_model.py model/model_rusal.xlsx
 
 ---
 
-## 13. Финальный статус
+## 13. Финальный статус (AUDIT FINAL ACCEPTED)
 
 | Метрика | Значение |
 |---------|---------|
-| Листов | 31 |
-| Формул | ~1,205 |
-| CP параметров | 43/44 LIVE |
-| Method switches | 4 (Revenue, COGS, WC, SGA) |
-| Проверок | 15, все = 0 |
+| Версия | v4.2 (AUDIT FINAL accepted 07.10.2026) |
+| Листов | 31 (включая 11_Segments с формулами) |
+| Формул | ~1,270 |
+| CP параметров | ~47 LIVE (1 informational: ewa_halflife) |
+| Method switches | 4 (Revenue: segment/OLS/EWA, COGS: ratio/component/PPI, WC: days/ratio, SGA: ratio) |
+| Проверок | 15, все = 0 в обоих компаниях × 3 сценария |
 | Компании | 2 (Rusal, Nornickel) |
 | Сценарии | 3 × verified (Base/Stress/Severe) |
 | Cash | = min_cash ВСЕГДА (модель всегда финансирует) |
-| Gate | = rate (penalty 24% при нарушении, не блокировка) |
+| Gate | = rate (penalty 24%, penalty_limit configurable) |
+| 11_Segments | Подключён: vol/price/rev с формулами, 10_Revenue → refs |
+| OLS β | 0.828 (Rusal, 14 obs, lme_aluminium) → CP.rev_elasticity |
+| ST last year | avg ST share fallback (нет 2029 столбца) |
+| Buyback | CP.buyback_pct → 24_Equity (covenant-gated) |
+| Terminal params | CP.terminal_g/mult → 35_Valuation |
 | Op leverage | Rusal 3.5x, Nornickel 1.0x |
 | Behavioral tests | verify_model.py — ALL PASS обе компании |
 | Документация | Methodology + AI Build Guide |
-| Оставшийся долг | 182 литерала истории (requires layout rework) |
+| Оставшийся долг | ~150 литералов истории (layout rework, non-blocking) |
