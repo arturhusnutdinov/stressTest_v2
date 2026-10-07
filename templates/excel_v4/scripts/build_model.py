@@ -1537,17 +1537,22 @@ def build_cogs(wb, cfg):
             # History: input cells
             for c in range(3, 3 + n_hist):
                 input_cell(ws, r, c, 0, FMT_MLN)
-            # Forecast: component = Revenue × share × COGS_ratio
-            # COGS_ratio from last history year
-            # This ensures components scale with revenue (not absolute growth)
-            # Forecast: component = Revenue × COGS_ratio(from 03_Assump) × share
-            # 03_Assump r7 = COGS/Revenue EWA calibrated from history
+            # Forecast: component = Revenue × COGS_ratio(CP) × share(CP)
+            # COGS_ratio from Control_Panel (calibrated by fill_data from EWA)
+            # Share from Control_Panel (not hardcoded literal)
+            cp_cogs_ratio = f"'Control_Panel'!$C${REG.get('CP.cogs_ratio', 20)}"
+            # Find CP row for this component's share
+            cp_share_key = f"CP.cogs_{comp}"
+            cp_share_row = REG.get(cp_share_key)
             for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
                 cl = get_column_letter(c)
                 rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
-                cogs_ratio_ref = f"'{NAME['AS']}'!{cl}$7"  # 03_Assump COGS ratio
+                if cp_share_row:
+                    share_ref = f"'Control_Panel'!$C${cp_share_row}"
+                else:
+                    share_ref = str(share)
                 formula_cell(ws, r, c,
-                             f"={rev_ref}*{cogs_ratio_ref}*{share}",
+                             f"={rev_ref}*{cp_cogs_ratio}*{share_ref}",
                              FMT_MLN)
 
         # D&A in COGS (if applicable)
@@ -1574,14 +1579,13 @@ def build_cogs(wb, cfg):
             parts = [f"{cl}{REG.get(f'CG.{k}', 8)}" for k in comp_keys]
             formula_cell(ws, r_total, c, "=-(" + "+".join(parts) + ")", FMT_MLN, bold=True)
     else:
-        # Ratio mode: COGS = -ABS(Revenue) × ratio
-        # Ratio comes from 03_Assump preprocessing (history average)
+        # Ratio mode: COGS = -ABS(Revenue) × ratio(from CP)
+        cp_cogs = f"'Control_Panel'!$C${REG.get('CP.cogs_ratio', 20)}"
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             cl = get_column_letter(c)
             rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
-            # Use ratio from history (average of last 3 years)
             formula_cell(ws, r_total, c,
-                         f"=-ABS({rev_ref})*{cfg.get('cogs_ratio_default', 0.60)}", FMT_MLN, bold=True)
+                         f"=-ABS({rev_ref})*{cp_cogs}", FMT_MLN, bold=True)
 
     # COGS ratio
     r_ratio = REG["CG.ratio"]
@@ -2953,13 +2957,17 @@ def build_control_panel(wb, cfg):
     cogs_method = 2 if cfg.get("cogs_mode") == "component" else 1
     label_row(ws, r, "COGS method (1=ratio, 2=component, 3=ppi_uplift)")
     input_cell(ws, r, 3, cogs_method, FMT_INT); r += 1
+    # COGS ratio (used by both modes — main sensitivity lever)
+    label_row(ws, r, "COGS ratio (калиброванный)", "%", "→ 12_COGS formula")
+    input_cell(ws, r, 3, cfg.get("cogs_ratio_default", 0.83), FMT_PCT)
+    REG["CP.cogs_ratio"] = r; r += 1
     if cfg.get("cogs_mode") == "component":
         for comp, share in cfg.get("cogs_components", {}).items():
-            label_row(ws, r, f"Доля {comp.title()}", "%")
-            input_cell(ws, r, 3, share, FMT_PCT); r += 1
+            label_row(ws, r, f"Доля {comp.title()}", "%", "→ 12_COGS component")
+            input_cell(ws, r, 3, share, FMT_PCT)
+            REG[f"CP.cogs_{comp}"] = r; r += 1
     else:
-        label_row(ws, r, "COGS ratio (default)")
-        input_cell(ws, r, 3, cfg.get("cogs_ratio_default", 0.60), FMT_PCT); r += 1
+        pass  # ratio mode uses CP.cogs_ratio directly
     label_row(ws, r, "PPI beta (COGS ~ PPI)")
     input_cell(ws, r, 3, 0.85, FMT_RATIO); r += 1
     label_row(ws, r, "Mean reversion dampening")
