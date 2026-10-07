@@ -271,5 +271,57 @@ python3 -B scripts/verify_model.py model/model_rusal.xlsx
 | LT формула | `MAX(0, close-(mandatory+RC))` — скобки обязательны! |
 | ST | Next year mandatory (IAS 1), не текущий год |
 | BS.cash | = CF cash_close (модель всегда финансирует) |
-| S&U gap | = funding_need (CF-based, авторитетный) |
+| S&U gap | = rc_draw + new_term (включает term_out, check = 0 всегда) |
 | penalty_rate | На accumulated gap при нарушении (% от долга по штрафной ставке) |
+| funding_gap | = penalty-financed portion (подмножество new_term, не отдельный источник) |
+
+---
+
+## 12. CP параметры: 43/44 LIVE
+
+### Method Switches (из Control_Panel)
+| Switch | Значения | Default | Лист |
+|--------|----------|---------|------|
+| Revenue method | 1=segment, 2=macro_ols (β×Δln), 3=ewa | 1 | 10_Revenue |
+| COGS method | 1=ratio, 2=component, 3=ppi_uplift | 2 (Rusal) | 12_COGS |
+| WC method | 1=days (DSO/DIH/DPO), 2=ratio (NWC/Rev) | 1 | 16_WC |
+| SGA ratio | CP.sga_ratio → Revenue × ratio | 8% | 13_SGA |
+
+### Все CP секции
+| Секция | Параметры | Статус |
+|--------|-----------|--------|
+| A. Макросценарий | Сценарий (1/2/3) + 6 macro factors | LIVE |
+| B. Операционные | Volume + price growth per segment | LIVE |
+| C. Выручка | Method, elasticity β, R² | LIVE |
+| D. Себестоимость | Method, ratio, components, PPI beta, dampening | LIVE |
+| E. SGA | SGA ratio, EWA halflife | LIVE (halflife = info) |
+| F. CapEx/PPE | DA rate, sustaining ratio, expansion%, useful life, disposal% | LIVE |
+| G. Оборотный капитал | Method, DSO/DIH/DPO | LIVE |
+| H. Долг | 18 params (min_cash..penalty_rate) | LIVE |
+| I. FX | USDCNY/USDRUB change, rev/cost shares | LIVE |
+| J. Ковенанты | ND/EBITDA max, ICR min | LIVE |
+| K. Налоги | Tax rate, NOL open/cap | LIVE |
+| L. Дивиденды/WACC | Payout, Rf/β/ERP/CRP/SCP, TV growth | LIVE |
+
+### Единственный информационный
+- `CP.ewa_halflife` — настройка Python preprocessing (не Excel формула)
+
+---
+
+## 13. Финальный статус
+
+| Метрика | Значение |
+|---------|---------|
+| Листов | 31 |
+| Формул | ~1,205 |
+| CP параметров | 43/44 LIVE |
+| Method switches | 4 (Revenue, COGS, WC, SGA) |
+| Проверок | 15, все = 0 |
+| Компании | 2 (Rusal, Nornickel) |
+| Сценарии | 3 × verified (Base/Stress/Severe) |
+| Cash | = min_cash ВСЕГДА (модель всегда финансирует) |
+| Gate | = rate (penalty 24% при нарушении, не блокировка) |
+| Op leverage | Rusal 3.5x, Nornickel 1.0x |
+| Behavioral tests | verify_model.py — ALL PASS обе компании |
+| Документация | Methodology + AI Build Guide |
+| Оставшийся долг | 182 литерала истории (requires layout rework) |
