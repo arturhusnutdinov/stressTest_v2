@@ -1038,9 +1038,10 @@ def build_bs(wb, cfg):
                      f"={cl}{r_ta}-{cl}{r_tl}-{cl}{r_te}", FMT_RATIO)
 
         # ── Cross-sheet links: BS items ← corkscrews ──
-        # Cash ← MAX(0, CF cash_close) — never negative
+        # Cash ← CF cash_close (can be negative in stress = overdraft/gap)
+        # Negative cash keeps BS balanced; funding_gap shows the hole
         formula_cell(ws, REG["BS.cash"], c_idx,
-                     f"=MAX(0,'{NAME['CF']}'!{cl}${REG['CF.cash_close']})", FMT_MLN)
+                     f"='{NAME['CF']}'!{cl}${REG['CF.cash_close']}", FMT_MLN)
         # AR ← WC
         ref_cell(ws, REG["BS.ar"], c_idx,
                  f"='{NAME['WC']}'!{cl}${REG['WC.ar']}", FMT_MLN)
@@ -1431,7 +1432,7 @@ def build_checks(wb, cfg):
         ("schedule_check", "DT.close = Term + RC + FX", None, None),
         ("cash_min", "Cash ≥ min_cash ИЛИ FundGap > 0", None, None),
         ("maint_debt", "Подд. CapEx не финансируется долгом", None, None),
-        ("interest_check", "Int = Term + RC + Fee", None, None),
+        ("interest_check", "Int = Term + RC + Fee + Penalty", None, None),
         ("it_res", "Невязка кольца (Cash vs est_cash)", None, None),
     ]
     for key, label, _, _ in new_checks:
@@ -1485,20 +1486,24 @@ def build_checks(wb, cfg):
                      f"'{NAME['DT']}'!{cl}${REG['DT.new_term']}>0),1,0)",
                      FMT_INT)
 
-        # #8 Interest = term + RC + fee (verify decomposition)
+        # #8 Interest = term + RC + fee + penalty (verify decomposition)
+        prev_cl = get_column_letter(c_idx - 1)
+        cp_pen = f"'Control_Panel'!$C${REG.get('CP.penalty_rate', 72)}"
         formula_cell(ws, REG["CK.interest_check"], c_idx,
                      f"='{NAME['DT']}'!{cl}${REG['DT.interest']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.interest_term']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.interest_rc']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.commit_fee']}",
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.commit_fee']}"
+                     f"-'{NAME['DT']}'!{prev_cl}${REG['DT.funding_gap_accum']}*{cp_pen}",
                      FMT_RATIO)
 
         # C3: Iteration residual — cash convergence check
-        # If RC_draw > 0, actual cash should ≈ min_cash
-        # Residual = |actual_cash - min_cash| when RC active, else 0
+        # If RC_draw > 0 AND no funding gap, actual cash should ≈ min_cash
+        # When funding gap > 0, cash can be below min (expected), so skip check
         cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
         formula_cell(ws, REG["CK.it_res"], c_idx,
-                     f"=IF('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,"
+                     f"=IF(AND('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,"
+                     f"'{NAME['DT']}'!{cl}${REG['DT.funding_gap']}=0),"
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
@@ -1873,9 +1878,12 @@ def build_debt(wb, cfg):
     cp_target_lev = f"'Control_Panel'!$C${REG.get('CP.target_leverage', 61)}"
     cp_buffer = f"'Control_Panel'!$C${REG.get('CP.buffer', 62)}"
 
+    last_fc_idx = 3 + n_hist + len(cfg["fc_years"]) - 1
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
+        is_last_fc = (c_idx == last_fc_idx)
+        next_cl = get_column_letter(c_idx + 1) if not is_last_fc else cl
 
         # ── Refs to other sheets (non-circular) ──
         ebitda_ref = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
@@ -2063,15 +2071,14 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # NEW TERM: ALWAYS covers residual (model always finances)
-        # Gate determines RATE, not WHETHER to finance (commit 8616edc)
+        # NEW TERM: gated by covenant — gate closed → no new debt
+        # (gate already set on line ~1994, but we must NOT overwrite it here)
+        # residual_after_rc used for funding_gap calc
         residual_after_rc = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
-        formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR({residual_after_rc}+{term_out},0)",
-                     FMT_MLN)
 
-        # Funding gap = penalty-financed portion (gates closed → penalty rate)
-        # Shows HOW MUCH is distressed, not unfunded
+        # Funding gap = unfunded need when gate is closed
+        # Gate open → gap = 0 (new_term covers everything)
+        # Gate closed → new_term = 0, gap = residual (cash drops below min_cash)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
                      f"=IFERROR(IF({gate},0,{residual_after_rc}),0)",
                      FMT_MLN)
@@ -2107,11 +2114,16 @@ def build_debt(wb, cfg):
                      f"=({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
                      f"*{cp_commit_fee}",
                      FMT_MLN)
-        # Total interest = term + RC + fee
+        # Penalty interest on accumulated funding gap (opening balance × penalty_rate)
+        # Uses opening gap_accum (= prev close) to avoid circularity
+        cp_penalty_rate = f"'Control_Panel'!$C${REG.get('CP.penalty_rate', 72)}"
+        penalty_int = f"{prev}{REG['DT.funding_gap_accum']}*{cp_penalty_rate}"
+        # Total interest = term + RC + fee + penalty
         formula_cell(ws, REG["DT.interest"], c_idx,
                      f"={cl}{REG['DT.interest_term']}"
                      f"+{cl}{REG['DT.interest_rc']}"
-                     f"+{cl}{REG['DT.commit_fee']}",
+                     f"+{cl}{REG['DT.commit_fee']}"
+                     f"+{penalty_int}",
                      FMT_MLN, bold=True)
         # Avg rate: base from schedule (fill_data overrides with weighted avg)
         # New debt premium: spread_base + spread_step × MAX(0, prev_ND/EBITDA - target)
@@ -2128,9 +2140,12 @@ def build_debt(wb, cfg):
         cp_cov_reclass = f"'Control_Panel'!$C${REG.get('CP.cov_reclass', 75)}"
         cov_breached = f"OR({prev_ebitda}<=0,{prev_nd_ebitda}>{cp_cov_nd},{prev_icr}<{cp_cov_icr})"
         reclass = f"AND({cp_cov_reclass}=1,{cov_breached})"
-        # Normal ST = mandatory(this year, proxy for next) + RC + new_term_short
-        st_normal = (f"{cl}{REG['DT.mandatory']}"
-                     f"+{cl}{REG['DT.rc_close']}")
+        # Normal ST = mandatory(NEXT year per IAS 1) + RC close
+        # IAS 1: current liabilities = due within 12 months from balance date
+        # On 31.12.2026, ST = mandatory_2027 + RC
+        # Last forecast year: fall back to current year mandatory (no next col)
+        st_mand = f"{next_cl}{REG['DT.mandatory']}"
+        st_normal = f"{st_mand}+{cl}{REG['DT.rc_close']}"
         # LT independent = total - ST (not residual — allows real check)
         lt_normal = f"MAX(0,{cl}{REG['DT.close']}-({st_normal}))"
         # With reclass: all debt becomes ST
