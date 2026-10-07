@@ -80,6 +80,8 @@ def discover_cp_rows(wb):
         "доля labour": "CP.cogs_labour",
         "доля other": "CP.cogs_other",
         "useful life": "CP.useful_life",
+        "тенор refi": "CP.term_tenor",
+        "тенор capex": "CP.term_tenor_capex",
         "disposal %": "CP.disposal_pct",
         "dso (дни": "CP.wc_dso",
         "dih (дни": "CP.wc_dio",
@@ -878,8 +880,16 @@ def fill_debt_schedule(wb, data: dict, company: str):
                 prev_close_col = get_column_letter(bc - 1)  # prev year Close col
                 formula_cell(ws, r, bc, f"={prev_close_col}{r}", FMT_MLN)
 
-            # Mandatory = full balance if maturity_year = this year
-            if mat_year and mat_year == yr:
+            # Mandatory = full balance at maturity OR at refi maturity (original + tenor)
+            # After refi: instrument gets new maturity = mat_year + tenor
+            cp_tenor = REG.get("CP.term_tenor")
+            tenor_val = 5  # default
+            is_mat_year = (mat_year and mat_year == yr)
+            is_refi_mat = False
+            if mat_year and cp_tenor:
+                refi_mat = mat_year + tenor_val
+                is_refi_mat = (refi_mat == yr) and (refi_mat != mat_year)
+            if is_mat_year or is_refi_mat:
                 formula_cell(ws, r, bc + 1, f"={cl_open}{r}", FMT_MLN)
             else:
                 formula_cell(ws, r, bc + 1, "=0", FMT_MLN)
@@ -1025,7 +1035,13 @@ def fill_debt_schedule(wb, data: dict, company: str):
             tenor_ref = f"'Control_Panel'!$C${cp_term_tenor}"
         else:
             tenor_ref = str(tenor)
-        ws.cell(r_synth, 7, f"{yr + tenor}").font = F_LABEL
+        # Maturity = yr + capex_tenor (longer for project capex)
+        cp_capex_tenor = REG.get("CP.term_tenor_capex")
+        capex_tenor = 7
+        if cp_capex_tenor:
+            # Read from CP for the formula
+            capex_tenor = 7  # default, CP overrides at runtime
+        ws.cell(r_synth, 7, f"{yr + capex_tenor}").font = F_LABEL
 
         # Rate = leverage-dependent: avg_rate + spread_base + spread_step × MAX(0, ND/EBITDA - target)
         if cp_spread_base and cp_spread_step and cp_target_lev:

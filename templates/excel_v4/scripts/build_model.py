@@ -837,16 +837,22 @@ def build_ppe(wb, cfg):
         # Gross: open = prev close
         formula_cell(ws, REG["PP.gross_open"], c_idx, f"={prev}{REG['PP.gross_close']}", FMT_MLN)
 
-        # ── CapEx = MAX(sustaining + expansion, revenue × capex_pct × 0.5) ──
-        # sustaining = prev_DA × sustaining_ratio (1.8x)
-        # expansion = MAX(0, revenue_growth) × expansion_pct (5%)
-        # Python: capex = max(sustaining_capex + growth_capex, raw_capex * 0.5)
+        # ── CapEx = sustaining + expansion ──
+        # sustaining = prev_DA × sustaining_ratio
+        # expansion = MAX(0, volume_growth) × capex_per_unit
+        #   volume_growth from seg1 (primary product)
+        #   capex_per_unit ≈ PPE_net / capacity → expansion_pct × rev as proxy
         rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
         prev_rev_ref = f"'{NAME['RV']}'!{prev}${REG['RV.total_rev']}"
+        # Volume-driven expansion: growth in seg1 volume → capex
+        vol_ref = f"'{NAME['RV']}'!{cl}${REG.get('RV.seg1_vol', 8)}"
+        prev_vol_ref = f"'{NAME['RV']}'!{prev}${REG.get('RV.seg1_vol', 8)}"
+        # expansion = MAX(0, Δvol/vol_prev) × PPE_net × expansion_pct
+        # If volumes don't grow → expansion = 0 (no capex for declining business)
         formula_cell(ws, REG["PP.capex"], c_idx,
                      f"=MAX("
                      f"{prev}{REG['PP.dep_charge']}*{cp_sustaining}"  # sustaining
-                     f"+MAX(0,{rev_ref}-{prev_rev_ref})*{cp_expansion}"  # expansion
+                     f"+IFERROR(MAX(0,{vol_ref}/{prev_vol_ref}-1),0)*{prev}{REG['PP.net_close']}*{cp_expansion}"  # expansion from volume
                      f","
                      f"ABS({rev_ref})*{cp_da_rate}*0.5"  # floor: 50% of rev-based
                      f")",
@@ -3126,9 +3132,13 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.60, FMT_PCT)
     REG["CP.rc_trigger"] = r; r += 1
 
-    label_row(ws, r, "Тенор нового транша (лет)", "yr")
+    label_row(ws, r, "Тенор refi транша (лет)", "yr", "Для рефинансирования")
     input_cell(ws, r, 3, cfg.get("term_tenor", 5), FMT_INT)
     REG["CP.term_tenor"] = r; r += 1
+
+    label_row(ws, r, "Тенор capex транша (лет)", "yr", "Для проектного CapEx (5-7 лет)")
+    input_cell(ws, r, 3, cfg.get("term_tenor_capex", 7), FMT_INT)
+    REG["CP.term_tenor_capex"] = r; r += 1
 
     label_row(ws, r, "Spread base (новый долг)", "%")
     input_cell(ws, r, 3, cfg.get("spread_base", 0.03), FMT_PCT)
