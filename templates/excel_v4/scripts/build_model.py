@@ -494,9 +494,11 @@ def build_assump(wb, cfg):
 
     # WC
     section_header(ws, r, "ОБОРОТНЫЙ КАПИТАЛ"); r += 1
+    wc_cp_keys = {"DSO": "CP.wc_dso", "DIH": "CP.wc_dio", "DPO": "CP.wc_dpo"}
     for d in ["DSO (дни)", "DIH (дни)", "DPO (дни)"]:
         label_row(ws, r, d)
-        ref_cell(ws, r, 3, f"='Control_Panel'!$C${38 + ['DSO', 'DIH', 'DPO'].index(d[:3])}", FMT_DAYS)
+        cp_wc = REG.get(wc_cp_keys.get(d[:3], ""), 50)
+        ref_cell(ws, r, 3, f"='Control_Panel'!$C${cp_wc}", FMT_DAYS)
         r += 1
     r += 1
 
@@ -2608,8 +2610,10 @@ def build_valuation(wb, cfg):
     r_ev = REG["VL.ev"]
     r_nd = REG["VL.nd"]
     r_eq = REG["VL.eq_value"]
-    label_row(ws, r_ev, "Enterprise Value (NPV + PV_TV)", "mln")
-    formula_cell(ws, r_ev, 3, f"=$C${npv_r}+$C${pv_tv_r}", FMT_MLN, bold=True)
+    label_row(ws, r_ev, "Enterprise Value (MAX of DCF, SOTP)", "mln")
+    formula_cell(ws, r_ev, 3,
+                 f"=MAX($C${npv_r}+$C${pv_tv_r},$C${REG['VL.sotp_total']})",
+                 FMT_MLN, bold=True)
     label_row(ws, r_nd, "Net Debt (последний прогнозный год)", "mln")
     ref_cell(ws, r_nd, 3, f"='{NAME['DT']}'!{last_fc_col}${REG['DT.nd']}", FMT_MLN)
     label_row(ws, r_eq, "Equity Value = EV − Net Debt", "mln")
@@ -2809,10 +2813,16 @@ def build_covenants(wb, cfg):
                 ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
         r += 1
 
-        # Threshold
+        # Threshold — from CP if available
         label_row(ws, r, f"Порог ({'≤' if direction == 'max' else '≥'} {threshold})")
+        # Map covenant labels to CP keys
+        cov_cp = {"ND/EBITDA": "CP.cov_nd_ebitda", "Interest Coverage (ICR)": "CP.cov_icr"}
+        cp_cov_row = REG.get(cov_cp.get(label, ""))
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
-            input_cell(ws, r, c, threshold, fmt)
+            if cp_cov_row:
+                ref_cell(ws, r, c, f"='Control_Panel'!$C${cp_cov_row}", fmt)
+            else:
+                input_cell(ws, r, c, threshold, fmt)
         thresh_r = r
         r += 1
 
@@ -2852,7 +2862,7 @@ def build_revstress(wb, cfg):
     covs = cfg.get("covenants", {})
     nd_max = covs.get("nd_ebitda_max", 4.5)
     label_row(ws, 8, f"Порог ND/EBITDA: {nd_max}x")
-    input_cell(ws, 8, 3, nd_max, FMT_MULT)
+    input_cell(ws, 8, 5, nd_max, FMT_MULT)  # E8 (not C8 — avoid self-ref from bisect_ebitda)
 
     label_row(ws, 10, "Breakeven Revenue shock (%)", "%", "Revenue(actual) × (1 + shock)")
     label_row(ws, 11, "Breakeven EBITDA shock (%)", "%")
@@ -2880,10 +2890,10 @@ def build_revstress(wb, cfg):
     int_ref = f"ABS('{NAME['DT']}'!{last_fc}${REG['DT.interest']})"
     # Revenue shock = ND/(threshold×EBITDA) - 1 (negative = drop)
     formula_cell(ws, REG["RS.bisect_rev"], 3,
-                 f"=IFERROR({nd_ref}/($C$8*{ebitda_ref})-1,0)", FMT_PCT)
-    # EBITDA shock (direct): ND/(threshold×EBITDA_new)=1 → EBITDA_new=ND/threshold
+                 f"=IFERROR({nd_ref}/($E$8*{ebitda_ref})-1,0)", FMT_PCT)
+    # EBITDA shock (direct)
     formula_cell(ws, REG["RS.bisect_ebitda"], 3,
-                 f"=IFERROR({nd_ref}/$C$8/{ebitda_ref}-1,0)", FMT_PCT)
+                 f"=IFERROR({nd_ref}/$E$8/{ebitda_ref}-1,0)", FMT_PCT)
 
     section_header(ws, 15, "B. TORNADO: ЧУВСТВИТЕЛЬНОСТЬ К ±1σ")
     ws.cell(16, 1, "Переменная").font = F_LABEL_B
