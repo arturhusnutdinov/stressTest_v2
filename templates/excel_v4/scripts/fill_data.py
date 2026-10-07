@@ -632,10 +632,10 @@ def fill_revenue(wb, data: dict, company: str):
         if not matching:
             continue
 
-        vol_r = REG.get(f"RV.{key}_vol")
-        price_r = REG.get(f"RV.{key}_price")
-        if not vol_r:
-            continue
+        # Fill into 11_Segments (single source); 10_Revenue refs 11_Segments
+        sg_vol_r = REG.get(f"SG.{key}_vol")
+        sg_price_r = REG.get(f"SG.{key}_price")
+        ws_sg = wb["11_Segments"]
 
         vol_data = matching.get("sales_kt", matching.get("production_kt", {}))
         price_data = matching.get("avg_price_usd_t", {})
@@ -646,12 +646,12 @@ def fill_revenue(wb, data: dict, company: str):
                 continue
             col = 3 + hist_years.index(year)
 
-            if year in vol_data:
-                ws.cell(vol_r, col, round(vol_data[year], 0)).font = F_INPUT
-                ws.cell(vol_r, col).number_format = FMT_INT
-            if year in price_data and price_r:
-                ws.cell(price_r, col, round(price_data[year], 0)).font = F_INPUT
-                ws.cell(price_r, col).number_format = FMT_INT
+            if year in vol_data and sg_vol_r:
+                ws_sg.cell(sg_vol_r, col, round(vol_data[year], 0)).font = F_INPUT
+                ws_sg.cell(sg_vol_r, col).number_format = FMT_INT
+            if year in price_data and sg_price_r:
+                ws_sg.cell(sg_price_r, col, round(price_data[year], 0)).font = F_INPUT
+                ws_sg.cell(sg_price_r, col).number_format = FMT_INT
 
         # Forecast: macro-driven price via OLS chain-link or EWA carry-forward
         fc_years = src["fc_years"]
@@ -722,33 +722,10 @@ def fill_revenue(wb, data: dict, company: str):
                             print(f"    {seg_label} OLS: β={beta_price:.3f} α={alpha_price:.4f} "
                                   f"({len(dx)} obs, factor={factor_name})")
 
-        # Write forecasts
-        forecast_vol = last_vol
-        forecast_price = last_price
-        for i, yr in enumerate(fc_years):
-            c = fc_start_col + i
-            # Volume: EWA growth
-            if avg_growth != 0:
-                import math
-                forecast_vol = forecast_vol * math.exp(avg_growth)
-            # Overwrite formula cell with calculated value
-            ws.cell(vol_r, c, round(forecast_vol, 0)).font = F_FORMULA
-            ws.cell(vol_r, c).number_format = FMT_INT
-
-            # Price: if macro-driven, use factor growth × β
-            if factor_name and factor_series:
-                # Use mean-reversion forecast of factor (already in 01_Macro)
-                # For now: simple chain-link using last known growth
-                last_factor = factor_series.get(hist_years[-1], factor_series.get(hist_years[-2], 0))
-                # Price mean-reverts like factor
-                if last_factor > 0 and last_price > 0:
-                    # Price grows at β × factor growth rate
-                    # Simple: median reversion at 30% per year
-                    median_price = sorted(price_data.values())[len(price_data) // 2] if price_data else last_price
-                    forecast_price = forecast_price + 0.3 * (median_price - forecast_price)
-
-            # Price forecast: DON'T overwrite — build_model links to 01_Macro active scenario
-            # (was overwriting macro formula with literal — audit blocker 3)
+        # Forecast: DON'T override — build_model creates formulas in 11_Segments
+        # (volume = carry-forward, price = 01_Macro active scenario)
+        if factor_name and beta_price != 1.0:
+            print(f"    {seg_label} OLS β={beta_price:.3f} (reference only, formulas in 11_Segments)")
 
 
 def fill_debt_schedule(wb, data: dict, company: str):

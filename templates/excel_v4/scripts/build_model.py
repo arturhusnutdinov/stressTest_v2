@@ -682,6 +682,54 @@ def build_hist(wb, cfg):
             input_cell(ws, r, c, 0, FMT_MLN)
 
 
+def build_segments(wb, cfg):
+    """11_Segments — operational data structure (filled by fill_data)."""
+    ws = wb["11_Segments"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"11_Segments — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Операционные показатели по сегментам (history + forecast)").font = F_SUBTITLE
+
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
+
+    r = 6
+    for i, seg in enumerate(cfg["segments"]):
+        key = seg["key"]
+        section_header(ws, r, f"{seg['name']} (driver: {seg['driver']})")
+        r += 1
+        # Volume
+        label_row(ws, r, "Объём продаж", "kt")
+        REG[f"SG.{key}_vol"] = r
+        for c in range(3, 3 + n_hist):
+            input_cell(ws, r, c, 0, FMT_INT)
+        # Forecast: carry forward (fill_data may override)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            prev = get_column_letter(c - 1)
+            formula_cell(ws, r, c, f"={prev}{r}", FMT_INT)
+        r += 1
+        # Price
+        label_row(ws, r, "Средняя цена реализации", "$/t")
+        REG[f"SG.{key}_price"] = r
+        for c in range(3, 3 + n_hist):
+            input_cell(ws, r, c, 0, FMT_INT)
+        # Forecast: from 01_Macro active scenario
+        act_base = REG.get("MA.act_base", 36)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            formula_cell(ws, r, c,
+                         f"='{NAME['MA']}'!{cl}${act_base + i}", FMT_INT)
+        r += 1
+        # Revenue
+        label_row(ws, r, "Выручка сегмента", "mln")
+        REG[f"SG.{key}_rev"] = r
+        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            formula_cell(ws, r, c,
+                         f"={cl}{REG[f'SG.{key}_vol']}*{cl}{REG[f'SG.{key}_price']}/1000",
+                         FMT_MLN, bold=True)
+        r += 2
+
+
 def build_revenue(wb, cfg):
     """10_Revenue — segment-level revenue = Σ(Vol × Price)."""
     ws = wb["10_Revenue"]
@@ -703,13 +751,23 @@ def build_revenue(wb, cfg):
         label_row(ws, base_r + 1, "Средняя цена реализации", "$/t")
         label_row(ws, base_r + 2, "Выручка сегмента", "mln")
 
-        # History: input
+        # History: reference 11_Segments (single source)
         n_hist = len(cfg["hist_years"][-3:])
+        sg_vol = REG.get(f"SG.{key}_vol")
+        sg_price = REG.get(f"SG.{key}_price")
         for c in range(3, 3 + n_hist):
-            input_cell(ws, base_r, c, 0, FMT_INT)      # volume
-            input_cell(ws, base_r + 1, c, 0, FMT_INT)   # price
-            # revenue = vol × price / 1e6 (kt × $/t → $mln)
             col_l = get_column_letter(c)
+            if sg_vol:
+                ref_cell(ws, base_r, c,
+                         f"='{NAME['SG']}'!{col_l}${sg_vol}", FMT_INT)
+            else:
+                input_cell(ws, base_r, c, 0, FMT_INT)
+            if sg_price:
+                ref_cell(ws, base_r + 1, c,
+                         f"='{NAME['SG']}'!{col_l}${sg_price}", FMT_INT)
+            else:
+                input_cell(ws, base_r + 1, c, 0, FMT_INT)
+            # revenue = vol × price / 1e6 (kt × $/t → $mln)
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
@@ -3822,6 +3880,7 @@ def build(company: str, output: str):
         ("03_Assump",       build_assump),
         ("Raw_IFRS",        build_raw_ifrs),
         ("02_Hist",         build_hist),
+        ("11_Segments",     build_segments),
         ("10_Revenue",      build_revenue),
         ("12_COGS",         build_cogs),
         ("13_SGA",          build_sga),
