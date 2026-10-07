@@ -766,6 +766,28 @@ def build_revenue(wb, cfg):
         parts.append(f"{col_l}{r_recon}")  # + reconciliation
         formula_cell(ws, r_total, c, "=" + "+".join(parts), FMT_MLN, bold=True)
 
+    # Revenue method switch for total (method 2=macro_ols, 3=ewa override total)
+    # Method 1 (segment): already computed above as Σ segments + recon
+    # Method 2 (macro_ols): Rev = prev × (1 + β × Δln(factor))
+    # Method 3 (ewa): Rev = prev × (1 + EWA_growth_from_history)
+    cp_rev_method = f"'Control_Panel'!$C${REG.get('CP.rev_method', 20)}"
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        col_l = get_column_letter(c)
+        prev_col = get_column_letter(c - 1)
+        seg_total = "+".join(
+            f"{col_l}{REG.get('RV.' + seg['key'] + '_rev', 10)}"
+            for seg in cfg["segments"])
+        seg_total = f"{seg_total}+{col_l}{r_recon}"  # method 1
+        # Method 2: macro OLS = prev × (1 + growth from 03_Assump)
+        assump_growth = f"'{NAME['AS']}'!{col_l}${REG.get('AS.rev_growth', 7)}"
+        method2 = f"{prev_col}{r_total}*(1+{assump_growth})"
+        # Method 3: EWA = carry-forward growth (simpler, from prev year)
+        method3 = f"{prev_col}{r_total}*(1+IFERROR(({prev_col}{r_total}/{get_column_letter(c-2)}{r_total}-1),0))"
+        formula_cell(ws, r_total, c,
+                     f"=IF({cp_rev_method}=1,{seg_total},"
+                     f"IF({cp_rev_method}=2,{method2},{method3}))",
+                     FMT_MLN, bold=True)
+
     # Revenue growth
     r_growth = REG.get("RV.rev_growth", 21)
     label_row(ws, r_growth, "Рост выручки", "%")
@@ -1625,21 +1647,37 @@ def build_cogs(wb, cfg):
     label_row(ws, r_total, "ИТОГО СЕБЕСТОИМОСТЬ", "mln")
     ws.cell(r_total, 1).font = F_LABEL_B
 
+    cp_cogs_method = f"'Control_Panel'!$C${REG.get('CP.cogs_method', 20)}"
+    cp_cogs_ratio = f"'Control_Panel'!$C${REG.get('CP.cogs_ratio', 20)}"
+
     if cfg.get("cogs_mode") == "component":
         comps = cfg.get("cogs_components", {})
         comp_keys = list(comps.keys())
-        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+        # History: always sum of components
+        for c in range(3, 3 + n_hist):
             cl = get_column_letter(c)
             parts = [f"{cl}{REG.get(f'CG.{k}', 8)}" for k in comp_keys]
             formula_cell(ws, r_total, c, "=-(" + "+".join(parts) + ")", FMT_MLN, bold=True)
+        # Forecast: switch (1=ratio, 2=component, 3=ppi_uplift as ratio×(1+ppi))
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            prev_cl = get_column_letter(c - 1)
+            rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
+            comp_sum = "+".join(f"{cl}{REG.get(f'CG.{k}', 8)}" for k in comp_keys)
+            method1 = f"-{rev_ref}*{cp_cogs_ratio}"  # ratio
+            method2 = f"-({comp_sum})"  # component
+            method3 = f"{prev_cl}{r_total}*(1+0.03)"  # PPI uplift (simplified)
+            formula_cell(ws, r_total, c,
+                         f"=IF({cp_cogs_method}=1,{method1},"
+                         f"IF({cp_cogs_method}=2,{method2},{method3}))",
+                         FMT_MLN, bold=True)
     else:
-        # Ratio mode: COGS = -ABS(Revenue) × ratio(from CP)
-        cp_cogs = f"'Control_Panel'!$C${REG.get('CP.cogs_ratio', 20)}"
+        # Ratio mode only (no components built)
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             cl = get_column_letter(c)
             rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
             formula_cell(ws, r_total, c,
-                         f"=-ABS({rev_ref})*{cp_cogs}", FMT_MLN, bold=True)
+                         f"=-ABS({rev_ref})*{cp_cogs_ratio}", FMT_MLN, bold=True)
 
     # COGS ratio
     r_ratio = REG["CG.ratio"]
@@ -1740,12 +1778,26 @@ def build_wc(wb, cfg):
                          FMT_MLN)
 
     # NWC = AR + INV - AP
+    # WC method switch: 1=days (AR/INV/AP from DSO/DIH/DPO), 2=ratio (NWC = prev_NWC/Rev × Rev)
+    cp_wc_method = f"'Control_Panel'!$C${REG.get('CP.wc_method', 30)}"
     r_nwc = REG["WC.nwc"]
     label_row(ws, r_nwc, "Чистый оборотный капитал", "mln")
-    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+    # History: always from components
+    for c in range(3, 3 + n_hist):
         cl = get_column_letter(c)
         formula_cell(ws, r_nwc, c,
                      f"={cl}{REG['WC.ar']}+{cl}{REG['WC.inv']}-ABS({cl}{REG['WC.ap']})", FMT_MLN, bold=True)
+    # Forecast: method switch
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        prev_cl = get_column_letter(c - 1)
+        rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
+        prev_rev = f"ABS('{NAME['RV']}'!{prev_cl}${REG['RV.total_rev']})"
+        method1 = f"{cl}{REG['WC.ar']}+{cl}{REG['WC.inv']}-ABS({cl}{REG['WC.ap']})"
+        method2 = f"IFERROR({prev_cl}{r_nwc}/{prev_rev}*{rev_ref},{prev_cl}{r_nwc})"
+        formula_cell(ws, r_nwc, c,
+                     f"=IF({cp_wc_method}=1,{method1},{method2})",
+                     FMT_MLN, bold=True)
 
     # ΔNWC
     r_delta = REG["WC.delta_nwc"]
@@ -3182,7 +3234,8 @@ def build_control_panel(wb, cfg):
     # ── C. ВЫРУЧКА ──
     section_header(ws, r, "C. ВЫРУЧКА"); r += 1
     label_row(ws, r, "Revenue method (1=segment, 2=macro_ols, 3=ewa)")
-    input_cell(ws, r, 3, 1, FMT_INT); r += 1
+    input_cell(ws, r, 3, 1, FMT_INT)
+    REG["CP.rev_method"] = r; r += 1
     label_row(ws, r, "Эластичность Revenue к macro-фактору", "", "β × Δln(factor)")
     input_cell(ws, r, 3, 1.0, FMT_RATIO); r += 1
     label_row(ws, r, "R² (коэфф. детерминации)")
@@ -3192,7 +3245,8 @@ def build_control_panel(wb, cfg):
     section_header(ws, r, "D. СЕБЕСТОИМОСТЬ"); r += 1
     cogs_method = 2 if cfg.get("cogs_mode") == "component" else 1
     label_row(ws, r, "COGS method (1=ratio, 2=component, 3=ppi_uplift)")
-    input_cell(ws, r, 3, cogs_method, FMT_INT); r += 1
+    input_cell(ws, r, 3, cogs_method, FMT_INT)
+    REG["CP.cogs_method"] = r; r += 1
     # COGS ratio (used by both modes — main sensitivity lever)
     label_row(ws, r, "COGS ratio (калиброванный)", "%", "→ 12_COGS formula")
     input_cell(ws, r, 3, cfg.get("cogs_ratio_default", 0.83), FMT_PCT)
@@ -3240,7 +3294,8 @@ def build_control_panel(wb, cfg):
     # ── G. ОБОРОТНЫЙ КАПИТАЛ ──
     section_header(ws, r, "G. ОБОРОТНЫЙ КАПИТАЛ"); r += 1
     label_row(ws, r, "WC method (1=days, 2=ratio)")
-    input_cell(ws, r, 3, 1, FMT_INT); r += 1
+    input_cell(ws, r, 3, 1, FMT_INT)
+    REG["CP.wc_method"] = r; r += 1
     for d, default, key in [("DSO (дни)", 30, "CP.wc_dso"),
                              ("DIH (дни)", 80, "CP.wc_dio"),
                              ("DPO (дни)", 40, "CP.wc_dpo")]:
