@@ -2264,6 +2264,106 @@ def validate_data(wb, data: dict, company: str):
         print(f"    All checks passed ✓")
 
 
+def fill_macro_scenarios(wb, company: str):
+    """Fill 01_Macro 3 scenarios with consensus-based forecasts."""
+    ws = wb["01_Macro"]
+    src = SOURCES[company]
+    fc_years = src["fc_years"]
+    n_hist = N_HIST_DISPLAY
+    fc_start = COL_START + n_hist
+
+    # Consensus-based scenarios (LME Al $/t, LME Alumina, USD/RUB, Brent, CPI%, PPI%)
+    # Factors match cfg["macro_factors"] order
+    scenarios = {
+        "rusal": {
+            # Scenario 1: Base (consensus mean-reversion)
+            1: {
+                "LME Aluminium": [2450, 2500, 2550],     # gradual recovery
+                "LME Alumina": [540, 520, 500],           # normalizing
+                "USD/RUB": [95, 92, 90],                  # RUB strengthening
+                "Brent": [75, 72, 70],                    # stable
+                "CPI RU": [0.06, 0.05, 0.04],             # declining
+                "PPI RU": [0.05, 0.04, 0.03],
+            },
+            # Scenario 2: Stress (commodity down, RUB weak)
+            2: {
+                "LME Aluminium": [2000, 1900, 1850],     # -20%
+                "LME Alumina": [400, 380, 370],           # down
+                "USD/RUB": [110, 115, 120],               # RUB weakening
+                "Brent": [60, 55, 50],
+                "CPI RU": [0.08, 0.09, 0.10],
+                "PPI RU": [0.07, 0.08, 0.09],
+            },
+            # Scenario 3: Severe (deep recession)
+            3: {
+                "LME Aluminium": [1700, 1600, 1550],     # -35%
+                "LME Alumina": [300, 280, 270],
+                "USD/RUB": [130, 140, 150],
+                "Brent": [45, 40, 38],
+                "CPI RU": [0.12, 0.14, 0.15],
+                "PPI RU": [0.10, 0.12, 0.14],
+            },
+        },
+        "nornickel": {
+            1: {
+                "LME Nickel": [18000, 19000, 20000],
+                "LME Copper": [9000, 9200, 9500],
+                "LME Palladium": [1000, 1050, 1100],
+                "LME Platinum": [950, 980, 1000],
+                "USD/RUB": [95, 92, 90],
+                "Brent": [75, 72, 70],
+                "GDP World": [0.027, 0.029, 0.030],
+            },
+            2: {
+                "LME Nickel": [14000, 13000, 12000],
+                "LME Copper": [7000, 6500, 6000],
+                "LME Palladium": [700, 650, 600],
+                "LME Platinum": [750, 700, 680],
+                "USD/RUB": [110, 115, 120],
+                "Brent": [55, 50, 45],
+                "GDP World": [0.015, 0.010, 0.005],
+            },
+            3: {
+                "LME Nickel": [10000, 9000, 8500],
+                "LME Copper": [5500, 5000, 4500],
+                "LME Palladium": [500, 450, 400],
+                "LME Platinum": [600, 550, 500],
+                "USD/RUB": [140, 150, 160],
+                "Brent": [40, 35, 30],
+                "GDP World": [0.005, -0.010, -0.020],
+            },
+        },
+    }
+
+    company_scenarios = scenarios.get(company, {})
+    if not company_scenarios:
+        return
+
+    from build_model import COMPANY_CONFIGS
+    cfg = COMPANY_CONFIGS.get(company, {})
+    factors = cfg.get("macro_factors", [])
+
+    # Scenario row blocks: S1 starts at row 8, gap = len(factors)+3
+    n_f = len(factors)
+    filled = 0
+    for s_idx in [1, 2, 3]:
+        s_data = company_scenarios.get(s_idx, {})
+        s_base = 6 + (s_idx - 1) * (n_f + 3)  # matches build_macro layout
+        for i, factor in enumerate(factors):
+            r = s_base + 2 + i
+            vals = s_data.get(factor, [0] * len(fc_years))
+            for j, val in enumerate(vals):
+                c = fc_start + j
+                ws.cell(r, c, val).font = F_INPUT
+                if isinstance(val, float) and val < 1:
+                    ws.cell(r, c).number_format = FMT_PCT
+                else:
+                    ws.cell(r, c).number_format = FMT_RATIO1
+                filled += 1
+
+    print(f"    Macro scenarios: 3 × {n_f} factors × {len(fc_years)} years = {filled} cells")
+
+
 def fill_macro_forecasts(wb, data: dict, company: str):
     """Fill 01_Macro forecast columns with simple mean-reversion forecasts.
 
@@ -2401,8 +2501,9 @@ def fill_all(company: str, model_path: str):
     print("\n4. Filling 11_Segments (operational)...")
     fill_segments(wb, data, company)
 
-    print("\n5. Filling 01_Macro (factors)...")
+    print("\n5. Filling 01_Macro (factors + scenarios)...")
     fill_macro(wb, data, company)
+    fill_macro_scenarios(wb, company)
 
     print("\n6. Filling 10_Revenue (volumes & prices)...")
     fill_revenue(wb, data, company)
