@@ -1938,15 +1938,32 @@ def build_debt(wb, cfg):
         # Refi — input, filled by fill_data (= mandatory × refi_pct)
         input_cell(ws, REG["DT.refi"], c_idx, 0, FMT_MLN)
 
-        # ── cash_before_RC: from CF totals, NOT duplicated P&L arithmetic ──
-        # CFF_no_RC is computed in 23_CF (refi + new_term - mand - vol - lease - div)
-        # cash_before_RC = BS.cash_prev + CF.CFO + CF.CFI + CF.CFF_no_RC
-        cff_no_rc_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cff_no_rc']}"
-        cfo_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}"
-        cfi_ref = f"'{NAME['CF']}'!{cl}${REG['CF.cfi']}"
-        cash_before_rc = f"({cash_prev}+{cfo_ref}+{cfi_ref}+{cff_no_rc_ref})"
-        # Write to dedicated row for transparency
-        label_row(ws, REG["DT.cash_before_rc"], "ДС до RC (из CF)", "mln") if c_idx == 3 + n_hist else None
+        # ── cash_before_RC: ANALYTICAL, from opening balances only ──
+        # NO circular dependency: uses only prev-year balances and current-year
+        # deterministic flows (EBITDA, tax from openings, capex, WC, term debt flows)
+        #
+        # cash_before = ДС_нач + EBITDA - interest_term(opening) - tax_est
+        #              - CapEx - ΔWC - mandatory + refi - div(prev_NI) - lease_pay
+        interest_term_est = f"{cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']}"
+        cp_tax_rate_dt = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+        tax_est = f"MAX(0,{ebitda_ref}-{da_ref}-({interest_term_est}))*{cp_tax_rate_dt}"
+        # Dividends from PREVIOUS year NI (not current — breaks circular)
+        prev_ni = f"IFERROR('{NAME['PL']}'!{prev}${REG['PL.ni']},0)"
+        cp_payout = f"'Control_Panel'!$C${REG.get('CP.payout_ratio', 85)}"
+        div_est = f"MAX(0,{prev_ni})*{cp_payout}"
+
+        cash_before_rc = (
+            f"{cash_prev}+{ebitda_ref}"
+            f"-({interest_term_est})"
+            f"-({tax_est})"
+            f"-ABS({capex_ref})"
+            f"-{wc_ref}"
+            f"-ABS({cl}{REG['DT.mandatory']})"
+            f"+{cl}{REG['DT.refi']}"
+            f"-({div_est})"
+            f"-ABS('{NAME['LS']}'!{cl}${REG['LS.liab_pay']})")
+
+        label_row(ws, REG["DT.cash_before_rc"], "ДС до RC (аналитич.)", "mln") if c_idx == 3 + n_hist else None
         formula_cell(ws, REG["DT.cash_before_rc"], c_idx,
                      f"=IFERROR({cash_before_rc},0)", FMT_MLN)
 
@@ -1958,10 +1975,17 @@ def build_debt(wb, cfg):
 
         cbrc = f"{cl}{REG['DT.cash_before_rc']}"
 
-        # ── FUNDING NEED (единая потребность) ──
+        # ── FUNDING NEED with analytical interest correction (§6) ──
+        # need₀ = MAX(0, min_cash - cash_before_RC)
+        # P = need₀ / (1 - r/2 × (1-t))  — closed-form fixed point
+        # r_blend ≈ RC rate (most financing is RC at this stage)
+        need_raw = f"MAX(0,{cp_min_cash}-{cbrc})"
+        # Analytical correction: P = need₀ / (1 - r/2·(1-t))
+        # At r=14%, t=25%: divisor = 0.9475, P ≈ 1.055 × need₀
+        divisor = f"MAX(0.5,1-{cp_rc_rate}/2*(1-{cp_tax_rate_dt}))"
         need = f"{cl}{REG['DT.funding_need']}"
         formula_cell(ws, REG["DT.funding_need"], c_idx,
-                     f"=MAX(0,{cp_min_cash}-{cbrc})", FMT_MLN)
+                     f"=IFERROR({need_raw}/{divisor},0)", FMT_MLN)
 
         # ── RC DRAW: covers need up to free limit ──
         free_limit = f"MAX(0,{cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
