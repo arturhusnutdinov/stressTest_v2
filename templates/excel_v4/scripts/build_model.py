@@ -2055,11 +2055,21 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # Funding gap = need - RC_draw - new_term (residual unpaid)
-        formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(MAX(0,{need}-{cl}{REG['DT.rc_draw']}-{cl}{REG['DT.new_term']}),0)",
+        # NEW TERM always covers residual after RC (model always finances)
+        # Gate determines RATE, not whether to finance:
+        #   gate OPEN → normal rate (spread_base + spread_step × leverage)
+        #   gate CLOSED → penalty rate (24%) — shown as "last resort"
+        # This eliminates negative cash entirely
+        formula_cell(ws, REG["DT.new_term"], c_idx,
+                     f"=IFERROR(MAX(0,{need}-{cl}{REG['DT.rc_draw']})+{term_out},0)",
                      FMT_MLN)
-        # Accumulated gap = prev + current year gap
+
+        # Funding gap = portion financed at penalty rate (gate closed)
+        # Shows how much of new_term is "distressed" financing
+        formula_cell(ws, REG["DT.funding_gap"], c_idx,
+                     f"=IFERROR(IF({gate},0,MAX(0,{need}-{cl}{REG['DT.rc_draw']})),0)",
+                     FMT_MLN)  # penalty-financed portion
+        # Accumulated = total penalty financing
         formula_cell(ws, REG["DT.funding_gap_accum"], c_idx,
                      f"={prev}{REG['DT.funding_gap_accum']}+{cl}{REG['DT.funding_gap']}",
                      FMT_MLN)
@@ -2329,10 +2339,10 @@ def build_cf(wb, cfg):
                      f"=-ABS({cl}{REG['CF.capex']})+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
                      FMT_MLN, bold=True)
 
-        # CFF_без_RC: all financing flows EXCEPT RC draw/repay
-        # = refi + new_term - mandatory - voluntary_term - lease - div + other
+        # CFF_без_RC_и_NewTerm: deterministic financing flows only
+        # Excludes RC draw/repay AND new_term (both determined by the plug)
+        # = refi - mandatory - voluntary_term - lease - div + other
         cff_no_rc = (f"='{NAME['DT']}'!{cl}${REG['DT.refi']}"
-                     f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
                      f"-ABS('{NAME['DT']}'!{cl}${REG['DT.mandatory']})"
                      f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary_term']})"
                      f"-ABS({cl}{REG['CF.lease_pay']})"
@@ -2341,9 +2351,10 @@ def build_cf(wb, cfg):
         label_row(ws, REG["CF.cff_no_rc"], "CFF без RC", "mln") if c_idx == 3 + n_hist else None
         formula_cell(ws, REG["CF.cff_no_rc"], c_idx, cff_no_rc, FMT_MLN)
 
-        # CFF = CFF_без_RC + RC_draw - RC_repay
+        # CFF = CFF_base + new_term + RC_draw - RC_repay
         formula_cell(ws, r_cff, c_idx,
                      f"={cl}{REG['CF.cff_no_rc']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
                      f"+'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}",
                      FMT_MLN, bold=True)
@@ -3193,6 +3204,10 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Премия за досрочное погашение LT", "%")
     input_cell(ws, r, 3, cfg.get("prepay_premium", 0.01), FMT_PCT)
     REG["CP.prepay_premium"] = r; r += 1
+
+    label_row(ws, r, "Штрафная ставка (last resort)", "%", "Для финансирования при нарушении ковенантов")
+    input_cell(ws, r, 3, 0.24, FMT_PCT)  # KeyRate + 10pp ≈ 24%
+    REG["CP.penalty_rate"] = r; r += 1
 
     label_row(ws, r, "FX USDCNY change YoY", "%", "Δ курса: >0 = USD усиливается")
     input_cell(ws, r, 3, 0.0, FMT_PCT)
