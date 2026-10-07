@@ -819,6 +819,7 @@ def fill_debt_schedule(wb, data: dict, company: str):
 
     other_balance = 0
     other_interest = 0
+    top_n_balance = 0  # track top-N for reconciliation
 
     for i, inst in enumerate(instruments):
         if i >= max_inst:
@@ -827,6 +828,9 @@ def fill_debt_schedule(wb, data: dict, company: str):
             other_balance += bal
             other_interest += bal * rate
             continue
+
+        # Track rounded top-N balance for reconciliation with BS
+        top_n_balance += round(abs(float(inst.get("opening_balance", 0) or 0)) / 1e6, 1)
 
         r = 5 + i
         name = str(inst.get("instrument_name", f"Inst_{i+1}"))[:35]
@@ -912,11 +916,20 @@ def fill_debt_schedule(wb, data: dict, company: str):
             formula_cell(ws, r, bc + 4,
                          f"={cl_open}{r}-{cl_mand}{r}+{cl_refi}{r}", FMT_MLN)
 
-    # Other bucket (remaining instruments)
-    if other_balance > 0:
-        r_other = 5 + max_inst
+    # Other bucket: reconcile so that schedule total = BS total exactly
+    # Other = BS_total - Σ(top_N rounded) to absorb rounding differences
+    bs_d = data.get("bs", {})
+    last_yr = SOURCES[company]["hist_years"][-1]
+    st_bs = abs(bs_d.get("short_term_debt", {}).get(last_yr, 0))
+    lt_bs = abs(bs_d.get("long_term_debt", {}).get(last_yr, 0))
+    bs_total_mln = st_bs + lt_bs
+    reconciled_other = bs_total_mln - top_n_balance
+    if reconciled_other < 0:
+        reconciled_other = other_balance  # fallback
+    r_other = 5 + max_inst
+    if other_balance > 0 or reconciled_other > 0:
         ws.cell(r_other, 2, f"Other ({len(instruments) - max_inst} instruments)").font = F_LABEL_B
-        ws.cell(r_other, 5, round(other_balance, 1)).font = F_INPUT
+        ws.cell(r_other, 5, round(reconciled_other, 1)).font = F_INPUT
         ws.cell(r_other, 5).number_format = FMT_MLN
         avg_other_rate = other_interest / other_balance if other_balance > 0 else 0.08
         ws.cell(r_other, 6, round(avg_other_rate, 4)).font = F_INPUT
@@ -1302,8 +1315,10 @@ def fill_debt_hist(wb, data: dict, company: str):
     bs = data.get("bs", {})
     st = bs.get("short_term_debt", {}).get(last_yr, 0)
     lt = bs.get("long_term_debt", {}).get(last_yr, 0)
-    total = abs(st) + abs(lt)
+    total_bs = abs(st) + abs(lt)
     cash = abs(bs.get("cash", {}).get(last_yr, 0))
+
+    total = total_bs  # must match BS (ST+LT) for balance identity
 
     if total > 0:
         # Term debt (total debt = term, RC starts at 0)
