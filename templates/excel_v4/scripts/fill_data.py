@@ -747,9 +747,8 @@ def fill_revenue(wb, data: dict, company: str):
                     median_price = sorted(price_data.values())[len(price_data) // 2] if price_data else last_price
                     forecast_price = forecast_price + 0.3 * (median_price - forecast_price)
 
-            if price_r and forecast_price > 0:
-                ws.cell(price_r, c, round(forecast_price, 0)).font = F_FORMULA
-                ws.cell(price_r, c).number_format = FMT_INT
+            # Price forecast: DON'T overwrite — build_model links to 01_Macro active scenario
+            # (was overwriting macro formula with literal — audit blocker 3)
 
 
 def fill_debt_schedule(wb, data: dict, company: str):
@@ -1070,10 +1069,9 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws, r_synth, bc + 2, "=0", FMT_MLN)  # no refi
         cl_open_s = get_column_letter(bc)
         cl_close_s = get_column_letter(bc + 4)
-        # Interest from OPENING only (not avg — avoids circular via new_term)
-        formula_cell(ws, r_synth, bc + 3,
-                     f"={cl_open_s}{r_synth}*$F${r_synth}",
-                     FMT_MLN)
+        # Interest = 0 in year of issuance (breaks circular: new_term → interest → NI → CF → need)
+        # Interest starts NEXT year from opening balance (= closing of issuance year)
+        formula_cell(ws, r_synth, bc + 3, "=0", FMT_MLN)
         formula_cell(ws, r_synth, bc + 4,
                      f"={cl_open_s}{r_synth}", FMT_MLN)  # bullet: close = open
 

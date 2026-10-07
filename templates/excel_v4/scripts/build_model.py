@@ -722,19 +722,14 @@ def build_revenue(wb, cfg):
             # Python: val × exp(ewa_growth) — simplified to carry forward
             formula_cell(ws, base_r, c, f"={prev_col}{base_r}", FMT_INT)
 
-            # Price forecast: depends on driver method
-            if seg.get("driver", "").startswith("LME") or seg.get("driver", "").startswith("macro"):
-                # OLS chain-link: Price_t = Price_{t-1} × EXP(β × LN(Factor_t / Factor_{t-1}))
-                # β stored in Control_Panel, Factor from 01_Macro
-                # Simplified: use elasticity=1.0 (price tracks factor 1:1 in log space)
-                # Price_t = Price_{t-1} × (Factor_t / Factor_{t-1})^β
-                # For now: price follows factor growth (β=1.0)
-                # The factor row in 01_Macro is dynamic — we need a named reference
-                # Simplified version: carry forward (will be overridden by fill_data with YAML values)
-                formula_cell(ws, base_r + 1, c, f"={prev_col}{base_r+1}", FMT_INT)
-            else:
-                # EWA: carry forward
-                formula_cell(ws, base_r + 1, c, f"={prev_col}{base_r+1}", FMT_INT)
+            # Price forecast: from 01_Macro active scenario row
+            # seg["driver"] maps to macro factor → active row
+            # Active scenario rows start at REG.get("MA.act_base", 36)
+            act_base = REG.get("MA.act_base", 36)
+            seg_idx = cfg["segments"].index(seg)
+            macro_price_row = act_base + seg_idx  # each segment maps to a factor
+            formula_cell(ws, base_r + 1, c,
+                         f"='{NAME['MA']}'!{col_l}${macro_price_row}", FMT_INT)
 
             # Revenue = vol × price / 1000
             formula_cell(ws, base_r + 2, c,
@@ -2427,17 +2422,19 @@ def build_equity(wb, cfg):
                          f">'Control_Panel'!$C${cp_cov_nd}")
         else:
             cov_check = "FALSE"
+        # Dividends from PREV year NI (breaks circular: NI→div→CF→cash→RC→interest→NI)
+        # Dividends are declared by year-end results — methodologically correct
         if cp_payout_row:
             formula_cell(ws, REG["EQ.div"], c_idx,
                          f"=IF({cov_check},0,"
-                         f"MAX(0,{cl}{REG['EQ.ni']})*'Control_Panel'!$C${cp_payout_row})",
+                         f"MAX(0,{prev}{REG['EQ.ni']})*'Control_Panel'!$C${cp_payout_row})",
                          FMT_MLN)
         else:
             payout = 0.6 if "Nornickel" in cfg.get("name", "") else 0.0
             if payout > 0:
                 formula_cell(ws, REG["EQ.div"], c_idx,
                              f"=IF({cov_check},0,"
-                             f"MAX(0,{cl}{REG['EQ.ni']})*{payout})",
+                             f"MAX(0,{prev}{REG['EQ.ni']})*{payout})",
                              FMT_MLN)
 
         # RE close = open + NI - div - buyback + other
