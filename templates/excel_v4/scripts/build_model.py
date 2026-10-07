@@ -2132,7 +2132,7 @@ def build_debt(wb, cfg):
         st_normal = (f"{cl}{REG['DT.mandatory']}"
                      f"+{cl}{REG['DT.rc_close']}")
         # LT independent = total - ST (not residual — allows real check)
-        lt_normal = f"MAX(0,{cl}{REG['DT.close']}-{st_normal})"
+        lt_normal = f"MAX(0,{cl}{REG['DT.close']}-({st_normal}))"
         # With reclass: all debt becomes ST
         formula_cell(ws, REG["DT.st"], c_idx,
                      f"=IF({reclass},{cl}{REG['DT.close']},"
@@ -3242,8 +3242,8 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.24, FMT_PCT)
     REG["CP.penalty_rate"] = r; r += 1
 
-    label_row(ws, r, "Covenant reclass LT→ST (1=Да, 0=Нет)", "", "IAS 1.74: breach → all LT becomes ST")
-    input_cell(ws, r, 3, 1, FMT_INT)
+    label_row(ws, r, "Covenant reclass LT→ST (1=Да, 0=Нет)", "", "IAS 1.74: opt-in (default=0, waiver assumed)")
+    input_cell(ws, r, 3, 0, FMT_INT)  # Default 0: assume waiver. Analyst enables for stress
     REG["CP.cov_reclass"] = r; r += 1
 
     label_row(ws, r, "FX USDCNY change YoY", "%", "Δ курса: >0 = USD усиливается")

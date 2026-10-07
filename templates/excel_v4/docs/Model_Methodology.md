@@ -135,7 +135,8 @@ Control_Panel (130+ INPUT параметров)
     C. RC (Revolving Credit): single plug, limited, funding gap flag
     D. Total Debt = term + RC + FX revaluation
     E. Interest = term (schedule) + RC (avg×rate) + commitment fee
-    F. ST/LT: maturity-based from schedule + RC (residual)
+    F. ST/LT: ST = MIN(close, mandatory + RC), LT = MAX(0, close - (mandatory + RC))
+       Covenant reclass (IAS 1.74): if cov_reclass=1 AND breach → all ST. Default=0 (waiver)
     G. Historical calibration (ST share, maint%, tenor, spread, flag)
 18_Lease: IFRS 16 ROU + Liability (interest + payment)
 19_Tax: IAS 12 (NOL → Taxable → Current×25% + Deferred), DTA/DTL carry

@@ -1128,16 +1128,8 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws_dt, REG["DT.interest_term"], c_dt,
                      f"='_Debt_Schedule'!{int_col}${total_r}", FMT_MLN)
 
-        # 17_Debt ST = schedule_ST + RC_close
-        cl_dt = get_column_letter(c_dt)
-        formula_cell(ws_dt, REG["DT.st"], c_dt,
-                     f"=MIN('_Debt_Schedule'!{close_col}${r_st_label},"
-                     f"{cl_dt}{REG['DT.term_close']})"
-                     f"+{cl_dt}{REG['DT.rc_close']}", FMT_MLN)
-
-        # 17_Debt LT = DT.close - DT.st (residual, guarantees ST+LT=close)
-        formula_cell(ws_dt, REG["DT.lt"], c_dt,
-                     f"={cl_dt}{REG['DT.close']}-{cl_dt}{REG['DT.st']}", FMT_MLN)
+        # ST/LT: DON'T override — build_model computes from mandatory + RC + reclass
+        # (SUMPRODUCT text search on static maturity was wrong — audit defect 3)
 
     # ── FX Revaluation from currency exposure ──
     # FX effect = Σ(instrument_close × (FX_old/FX_new - 1)) per currency
