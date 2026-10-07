@@ -2056,20 +2056,17 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # NEW TERM always covers residual after RC (model always finances)
-        # Gate determines RATE, not whether to finance:
-        #   gate OPEN → normal rate (spread_base + spread_step × leverage)
-        #   gate CLOSED → penalty rate (24%) — shown as "last resort"
-        # This eliminates negative cash entirely
+        # NEW TERM: gated by covenants. Covers residual only if gates open.
+        residual_after_rc = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR(MAX(0,{need}-{cl}{REG['DT.rc_draw']})+{term_out},0)",
+                     f"=IFERROR(IF({gate},({residual_after_rc})+{term_out},0),0)",
                      FMT_MLN)
 
-        # Funding gap = portion financed at penalty rate (gate closed)
-        # Shows how much of new_term is "distressed" financing
+        # Funding gap = unfunded remainder (gates closed)
+        # Cash will fall below min_cash — this is the credit analysis result
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(IF({gate},0,MAX(0,{need}-{cl}{REG['DT.rc_draw']})),0)",
-                     FMT_MLN)  # penalty-financed portion
+                     f"=IFERROR(MAX(0,{need}-{cl}{REG['DT.rc_draw']}-{cl}{REG['DT.new_term']}),0)",
+                     FMT_MLN)
         # Accumulated = total penalty financing
         formula_cell(ws, REG["DT.funding_gap_accum"], c_idx,
                      f"={prev}{REG['DT.funding_gap_accum']}+{cl}{REG['DT.funding_gap']}",
@@ -2089,11 +2086,9 @@ def build_debt(wb, cfg):
 
         # ── E. INTEREST ──
         # Term interest: from _Debt_Schedule total (fill_data overrides)
-        # Default: avg(open,close) × avg_rate
+        # Default: OPENING × avg_rate (not avg — avoids circular)
         formula_cell(ws, REG["DT.interest_term"], c_idx,
-                     f"=IFERROR(({cl}{REG['DT.term_open']}+{cl}{REG['DT.term_close']})/2"
-                     f"*{cl}{REG['DT.avg_rate']},"
-                     f"{cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']})",
+                     f"={cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']}",
                      FMT_MLN)
         # RC interest: opening balance × rc_rate (NOT avg — avoids circular)
         formula_cell(ws, REG["DT.interest_rc"], c_idx,
@@ -3645,9 +3640,8 @@ def build(company: str, output: str):
     wb.calculation.iterate = True
     wb.calculation.iterateCount = 1000
     wb.calculation.iterateDelta = 0.000001  # 1e-6 like bank model
-    # fullCalcOnLoad=False — preserve cached values after AppleScript recalc
-    # (True destroys converged cache on open — bank model lesson)
-    wb.calculation.fullCalcOnLoad = False
+    # fullCalcOnLoad=True — recalc on open (audit requires cold start = warm start)
+    wb.calculation.fullCalcOnLoad = True
 
     # Named ranges for circular solver (bank model pattern)
     # calc_reset: 0 = iterate (normal), 1 = seed (decouple circular refs)

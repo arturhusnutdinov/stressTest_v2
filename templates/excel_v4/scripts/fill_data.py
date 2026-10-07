@@ -922,7 +922,7 @@ def fill_debt_schedule(wb, data: dict, company: str):
                 rate_ref = f"$F${r}"  # fixed contract rate
 
             formula_cell(ws, r, bc + 3,
-                         f"=({cl_open}{r}+{cl_close}{r})/2*{rate_ref}", FMT_MLN)
+                         f"={cl_open}{r}*{rate_ref}", FMT_MLN)  # opening only (no circular)
 
             # Close = Open - Mandatory + Refi
             formula_cell(ws, r, bc + 4,
@@ -1072,8 +1072,9 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws, r_synth, bc + 2, "=0", FMT_MLN)  # no refi
         cl_open_s = get_column_letter(bc)
         cl_close_s = get_column_letter(bc + 4)
+        # Interest from OPENING only (not avg — avoids circular via new_term)
         formula_cell(ws, r_synth, bc + 3,
-                     f"=({cl_open_s}{r_synth}+{cl_close_s}{r_synth})/2*$F${r_synth}",
+                     f"={cl_open_s}{r_synth}*$F${r_synth}",
                      FMT_MLN)
         formula_cell(ws, r_synth, bc + 4,
                      f"={cl_open_s}{r_synth}", FMT_MLN)  # bullet: close = open
@@ -1087,8 +1088,9 @@ def fill_debt_schedule(wb, data: dict, company: str):
             formula_cell(ws, r_synth, fut_bc, f"={prev_close_col}{r_synth}", FMT_MLN)
             formula_cell(ws, r_synth, fut_bc + 1, "=0", FMT_MLN)  # no maturity within horizon
             formula_cell(ws, r_synth, fut_bc + 2, "=0", FMT_MLN)
+            # Interest from opening only (no circular)
             formula_cell(ws, r_synth, fut_bc + 3,
-                         f"=({cl_open_f}{r_synth}+{cl_close_f}{r_synth})/2*$F${r_synth}",
+                         f"={cl_open_f}{r_synth}*$F${r_synth}",
                          FMT_MLN)
             formula_cell(ws, r_synth, fut_bc + 4,
                          f"={cl_open_f}{r_synth}", FMT_MLN)
