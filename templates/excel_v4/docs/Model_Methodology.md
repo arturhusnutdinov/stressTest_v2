@@ -167,24 +167,37 @@ Control_Panel (130+ INPUT параметров)
 Model_Output (12 секций, 144 зелёных ссылок)
 ```
 
-### 3.4 Circular Dependencies — ELIMINATED for debt
+### 3.4 Funding Waterfall — ZERO circular dependencies
 ```
-OLD: RC_draw → CFF → cash → RC_draw (circular, 38 cells, unstable)
-NEW: cash_before_RC = BS.cash_prev + CF.CFO + CF.CFI + CF.CFF_no_RC
-     RC_draw = MIN(limit - open, MAX(0, min_cash - cash_before_RC))
-     → NO circular dependency for debt. RC reads CF totals.
+Amazon CFI pattern: shortfall = Cash + CFO + CFI → allocate to debt
+
+CFF_base = refi - mandatory - voluntary - lease - div (deterministic)
+cash_before_RC = cash_open + CFO + CFI + CFF_base (deterministic)
+need = MAX(0, min_cash - cash_before_RC)
+RC_draw = MIN(free_limit, need)
+new_term = MAX(0, need - RC_draw) + term_out
+CFF = CFF_base + new_term + RC_draw - RC_repay
+Cash = cash_open + CFO + CFI + CFF = min_cash (EXACT, one pass)
 ```
 
-**Architecture:**
-1. `23_CF!r27` CFF_no_RC = refi + new_term - mandatory - voluntary - lease - div
-2. `17_Debt!r22` cash_before_RC = BS.cash_prev + CFO + CFI + CFF_no_RC
-3. RC_draw/repay/funding_gap all reference cash_before_RC (one row)
-4. RC interest = opening × rate (NOT avg — avoids circular through PL)
-5. `fullCalcOnLoad = True`, iterateCount 1000, delta 1e-6
-6. Circular cells: ~3/year (interest on avg PP&E → tax only), converges instantly
+**Why no circular:**
+- RC interest = opening × rate (NOT avg) → deterministic
+- CFF_base excludes RC AND new_term → deterministic
+- CFO depends on NI which depends on interest → but interest uses OPENING balances
+- Everything computable in one pass, no iterations needed
 
-**Key principle:** RC is the ONLY plug. Term debt deterministic from schedule.
-Funding gap shown when RC exhausted — model never forces negative cash.
+**Gate logic:** determines RATE, not WHETHER to finance
+- Gate OPEN (covenants OK): normal rate (spread_base + step × leverage)
+- Gate CLOSED (breach): penalty rate 24% → shown as "gap" (financed, but expensive)
+- Model ALWAYS covers the gap → no negative cash
+
+**Cascade:** min_cash target → if RC insufficient → new_term → if covenants block → penalty rate
+
+**fullCalcOnLoad = False** (bank model pattern: preserve cached values after AppleScript recalc)
+
+**Covenant reclassification (IAS 1.74):**
+- CP.cov_reclass=1: if ND/EBITDA>cov OR ICR<cov → ALL LT debt becomes ST
+- Optional: set =0 for waiver scenario
 
 ### 3.5 Cross-module integration (v4.1)
 - **DA** = gross / useful_life (calibrated: Rusal 31yr). Disposals from CP, proceeds = NBV in CFI
