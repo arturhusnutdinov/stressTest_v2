@@ -2113,18 +2113,25 @@ def build_debt(wb, cfg):
         input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
         # Note: new term rate computed in _Debt_Schedule synthetic row
 
-        # ── F. ST/LT with covenant reclassification (IAS 1.74) ──
-        # If covenant breached AND reclass enabled: ALL debt becomes ST
+        # ── F. ST/LT: mandatory next year + RC + covenant reclass ──
+        # ST = mandatory payments due within 12 months + RC balance
+        # This avoids static text maturity issues (audit defect 3)
+        # Next year mandatory: from _Debt_Schedule next year block (fill_data sets)
+        # Default: use mandatory from this year as proxy
         cp_cov_reclass = f"'Control_Panel'!$C${REG.get('CP.cov_reclass', 75)}"
         cov_breached = f"OR({prev_nd_ebitda}>{cp_cov_nd},{prev_icr}<{cp_cov_icr})"
         reclass = f"AND({cp_cov_reclass}=1,{cov_breached})"
-        # ST = IF(reclass, total_debt, schedule_ST + RC)
+        # Normal ST = mandatory(this year, proxy for next) + RC + new_term_short
+        st_normal = (f"{cl}{REG['DT.mandatory']}"
+                     f"+{cl}{REG['DT.rc_close']}")
+        # LT independent = total - ST (not residual — allows real check)
+        lt_normal = f"MAX(0,{cl}{REG['DT.close']}-{st_normal})"
+        # With reclass: all debt becomes ST
         formula_cell(ws, REG["DT.st"], c_idx,
                      f"=IF({reclass},{cl}{REG['DT.close']},"
-                     f"{cl}{REG['DT.rc_close']})", FMT_MLN)
-        # LT = IF(reclass, 0, term_close)
+                     f"MIN({cl}{REG['DT.close']},{st_normal}))", FMT_MLN)
         formula_cell(ws, REG["DT.lt"], c_idx,
-                     f"=IF({reclass},0,{cl}{REG['DT.term_close']})", FMT_MLN)
+                     f"=IF({reclass},0,{lt_normal})", FMT_MLN)
         # Net Debt
         formula_cell(ws, REG["DT.nd"], c_idx,
                      f"={cl}{REG['DT.close']}-'{NAME['BS']}'!{cl}${REG['BS.cash']}",
@@ -2552,10 +2559,22 @@ def build_valuation(wb, cfg):
             input_cell(ws, r, 3, defaults[key], FMT_PCT2 if key != "beta" else FMT_RATIO)
 
     r_wacc = REG["VL.wacc"]
-    label_row(ws, r_wacc, "WACC = Rf + β×ERP + CRP + SCP", "%", "Ke для DCF")
+    # True WACC = Ke × we + Kd × (1-t) × wd
+    # Ke = Rf + β×ERP + SCP (no CRP if Rf is local currency)
+    # Kd = avg debt rate, wd = D/(D+E), we = 1-wd
+    label_row(ws, r_wacc, "WACC = Ke×we + Kd×(1-t)×wd", "%", "True WACC for FCFF")
+    ke = (f"$C${REG['VL.rf']}+$C${REG['VL.beta']}*$C${REG['VL.erp']}"
+          f"+$C${REG['VL.scp']}")  # No CRP on top of local Rf
+    cp_tax_vl = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+    n_hist_vl = len(cfg["hist_years"][-3:])
+    lfc = get_column_letter(3 + n_hist_vl + len(fc) - 1)  # last forecast col
+    kd = f"'{NAME['DT']}'!{lfc}${REG['DT.avg_rate']}"
+    debt_ref = f"'{NAME['DT']}'!{lfc}${REG['DT.close']}"
+    equity_ref = f"'{NAME['BS']}'!{lfc}${REG['BS.te']}"
+    wd = f"IFERROR({debt_ref}/MAX(1,{debt_ref}+ABS({equity_ref})),0.5)"
     formula_cell(ws, r_wacc, 3,
-                 f"=$C${REG['VL.rf']}+$C${REG['VL.beta']}*$C${REG['VL.erp']}+"
-                 f"$C${REG['VL.crp']}+$C${REG['VL.scp']}", FMT_PCT2, bold=True)
+                 f"=({ke})*(1-{wd})+{kd}*(1-{cp_tax_vl})*{wd}",
+                 FMT_PCT2, bold=True)
 
     # ── B. TERMINAL VALUE ──
     section_header(ws, REG["VL.tg"] - 1, "B. TERMINAL VALUE PARAMETERS")
@@ -2669,7 +2688,9 @@ def build_valuation(wb, cfg):
         sr = r_sotp + 1 + i
         label_row(ws, sr, seg["name"], "mln")
         rev_r = REG.get(f"RV.{seg['key']}_rev", 10)
-        input_cell(ws, sr, 11, 0.7, FMT_MULT)  # K col = EV/Rev multiple input
+        # Different multiples per segment (audit: 0.7 for all is wrong)
+        seg_mults = {"seg1": 0.8, "seg2": 0.5, "seg3": 0.4}  # Al > Alumina > Other
+        input_cell(ws, sr, 11, seg_mults.get(seg["key"], 0.7), FMT_MULT)
         ws.cell(sr, 12, "EV/Rev →").font = F_NOTE
         formula_cell(ws, sr, 3,
                      f"='{NAME['RV']}'!{last_fc_col}${rev_r}*$K${sr}", FMT_MLN)
@@ -2728,11 +2749,11 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         nd_ebitda = f"'{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}"
-        # Д9: recalibrated for high-leverage issuers
-        # <1x→80, 2x→60, 3x→45, 4x→30, 5x→20, 6x→12, 8x→5
-        # Piecewise linear: score = MAX(5, 80 - ND/EBITDA^1.3 × 5)
+        # Audit v7: linear scale 0-16x turnovers, monotonically decreasing
+        # 0x→80, 4x→61, 8x→42, 12x→24, 16x→5
+        # score = MAX(5, 80 - ND/EBITDA × 4.7)
         formula_cell(ws, r_lev, c,
-                     f"=MAX(5,MIN(80,80-POWER(MAX(0,{nd_ebitda}),1.3)*5))", FMT_RATIO1)
+                     f"=MAX(5,MIN(80,80-MAX(0,{nd_ebitda})*4.7))", FMT_RATIO1)
 
     # Coverage: ICR → score
     r_cov = REG["SC.coverage"]
