@@ -465,30 +465,30 @@ def build_assump(wb, cfg):
                 ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
         r += 1
 
-    # Margins / COGS
+    # Margins / COGS — use REG for CP rows (not hardcoded)
     section_header(ws, r, "СЕБЕСТОИМОСТЬ"); r += 1
-    label_row(ws, r, "COGS method")
-    ref_cell(ws, r, 3, "='Control_Panel'!$C$18", FMT_INT); r += 1
+    label_row(ws, r, "COGS ratio")
+    cp_cr = REG.get("CP.cogs_ratio")
+    if cp_cr:
+        ref_cell(ws, r, 3, f"='Control_Panel'!$C${cp_cr}", FMT_PCT)
+    r += 1
     if cfg.get("cogs_mode") == "component":
-        for comp, share in cfg.get("cogs_components", {}).items():
+        for comp in cfg.get("cogs_components", {}):
             label_row(ws, r, f"Доля {comp.title()}")
-            ref_cell(ws, r, 3, f"='Control_Panel'!$C${19 + list(cfg['cogs_components'].keys()).index(comp)}", FMT_PCT)
+            cp_comp = REG.get(f"CP.cogs_{comp}")
+            if cp_comp:
+                ref_cell(ws, r, 3, f"='Control_Panel'!$C${cp_comp}", FMT_PCT)
             r += 1
-    label_row(ws, r, "PPI beta")
-    ref_cell(ws, r, 3, f"='Control_Panel'!$C${24}", FMT_RATIO); r += 2
+    r += 1
 
-    # PP&E
+    # PP&E — use REG
     section_header(ws, r, "ОСНОВНЫЕ СРЕДСТВА"); r += 1
-    ppe_params = [
-        ("DA rate", "FMT_PCT"),
-        ("Sustaining CapEx / DA", "FMT_RATIO"),
-        ("Expansion CapEx (% rev growth)", "FMT_PCT"),
-        ("Useful life (лет)", "FMT_INT"),
-    ]
-    for i, (label, _) in enumerate(ppe_params):
+    for label, key in [("DA rate", "CP.da_rate"), ("Sustaining CapEx / DA", "CP.sustaining_ratio"),
+                        ("Expansion CapEx", "CP.expansion_pct")]:
         label_row(ws, r, label)
-        # Reference CP rows (approximate — CP da_rate starts around row 30)
-        ref_cell(ws, r, 3, f"='Control_Panel'!$C${31 + i}", FMT_PCT if "%" in label else FMT_RATIO)
+        cp_r = REG.get(key)
+        if cp_r:
+            ref_cell(ws, r, 3, f"='Control_Panel'!$C${cp_r}", FMT_PCT if "%" in label or "rate" in label else FMT_RATIO)
         r += 1
     r += 1
 
@@ -2483,9 +2483,10 @@ def build_valuation(wb, cfg):
         label_row(ws, r, label, "mln" if "rate" not in label.lower() and "factor" not in label.lower() else "")
         r += 1
 
-    # FCFF formulas per forecast year
+    # FCFF formulas per forecast year — use SAME columns as model (F, G, H)
+    n_hist_vl = len(cfg["hist_years"][-3:])
     for i, yr in enumerate(fc):
-        c = 7 + i  # G, H, I...
+        c = 3 + n_hist_vl + i  # F=6, G=7, H=8 (matching model layout)
         cl = get_column_letter(c)
         t = i + 1  # discount period
         ebit_r = fcff_start_r
@@ -2499,7 +2500,9 @@ def build_valuation(wb, cfg):
         pvfcff_r = fcff_start_r + 8
 
         ref_cell(ws, ebit_r, c, f"='{NAME['PL']}'!{cl}${REG['PL.ebit']}", FMT_MLN)
-        ref_cell(ws, tax_r, c, f"='{NAME['TX']}'!{cl}${REG['TX.eff_rate']}", FMT_PCT)
+        # Tax rate: statutory (not effective — effective can be negative)
+        cp_tax_vl = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+        ref_cell(ws, tax_r, c, f"={cp_tax_vl}", FMT_PCT)
         formula_cell(ws, nopat_r, c, f"={cl}{ebit_r}*(1-{cl}{tax_r})", FMT_MLN, bold=True)
         ref_cell(ws, da_r, c, f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
         ref_cell(ws, capex_r, c, f"=ABS('{NAME['PP']}'!{cl}${REG['PP.capex']})", FMT_MLN)
@@ -2516,7 +2519,7 @@ def build_valuation(wb, cfg):
     r += 1
     tv_r = r
     label_row(ws, r, "Terminal Value (EV/EBITDA)", "mln", "EBITDA_last × multiple")
-    last_fc_col = get_column_letter(7 + n_fc - 1)
+    last_fc_col = get_column_letter(3 + n_hist_vl + n_fc - 1)  # H (last forecast)
     formula_cell(ws, r, 3,
                  f"='{NAME['PL']}'!{last_fc_col}${REG['PL.ebitda']}*$C${REG['VL.tm']}", FMT_MLN)
     r += 1
@@ -2533,7 +2536,7 @@ def build_valuation(wb, cfg):
     r += 1
     npv_r = r
     label_row(ws, r, "NPV of FCFF", "mln")
-    pv_cols = [f"{get_column_letter(7+i)}{pvfcff_r}" for i in range(n_fc)]
+    pv_cols = [f"{get_column_letter(3+n_hist_vl+i)}{pvfcff_r}" for i in range(n_fc)]
     formula_cell(ws, r, 3, "=" + "+".join(pv_cols), FMT_MLN)
     r += 1
 

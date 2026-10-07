@@ -1653,8 +1653,34 @@ def fill_statement_history(wb, data: dict, company: str):
                         ws_pl.cell(r, col, round(val, 1)).font = F_INPUT
                         ws_pl.cell(r, col).number_format = FMT_MLN
 
+    # Д1: Fill missing PL items as residuals so history satisfies its own formulas
+    # other_opex = EBITDA - GP - SGA (makes Валовая + SGA + other = EBITDA)
+    # impairment = EBIT - EBITDA + DA (makes EBITDA - DA - impairment = EBIT)
+    for yr in hist_3:
+        col = COL_START + hist_3.index(yr)
+        gp = is_d.get("gross_profit", {}).get(yr, 0) or 0
+        sga = is_d.get("sga", {}).get(yr, 0) or 0
+        ebitda = is_d.get("ebitda", {}).get(yr, 0) or 0
+        ebit = is_d.get("ebit", {}).get(yr, 0) or 0
+        da = is_d.get("total_da", {}).get(yr, 0) or 0
+        # other_opex = EBITDA - GP - SGA
+        other_opex = ebitda - gp - sga
+        if abs(other_opex) > 1:
+            r_oo = REG.get("PL.other_opex")
+            if r_oo:
+                ws_pl.cell(r_oo, col, round(other_opex, 1)).font = F_INPUT
+                ws_pl.cell(r_oo, col).number_format = FMT_MLN
+        # impairment = EBIT - EBITDA + DA (sign: EBIT = EBITDA - DA - impairment)
+        impairment = ebitda - abs(da) - ebit
+        if abs(impairment) > 1:
+            r_imp = REG.get("PL.impairment")
+            if r_imp:
+                ws_pl.cell(r_imp, col, round(impairment, 1)).font = F_INPUT
+                ws_pl.cell(r_imp, col).number_format = FMT_MLN
+
     print(f"    CF history: {filled} metrics for {last_yr}, cash={cash_close}")
     print(f"    PL history: {len(pl_map)} metrics × {len(hist_3)} years ({pl_refs} refs to 02_Hist)")
+    print(f"    PL reconciliation: other_opex + impairment filled from residuals (Д1)")
 
 
 def fill_bs_history(wb, data: dict, company: str):
