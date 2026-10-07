@@ -1582,9 +1582,19 @@ def build_cogs(wb, cfg):
                 rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
                 share_ref = f"'Control_Panel'!$C${cp_share_row}" if cp_share_row else str(share)
 
-                if comp in ("energy", "labour"):
+                if comp == "material":
+                    # Material = Volume_Al(kt) × alumina_norm(t/t) × alumina_price($/t) / 1000
+                    # alumina_norm ≈ 1.93 t alumina per t aluminium (industry standard)
+                    # alumina_price from 10_Revenue seg2 price row
+                    vol_t = vol_ref.format(cl=cl)
+                    alumina_price = f"'{NAME['RV']}'!{cl}${REG.get('RV.seg2_price', 13)}"
+                    alumina_norm = "1.93"  # t alumina / t Al
+                    formula_cell(ws, r, c,
+                                 f"=IFERROR({vol_t}*{alumina_norm}*{alumina_price}/1000,"
+                                 f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
+                                 FMT_MLN)
+                elif comp in ("energy", "labour"):
                     # Fixed per tonne: grow with volume, not price
-                    # base = prev_year × (volume_t / volume_t-1)
                     vol_t = vol_ref.format(cl=cl)
                     vol_prev = vol_ref.format(cl=prev_cl)
                     formula_cell(ws, r, c,
@@ -1592,7 +1602,7 @@ def build_cogs(wb, cfg):
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 else:
-                    # Material/Other: proportional to revenue (variable)
+                    # Other: proportional to revenue (transport, commissions)
                     formula_cell(ws, r, c,
                                  f"={rev_ref}*{cp_cogs_ratio}*{share_ref}",
                                  FMT_MLN)

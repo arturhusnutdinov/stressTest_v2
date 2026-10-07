@@ -2196,9 +2196,9 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
         sga = sga_hist.get(year, 0)
         dist = dist_hist.get(year, 0)
         total_sga = sga + dist  # both negative
-        if total_sga != 0:
-            ws_sa.cell(REG["SA.sga_total"], col, round(total_sga, 1)).font = F_INPUT
-            ws_sa.cell(REG["SA.sga_total"], col).number_format = FMT_MLN
+        # SGA total: DON'T overwrite — build_model sets =ref('21_PL')
+        # (was overwriting formula with literal — audit Д4)
+        pass
 
     # Forecast SGA: ratio × Revenue
     last_sga = (sga_hist.get(hist_years[-1], 0) + dist_hist.get(hist_years[-1], 0))
