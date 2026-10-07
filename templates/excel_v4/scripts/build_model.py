@@ -1038,8 +1038,7 @@ def build_bs(wb, cfg):
                      f"={cl}{r_ta}-{cl}{r_tl}-{cl}{r_te}", FMT_RATIO)
 
         # ── Cross-sheet links: BS items ← corkscrews ──
-        # Cash ← CF cash_close (can be negative in stress = overdraft/gap)
-        # Negative cash keeps BS balanced; funding_gap shows the hole
+        # Cash ← CF cash_close (always funded — model always attracts debt)
         formula_cell(ws, REG["BS.cash"], c_idx,
                      f"='{NAME['CF']}'!{cl}${REG['CF.cash_close']}", FMT_MLN)
         # AR ← WC
@@ -1426,7 +1425,7 @@ def build_checks(wb, cfg):
     # ── Additional checks: RC + Sources & Uses ──
     new_checks = [
         ("rc_limit", "RC: Close ≤ Limit", None, None),
-        ("funding_gap", "Funding gap = 0", None, None),
+        ("funding_gap", "Penalty debt (0 = no breach)", None, None),
         ("su_balance", "S&U: Gap = RC_draw + NewTerm + FundGap", None, None),
         ("st_lt_check", "ST + LT = DT.close", None, None),
         ("schedule_check", "DT.close = Term + RC + FX", None, None),
@@ -1450,12 +1449,12 @@ def build_checks(wb, cfg):
         # Funding gap: should be 0
         ref_cell(ws, REG["CK.funding_gap"], c_idx,
                  f"='{NAME['DT']}'!{cl}${REG['DT.funding_gap']}", FMT_RATIO)
-        # S&U balance: gap = rc_draw + new_term + funding_gap
+        # S&U balance: need = rc_draw + new_term
+        # (funding_gap is a subset of new_term — rate attribute, not extra source)
         formula_cell(ws, REG["CK.su_balance"], c_idx,
                      f"='{NAME['DT']}'!{cl}${REG['DT.su_gap']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.funding_gap']}",
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.new_term']}",
                      FMT_RATIO)
         # ST + LT = close
         formula_cell(ws, REG["CK.st_lt_check"], c_idx,
@@ -1498,12 +1497,10 @@ def build_checks(wb, cfg):
                      FMT_RATIO)
 
         # C3: Iteration residual — cash convergence check
-        # If RC_draw > 0 AND no funding gap, actual cash should ≈ min_cash
-        # When funding gap > 0, cash can be below min (expected), so skip check
+        # If RC_draw > 0, actual cash should ≈ min_cash (model always finances)
         cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
         formula_cell(ws, REG["CK.it_res"], c_idx,
-                     f"=IF(AND('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,"
-                     f"'{NAME['DT']}'!{cl}${REG['DT.funding_gap']}=0),"
+                     f"=IF('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,"
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
@@ -1834,8 +1831,8 @@ def build_debt(wb, cfg):
         ("rc_repay", "RC repay (cash sweep + term-out)", "mln"),
         ("rc_close", "RC, конец", "mln"),
         ("rc_util", "Utilization (RC / лимит)", "%"),
-        ("funding_gap", "Разрыв за год", "mln"),
-        ("funding_gap_accum", "Непокрытая потребность (накопл.)", "mln"),
+        ("funding_gap", "Привлечено по штрафной ставке", "mln"),
+        ("funding_gap_accum", "Долг по штрафной ставке (накопл.)", "mln"),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, unit)
     ws.cell(REG["DT.funding_gap"], 1).font = F_LABEL_B
@@ -1996,12 +1993,14 @@ def build_debt(wb, cfg):
         util_after = f"IFERROR(({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})/{cl}{REG['DT.rc_limit']},0)"
         term_out = f"IF({util_after}>{cp_rc_trigger},({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})-{cp_rc_trigger}*{cl}{REG['DT.rc_limit']},0)"
 
-        # ── NEW TERM: residual + term-out, gated by covenant + availability ──
+        # ── NEW TERM: ALWAYS covers residual + term-out ──
+        # Gate determines RATE, not ACCESS: model always finances the company
+        # When covenant breach → debt attracted at penalty_rate (not blocked)
         cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
         prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},99)"
         gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR(IF({gate},{residual}+{term_out},0),0)",
+                     f"=IFERROR({residual}+{term_out},0)",
                      FMT_MLN)
 
         # ── Voluntary term: after RC repay, with covenant stops ──
@@ -2072,18 +2071,14 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.rc_close']}/{cl}{REG['DT.rc_limit']},0)",
                      FMT_PCT)
 
-        # NEW TERM: gated by covenant — gate closed → no new debt
-        # (gate already set on line ~1994, but we must NOT overwrite it here)
-        # residual_after_rc used for funding_gap calc
+        # Penalty-financed portion = new_term attracted when gate is closed
+        # Gate open → normal rate, penalty = 0
+        # Gate closed → debt attracted at penalty_rate, penalty = new_term amount
         residual_after_rc = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
-
-        # Funding gap = unfunded need when gate is closed
-        # Gate open → gap = 0 (new_term covers everything)
-        # Gate closed → new_term = 0, gap = residual (cash drops below min_cash)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(IF({gate},0,{residual_after_rc}),0)",
+                     f"=IFERROR(IF({gate},0,{cl}{REG['DT.new_term']}),0)",
                      FMT_MLN)
-        # Accumulated = total penalty financing
+        # Accumulated = total outstanding penalty-rate debt
         formula_cell(ws, REG["DT.funding_gap_accum"], c_idx,
                      f"={prev}{REG['DT.funding_gap_accum']}+{cl}{REG['DT.funding_gap']}",
                      FMT_MLN)
