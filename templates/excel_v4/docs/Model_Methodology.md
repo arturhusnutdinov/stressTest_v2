@@ -167,23 +167,38 @@ Control_Panel (130+ INPUT параметров)
 Model_Output (12 секций, 144 зелёных ссылок)
 ```
 
-### 3.4 Circular Dependencies
+### 3.4 Circular Dependencies — ELIMINATED for debt
 ```
-RC_draw → DT.close → DT.interest → PL.interest → NI
-    → Voluntary_term (checks NI>0) → term_close → DT.close (CIRCULAR)
+OLD: RC_draw → CFF → cash → RC_draw (circular, 38 cells, unstable)
+NEW: cash_before_RC = BS.cash_prev + CF.CFO + CF.CFI + CF.CFF_no_RC
+     RC_draw = MIN(limit - open, MAX(0, min_cash - cash_before_RC))
+     → NO circular dependency for debt. RC reads CF totals.
 ```
 
-**Решение (non-circular est_cash):**
-1. est_cash_base = prev_cash + EBITDA - interest_term_est - CapEx - ΔWC - tax_est - div - mandatory + refi
-   (interest_term_est uses opening balance × avg_rate — NO circular dependency)
-2. RC_draw = MIN(limit - open, MAX(0, min_cash - est_cash))
-3. Voluntary_term = IFERROR(IF(NI>0 AND overleveraged, sweep, 0), 0)
-4. IFERROR wrappers on all iterative cells for first-evaluation safety
-5. Excel iterative calc: 100 iterations, delta 0.001
-6. AppleScript: seed K1=1 → recalc → K1=0 → recalc ×20
+**Architecture:**
+1. `23_CF!r27` CFF_no_RC = refi + new_term - mandatory - voluntary - lease - div
+2. `17_Debt!r22` cash_before_RC = BS.cash_prev + CFO + CFI + CFF_no_RC
+3. RC_draw/repay/funding_gap all reference cash_before_RC (one row)
+4. RC interest = opening × rate (NOT avg — avoids circular through PL)
+5. `fullCalcOnLoad = True`, iterateCount 1000, delta 1e-6
+6. Circular cells: ~3/year (interest on avg PP&E → tax only), converges instantly
 
-**Key principle:** RC is the ONLY plug. Term debt is deterministic from schedule.
+**Key principle:** RC is the ONLY plug. Term debt deterministic from schedule.
 Funding gap shown when RC exhausted — model never forces negative cash.
+
+### 3.5 Cross-module integration (v4.1)
+- **DA** = gross / useful_life (calibrated: Rusal 31yr). Disposals from CP, proceeds = NBV in CFI
+- **COGS**: operating leverage — Energy/Labour fixed per tonne (vol-driven), Material/Other variable
+- **Revenue**: reconciliation grows proportionally to Σsegments (not frozen)
+- **CapEx**: expansion from volume growth (not ΔRevenue), dual tenor (5yr refi, 7yr capex)
+- **Tax**: IAS 12 timing diff (current tax - diff × rate), statutory rate in NOPAT
+- **Lease**: IFRS 16 linked to BS (ROU, CL, NCL), CF.other_noncash includes ROU dep + lease int
+- **Interest income**: 124M from МСФО (14_OtherIS populated)
+- **SGA**: 13_SGA history = ref(21_PL) — single source
+- **FX**: debt reval + revenue/cost natural hedge (CNY 35%, RUB 26%)
+- **Valuation**: EV = MAX(DCF, SOTP), statutory tax in NOPAT, correct columns (F-H)
+- **Scorecard**: recalibrated POWER(leverage,1.3), ICR×12, thresholds for B/CCC
+- **Covenants**: thresholds from CP, covenant breach blocks dividends + new draws
 
 ---
 
