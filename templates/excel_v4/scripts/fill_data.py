@@ -1476,19 +1476,78 @@ def fill_debt_hist(wb, data: dict, company: str):
         if dta or dtl:
             print(f"    Tax: DTA={dta:.0f} DTL={dtl:.0f}")
 
-    # Fill lease opening from BS
+    # Fill lease opening from BS (Д10: load actual lease data)
     if "18_Lease" in wb.sheetnames:
         ws_l = wb["18_Lease"]
+        # Try last year, fall back to prior year if not separately disclosed
         rou = abs(bs.get("rou_asset", {}).get(last_yr, 0))
         lease_cl = abs(bs.get("lease_liab_current", {}).get(last_yr, 0))
         lease_ncl = abs(bs.get("lease_liab_noncurrent", {}).get(last_yr, 0))
+        if rou == 0 and lease_cl == 0 and lease_ncl == 0:
+            # 2025 not disclosed separately — use 2024
+            prev_yr = last_yr - 1
+            rou = abs(bs.get("rou_asset", {}).get(prev_yr, 0))
+            lease_cl = abs(bs.get("lease_liab_current", {}).get(prev_yr, 0))
+            lease_ncl = abs(bs.get("lease_liab_noncurrent", {}).get(prev_yr, 0))
         lease_total = lease_cl + lease_ncl
         if rou > 0 or lease_total > 0:
             ws_l.cell(REG["LS.rou_open"], hc, round(rou, 1)).font = F_INPUT
             ws_l.cell(REG["LS.rou_close"], hc, round(rou, 1)).font = F_INPUT
             ws_l.cell(REG["LS.liab_open"], hc, round(lease_total, 1)).font = F_INPUT
             ws_l.cell(REG["LS.liab_close"], hc, round(lease_total, 1)).font = F_INPUT
-            print(f"    Lease: ROU={rou:.0f} Liability={lease_total:.0f}")
+            # ROU dep ≈ ROU / 5 years (typical lease term)
+            rou_dep = round(rou / 5, 1)
+            ws_l.cell(REG["LS.rou_dep"], hc, rou_dep).font = F_INPUT
+            ws_l.cell(REG["LS.rou_dep"], hc).number_format = FMT_MLN
+            # Lease payment ≈ lease_total / 4 (typical)
+            liab_pay = round(lease_total / 4, 1)
+            ws_l.cell(REG["LS.liab_pay"], hc, liab_pay).font = F_INPUT
+            ws_l.cell(REG["LS.liab_pay"], hc).number_format = FMT_MLN
+            # Forecast: dep and pay carry forward
+            for fc_i in range(len(src["fc_years"])):
+                fc_c = hc + 1 + fc_i
+                ws_l.cell(REG["LS.rou_dep"], fc_c, rou_dep).font = F_INPUT
+                ws_l.cell(REG["LS.liab_pay"], fc_c, liab_pay).font = F_INPUT
+            # Also fill BS.lease_cl and BS.lease_ncl in history
+            ws_bs = wb["20_BS"]
+            ws_bs.cell(REG["BS.lease_cl"], hc, round(lease_cl, 1)).font = F_INPUT
+            ws_bs.cell(REG["BS.lease_ncl"], hc, round(lease_ncl, 1)).font = F_INPUT
+            print(f"    Lease (Д10): ROU={rou:.0f} Liab={lease_total:.0f} (CL={lease_cl:.0f} NCL={lease_ncl:.0f})")
+            print(f"    Lease forecast: dep={rou_dep:.0f}/yr, pay={liab_pay:.0f}/yr")
+
+    # Fill 14_OtherIS — interest income, associates, impairment (Д10)
+    if "14_OtherIS" in wb.sheetnames:
+        ws_oi = wb["14_OtherIS"]
+        is_d = data.get("is", {})
+        oi_map = {
+            "interest_income": "interest_income",
+            "earnings_from_investees": "associates",
+            "asset_impairment": "impairment",
+            "other_operating_expenses": "other_opex",
+        }
+        oi_filled = 0
+        for src_key, oi_key in oi_map.items():
+            vals = is_d.get(src_key, {})
+            r_oi = REG.get(f"OI.{oi_key}")
+            if not r_oi:
+                continue
+            for yr in hist_years[-N_HIST_DISPLAY:]:
+                col = COL_START + hist_years[-N_HIST_DISPLAY:].index(yr)
+                val = vals.get(yr)
+                if val is not None:
+                    ws_oi.cell(r_oi, col, round(val, 1)).font = F_INPUT
+                    ws_oi.cell(r_oi, col).number_format = FMT_MLN
+                    oi_filled += 1
+            # Forecast: carry forward last year for interest_income
+            if oi_key == "interest_income":
+                last_val = vals.get(last_yr, 0)
+                if last_val:
+                    for fc_i in range(len(src["fc_years"])):
+                        fc_c = COL_START + N_HIST_DISPLAY + fc_i
+                        ws_oi.cell(r_oi, fc_c, round(last_val, 1)).font = F_INPUT
+                        ws_oi.cell(r_oi, fc_c).number_format = FMT_MLN
+        if oi_filled:
+            print(f"    14_OtherIS (Д10): {oi_filled} cells filled (int_income, associates, impairment)")
 
     # Fill PPE opening from BS
     if "15_PPE" in wb.sheetnames:
