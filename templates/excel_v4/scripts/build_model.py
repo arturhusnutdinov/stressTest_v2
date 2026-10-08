@@ -848,11 +848,19 @@ def build_revenue(wb, cfg):
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
-    # Reconciliation: reported revenue - Σ segments (for history)
-    # In forecast: carry forward last reconciliation value
+    # Reconciliation = reported revenue - Σ segments
     r_recon = REG.get("RV.recon", 19)
     label_row(ws, r_recon, "Reconciliation / Other revenue", "mln",
-              "Reported total − Σ segments (captures VAP, foil, eliminations)")
+              "= 02_Hist revenue − Σ segments")
+    # History: formula = '02_Hist'!revenue - Σ segment_revenues
+    hi_rev = REG.get("HI.revenue", 7)
+    for c in range(3, 3 + n_hist):
+        cl = get_column_letter(c)
+        seg_parts = "+".join(
+            f"{cl}{REG.get('RV.' + seg['key'] + '_rev', 10)}"
+            for seg in cfg["segments"])
+        formula_cell(ws, r_recon, c,
+                     f"='{NAME['HI']}'!{cl}${hi_rev}-({seg_parts})", FMT_MLN)
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         # Д2: Reconciliation grows proportionally to segment total (not frozen)
         # recon_t = recon_prev × (Σseg_t / Σseg_prev)
@@ -2757,7 +2765,23 @@ def build_tax(wb, cfg):
                        ("dtl_open", "DTL начало"), ("dtl_close", "DTL конец")]:
         label_row(ws, REG[f"TX.{key}"], label, "mln")
 
-    # Tax formulas
+    # History: DTA/DTL from 02_Hist (last hist col)
+    last_hist_col = 3 + n_hist - 1
+    cl_h = get_column_letter(last_hist_col)
+    hi_dta = REG.get("HI.dta")
+    hi_dtl = REG.get("HI.dtl")
+    if hi_dta:
+        ref_cell(ws, REG["TX.dta_open"], last_hist_col,
+                 f"='{NAME['HI']}'!{cl_h}${hi_dta}", FMT_MLN)
+        ref_cell(ws, REG["TX.dta_close"], last_hist_col,
+                 f"='{NAME['HI']}'!{cl_h}${hi_dta}", FMT_MLN)
+    if hi_dtl:
+        ref_cell(ws, REG["TX.dtl_open"], last_hist_col,
+                 f"='{NAME['HI']}'!{cl_h}${hi_dtl}", FMT_MLN)
+        ref_cell(ws, REG["TX.dtl_close"], last_hist_col,
+                 f"='{NAME['HI']}'!{cl_h}${hi_dtl}", FMT_MLN)
+
+    # Tax formulas (forecast)
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)

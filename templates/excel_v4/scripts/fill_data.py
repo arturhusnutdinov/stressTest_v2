@@ -1422,19 +1422,11 @@ def fill_debt_hist(wb, data: dict, company: str):
 
         print(f"    Instruments: {top_n} top + Other ({len(instruments)-top_n}), total={total/1e6:.0f}M")
 
-    # Fill Tax DTA/DTL history
-    if "19_Tax" in wb.sheetnames:
-        ws_tx = wb["19_Tax"]
-        dta = abs(bs.get("dta", {}).get(last_yr, 0))
-        dtl = abs(bs.get("dtl", {}).get(last_yr, 0))
-        if dta:
-            ws_tx.cell(REG["TX.dta_open"], hc, round(dta, 1)).font = F_INPUT
-            ws_tx.cell(REG["TX.dta_close"], hc, round(dta, 1)).font = F_INPUT
-        if dtl:
-            ws_tx.cell(REG["TX.dtl_open"], hc, round(dtl, 1)).font = F_INPUT
-            ws_tx.cell(REG["TX.dtl_close"], hc, round(dtl, 1)).font = F_INPUT
-        if dta or dtl:
-            print(f"    Tax: DTA={dta:.0f} DTL={dtl:.0f}")
+    # Tax DTA/DTL: build_model sets refs to 02_Hist (no fill needed)
+    dta = abs(bs.get("dta", {}).get(last_yr, 0))
+    dtl = abs(bs.get("dtl", {}).get(last_yr, 0))
+    if dta or dtl:
+        print(f"    Tax: DTA={dta:.0f} DTL={dtl:.0f} (refs from build_model)")
 
     # Fill lease opening from BS (Д10: load actual lease data)
     if "18_Lease" in wb.sheetnames:
@@ -2440,7 +2432,8 @@ def fill_all(company: str, model_path: str):
     fill_debt_schedule(wb, data, company)
 
     print("\n6a. Filling revenue reconciliation...")
-    fill_revenue_reconciliation(wb, data, company)
+    # Revenue reconciliation: build_model sets formula = '02_Hist'!revenue - Σ segments
+    print("    Revenue reconciliation: formula from build_model (not fill_data)")
 
     print("\n6b. Filling macro factor forecasts...")
     fill_macro_forecasts(wb, data, company)
