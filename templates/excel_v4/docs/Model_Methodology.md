@@ -1,9 +1,9 @@
 # Методология финансовой модели корпоративного эмитента (v4)
 
-**Версия:** 4.2 — AUDIT FINAL ACCEPTED (7 октября 2026)
+**Версия:** 4.2 — AUDIT FINAL ACCEPTED (8 октября 2026)
 **Компании:** UC RUSAL, PJSC MMC Norilsk Nickel
 **Подход:** outside-in (публичная МСФО отчётность), 3-statement Excel-driven model
-**Статус:** AUDIT FINAL ACCEPTED · 15/15 checks = 0 · Cash=500 always · OLS β=0.828 · 11_Segments live
+**Статус:** 54/54 тождеств = 0 · Cash=target always · OLS β=0.828 · 11_Segments live · reg.json auto-save
 
 ---
 
@@ -216,21 +216,25 @@ Equity = EV − Net Debt
 
 ---
 
-## 9. Сценарии (верифицировано в Excel)
+## 9. Сценарии (верифицировано в Excel, 08.10.2026)
 
-### Rusal
-| Сценарий | LME Al | EBITDA | Rating | Penalty Debt | Cash |
-|----------|--------|--------|--------|-------------|------|
-| Base (2450) | 2,450 | +1,268 | B | 0 | 500 |
-| Stress (2000) | 2,000 | +401 | D | 1,198 (Y2) | 500 |
-| Severe (1700) | 1,700 | −137 | D | 3,068 (Y3) | 500 |
+### Rusal (54/54 тождеств = 0)
+| Сценарий | Revenue | EBITDA | Rating | Penalty Y2/Y3 | Cash |
+|----------|---------|--------|--------|---------------|------|
+| Base (Al 2450) | 13,755 | +1,100 | B / B / B | 0 | 500 |
+| Stress (Al 2000) | 11,162 | +281 | D / D / D | 815 / 4,309 | 500 |
+| Severe (Al 1700) | 9,423 | −222 | D / D / D | 1,362 / 3,361 | 500 |
 
-### Nornickel
-| Сценарий | EBITDA | Rating | Cash |
-|----------|--------|--------|------|
-| Base | 4,280 | BBB | 1,494 |
-| Stress | 3,238 | BBB | 1,454 |
-| Severe | 2,404 | BB | 1,637 |
+Op leverage: **3.8x** (Rev −31.5% → EBITDA −120.2%)
+
+### Nornickel (54/54 тождеств = 0)
+| Сценарий | Revenue | EBITDA | Rating | Penalty | Cash |
+|----------|---------|--------|--------|---------|------|
+| Base | 24,406 | +7,349 | A / A / A | 0 | 1,888 |
+| Stress | 18,471 | +5,562 | BBB / BBB / BBB | 0 | 1,551 |
+| Severe | 13,707 | +4,127 | BBB / BB / BB | 0 | 1,488 |
+
+Op leverage: **1.0x** (Rev −43.8% → EBITDA −43.8%)
 
 ---
 
@@ -312,7 +316,7 @@ python3 -B scripts/verify_model.py model/model_rusal.xlsx
 
 | Метрика | Значение |
 |---------|---------|
-| Версия | v4.2 (AUDIT FINAL accepted 07.10.2026) |
+| Версия | v4.2 (AUDIT FINAL accepted 08.10.2026) |
 | Листов | 31 (включая 11_Segments с формулами) |
 | Формул | ~1,270 |
 | CP параметров | ~47 LIVE (1 informational: ewa_halflife) |
