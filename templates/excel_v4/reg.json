@@ -465,5 +465,19 @@
   "RI.debt_end_row": 89,
   "RI.debt_other_row": 89,
   "RI.debt_count": 20,
-  "RI.kr_row": 92
+  "RI.kr_row": 92,
+  "DR.seg1_vol_growth": 7,
+  "DR.seg2_vol_growth": 8,
+  "DR.seg3_vol_growth": 9,
+  "DR.capacity_util": 10,
+  "DR.energy_idx": 13,
+  "DR.labour_idx": 14,
+  "DR.transport_idx": 15,
+  "DR.seg1_price_delta": 18,
+  "DR.seg2_price_delta": 19,
+  "DR.associates": 22,
+  "DR.interest_income": 23,
+  "DR.cny_share": 26,
+  "DR.rub_share": 27,
+  "DR.fx_impact": 28
 }

@@ -38,6 +38,7 @@ SHEETS = [
     ("MA", "01_Macro",       TAB_INPUT),
     ("HI", "02_Hist",        TAB_INPUT),
     ("AS", "03_Assump",      TAB_INPUT),
+    ("DR", "05_Drivers",     TAB_INPUT),
     ("RI", "Raw_IFRS",       TAB_INPUT),
     ("RV", "10_Revenue",     TAB_ENGINE),
     ("SG", "11_Segments",    TAB_ENGINE),
@@ -746,6 +747,139 @@ def build_hist(wb, cfg):
             input_cell(ws, r, c, 0, FMT_MLN)
 
 
+def build_drivers(wb, cfg):
+    """05_Drivers — operating drivers: volumes, unit costs, associates, FX."""
+    ws = wb["05_Drivers"]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"05_Drivers — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Операционные драйверы модели (volume, cost, FX)").font = F_SUBTITLE
+
+    n_hist = len(cfg["hist_years"][-3:])
+    year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
+
+    r = 6
+    # ── A. VOLUME DRIVERS ──
+    section_header(ws, r, "A. ОБЪЁМЫ ПРОИЗВОДСТВА И ПРОДАЖ"); r += 1
+    for i, seg in enumerate(cfg["segments"]):
+        key = seg["key"]
+        label_row(ws, r, f"{seg['name']}: рост объёма (%)", "%")
+        REG[f"DR.{key}_vol_growth"] = r
+        # History: compute from 11_Segments
+        sg_vol = REG.get(f"SG.{key}_vol")
+        if sg_vol:
+            for c in range(4, 3 + n_hist):  # start from 2nd year
+                cl = get_column_letter(c)
+                prev = get_column_letter(c - 1)
+                formula_cell(ws, r, c,
+                             f"=IFERROR('{NAME['SG']}'!{cl}${sg_vol}/'{NAME['SG']}'!{prev}${sg_vol}-1,0)",
+                             FMT_PCT)
+        # Forecast: input (carry-forward from CP or manual)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            prev = get_column_letter(c - 1)
+            input_cell(ws, r, c, 0, FMT_PCT)  # default 0% growth
+        r += 1
+
+    label_row(ws, r, "Capacity utilisation proxy", "%")
+    REG["DR.capacity_util"] = r
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+        input_cell(ws, r, c, 0.95, FMT_PCT)
+    r += 2
+
+    # ── B. COST DRIVERS (indexation) ──
+    section_header(ws, r, "B. ИНДЕКСАЦИЯ УДЕЛЬНЫХ ЗАТРАТ"); r += 1
+    cost_drivers = [
+        ("energy_idx", "Индекс энергозатрат (Power price, YoY)", "PPI"),
+        ("labour_idx", "Индекс трудозатрат (CPI, YoY)", "CPI"),
+        ("transport_idx", "Индекс транспорта (PPI, YoY)", "PPI"),
+    ]
+    # Link to 01_Macro CPI/PPI
+    act_base = REG.get("MA.act_base", 39)
+    for drv_key, label, macro_type in cost_drivers:
+        label_row(ws, r, label, "%")
+        REG[f"DR.{drv_key}"] = r
+        # History: input
+        for c in range(3, 3 + n_hist):
+            input_cell(ws, r, c, 0, FMT_PCT)
+        # Forecast: from 01_Macro (CPI = act_base+4, PPI = act_base+5)
+        macro_row = act_base + 4 if macro_type == "CPI" else act_base + 5
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            formula_cell(ws, r, c,
+                         f"='{NAME['MA']}'!{cl}${macro_row}", FMT_PCT)
+        r += 1
+    r += 1
+
+    # ── C. COMMODITY CHAIN ──
+    section_header(ws, r, "C. ТОВАРНАЯ ЦЕПОЧКА (цена → выручка)"); r += 1
+    for i, seg in enumerate(cfg["segments"]):
+        if i >= 2:  # only commodity segments
+            continue
+        key = seg["key"]
+        label_row(ws, r, f"{seg['name']}: Δ цены к базовому сценарию", "%")
+        REG[f"DR.{key}_price_delta"] = r
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            prev = get_column_letter(c - 1)
+            # Delta = (macro_price - prev_macro_price) / prev_macro_price
+            sg_price = REG.get(f"SG.{key}_price")
+            if sg_price:
+                formula_cell(ws, r, c,
+                             f"=IFERROR('{NAME['SG']}'!{cl}${sg_price}/'{NAME['SG']}'!{prev}${sg_price}-1,0)",
+                             FMT_PCT)
+        r += 1
+    r += 1
+
+    # ── D. ASSOCIATES ──
+    section_header(ws, r, "D. ДОЛЯ В АССОЦИИРОВАННЫХ"); r += 1
+    label_row(ws, r, "Income from associates (carry-forward)", "mln")
+    REG["DR.associates"] = r
+    oi_assoc = REG.get("OI.associates")
+    if oi_assoc:
+        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            ref_cell(ws, r, c, f"='{NAME['OI']}'!{cl}${oi_assoc}", FMT_MLN)
+    r += 1
+
+    label_row(ws, r, "Interest income", "mln")
+    REG["DR.interest_income"] = r
+    oi_int = REG.get("OI.interest_income")
+    if oi_int:
+        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            ref_cell(ws, r, c, f"='{NAME['OI']}'!{cl}${oi_int}", FMT_MLN)
+    r += 2
+
+    # ── E. FX EXPOSURE ──
+    section_header(ws, r, "E. ВАЛЮТНАЯ ЭКСПОЗИЦИЯ"); r += 1
+    # CNY share from instruments
+    ri_s = REG.get("RI.debt_start_row", 69)
+    ri_e = REG.get("RI.debt_end_row", 89)
+    label_row(ws, r, "Доля CNY в долге (из Raw_IFRS)", "%")
+    REG["DR.cny_share"] = r
+    formula_cell(ws, r, 3,
+                 f"=IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_s}:D${ri_e},"
+                 f"('{NAME['RI']}'!C${ri_s}:C${ri_e}=\"CNY\")*1)"
+                 f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),0)",
+                 FMT_PCT)
+    r += 1
+
+    label_row(ws, r, "Доля RUB в долге", "%")
+    REG["DR.rub_share"] = r
+    formula_cell(ws, r, 3,
+                 f"=IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_s}:D${ri_e},"
+                 f"('{NAME['RI']}'!C${ri_s}:C${ri_e}=\"RUB\")*1)"
+                 f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),0)",
+                 FMT_PCT)
+    r += 1
+
+    label_row(ws, r, "FX impact on debt (mln)", "mln")
+    REG["DR.fx_impact"] = r
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        ref_cell(ws, r, c, f"='{NAME['DT']}'!{cl}${REG['DT.fx_reval']}", FMT_MLN)
+    r += 1
+
+
 def build_segments(wb, cfg):
     """11_Segments — operational data structure (filled by fill_data)."""
     ws = wb["11_Segments"]
@@ -766,10 +900,16 @@ def build_segments(wb, cfg):
         REG[f"SG.{key}_vol"] = r
         for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_INT)
-        # Forecast: carry forward (fill_data may override)
+        # Forecast: volume = prev × (1 + growth from 05_Drivers)
+        dr_growth = REG.get(f"DR.{key}_vol_growth")
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             prev = get_column_letter(c - 1)
-            formula_cell(ws, r, c, f"={prev}{r}", FMT_INT)
+            cl = get_column_letter(c)
+            if dr_growth:
+                formula_cell(ws, r, c,
+                             f"={prev}{r}*(1+'{NAME['DR']}'!{cl}${dr_growth})", FMT_INT)
+            else:
+                formula_cell(ws, r, c, f"={prev}{r}", FMT_INT)
         r += 1
         # Price
         label_row(ws, r, "Средняя цена реализации", "$/t")
@@ -1841,11 +1981,14 @@ def build_cogs(wb, cfg):
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 elif comp in ("energy", "labour"):
-                    # Fixed per tonne: grow with volume, not price
+                    # Per tonne × volume × (1 + cost_indexation)
                     vol_t = vol_ref.format(cl=cl)
                     vol_prev = vol_ref.format(cl=prev_cl)
+                    # Indexation from 05_Drivers (energy → DR.energy_idx, labour → DR.labour_idx)
+                    dr_idx = REG.get(f"DR.{'energy_idx' if comp == 'energy' else 'labour_idx'}")
+                    idx_factor = f"*(1+'{NAME['DR']}'!{cl}${dr_idx})" if dr_idx else ""
                     formula_cell(ws, r, c,
-                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}),"
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_factor},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 else:
@@ -3860,6 +4003,7 @@ def build_guide(wb, cfg):
             ("Raw_IFRS", "Долговой портфель: 20 инструментов + KeyRate forecast"),
             ("11_Segments", "Объёмы/цены/выручка по сегментам (10_Revenue ссылается)"),
             ("01_Macro", "Макро-факторы: 3 сценария (Base/Stress/Severe)"),
+            ("05_Drivers", "Объёмы, удельные затраты, FX, ассоциированные"),
         ]),
         ("ЭТАП 2: НАСТРОЙКА МОДЕЛИ (Control Panel)", [
             ("Control_Panel", "47+ параметров: методы, ставки, ковенанты, оценка"),
@@ -4141,6 +4285,7 @@ def build(company: str, output: str):
         ("03_Assump",       build_assump),
         ("Raw_IFRS",        build_raw_ifrs),
         ("02_Hist",         build_hist),
+        ("05_Drivers",      build_drivers),
         ("11_Segments",     build_segments),
         ("10_Revenue",      build_revenue),
         ("12_COGS",         build_cogs),
