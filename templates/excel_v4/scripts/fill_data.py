@@ -529,6 +529,66 @@ def fill_segments(wb, data: dict, company: str):
         r += 1  # gap between segments
 
 
+def fill_raw_ifrs_details(wb, data: dict, company: str):
+    """Fill Raw_IFRS detail rows (BS/IS/CF) from source data."""
+    if "Raw_IFRS" not in wb.sheetnames:
+        return
+    ws = wb["Raw_IFRS"]
+    src = SOURCES[company]
+    hist_years = src["hist_years"][-4:]  # Raw_IFRS has 4 hist years
+
+    # Map source keys to Raw_IFRS row labels
+    is_d = data.get("is", {})
+    bs_d = data.get("bs", {})
+    cf_d = data.get("cf", {})
+
+    # Find rows by label in Raw_IFRS (col A)
+    label_to_row = {}
+    for r in range(6, ws.max_row + 1):
+        lbl = ws.cell(r, 1).value
+        if lbl and isinstance(lbl, str):
+            label_to_row[lbl.strip()] = r
+
+    # IS details
+    is_map = {
+        "dep_ppe": "dep_ppe", "amort_intangibles": "amort_intangibles",
+        "current_tax": "current_tax", "deferred_tax": "deferred_tax",
+        "interest_expense": "interest_expense_debt", "interest_income": "interest_income",
+    }
+    # BS details
+    bs_map_ri = {
+        "ppe_gross": "ppe_gross", "ppe_accum_dep": "ppe_accum_dep", "ppe_net": "ppe_net",
+        "dta": "dta_nol", "dtl": "dtl_ppe",
+        "investments_lt": "investments_in_associates",
+    }
+    # CF details
+    cf_map_ri = {
+        "capex": "capex", "cfo_total": "cfo_net_income",
+        "cfo_da": "cfo_da", "deferred_income_taxes": "cfo_deferred_tax",
+        "cfo_interest_paid": "cfo_interest_paid", "taxes_paid": "cfo_tax_paid",
+        "proceeds_ppe_disposal": "disposal_proceeds",
+        "repayments_borrowings": "debt_repayment", "proceeds_borrowings": "debt_issuance",
+    }
+
+    filled = 0
+    for src_data, mapping in [(is_d, is_map), (bs_d, bs_map_ri), (cf_d, cf_map_ri)]:
+        for src_key, ri_label in mapping.items():
+            ri_row = label_to_row.get(ri_label)
+            if not ri_row:
+                continue
+            vals = src_data.get(src_key, {})
+            for yr in hist_years:
+                v = vals.get(yr)
+                if v is not None:
+                    col = 3 + hist_years.index(yr)
+                    ws.cell(ri_row, col, round(v, 1)).font = F_INPUT
+                    ws.cell(ri_row, col).number_format = FMT_MLN
+                    filled += 1
+
+    if filled:
+        print(f"    Raw_IFRS details: {filled} cells filled")
+
+
 def fill_macro(wb, data: dict, company: str):
     """Fill 01_Macro with historical macro factors."""
     ws = wb["01_Macro"]
@@ -2406,7 +2466,9 @@ def fill_all(company: str, model_path: str):
 
     # 11_Segments: data now filled via fill_revenue → SG.{key}_vol/price rows
     # Old fill_segments created dynamic layout that conflicted with build_segments
-    print("\n4. 11_Segments: filled via fill_revenue (REG-registered rows)")
+    print("\n4a. Raw_IFRS details...")
+    fill_raw_ifrs_details(wb, data, company)
+    print("\n4b. 11_Segments: filled via fill_revenue (REG-registered rows)")
 
     print("\n5. Filling 01_Macro (factors + scenarios)...")
     fill_macro(wb, data, company)

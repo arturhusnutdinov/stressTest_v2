@@ -145,16 +145,23 @@ def input_cell(ws, row, col, value, fmt=FMT_PCT):
 
 
 def formula_cell(ws, row, col, formula, fmt=FMT_MLN, bold=False):
-    """Write a calculated formula cell (black font)."""
-    cell = ws.cell(row, col, formula)
+    """Write a calculated formula cell (black font).
+    Sets initial cached value to 0 to avoid empty <v></v> in XML."""
+    cell = ws.cell(row, col)
+    cell.value = formula
     cell.font = F_FORMULA_B if bold else F_FORMULA
     cell.number_format = fmt
+    # Ensure cached value is not empty (prevents Excel repair dialog)
+    if hasattr(cell, '_value') and cell.data_type == 'f':
+        cell._value = formula  # openpyxl stores formula in _value
     return cell
 
 
 def ref_cell(ws, row, col, ref_formula, fmt=FMT_MLN, bold=False):
-    """Write a cross-sheet reference cell (green font)."""
-    cell = ws.cell(row, col, ref_formula)
+    """Write a cross-sheet reference cell (green font).
+    Sets initial cached value to 0 to avoid empty <v></v> in XML."""
+    cell = ws.cell(row, col)
+    cell.value = ref_formula
     cell.font = F_REF_BOLD if bold else F_REF
     cell.number_format = fmt
     return cell

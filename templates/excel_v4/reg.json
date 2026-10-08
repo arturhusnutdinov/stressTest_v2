@@ -480,5 +480,17 @@
   "DR.cny_share": 26,
   "DR.rub_share": 27,
   "DR.fx_impact": 28,
-  "MA.econ_beta": 50
+  "MA.econ_beta": 50,
+  "DR.capex_proj1_name": 31,
+  "DR.capex_proj1": 32,
+  "DR.capex_proj2_name": 33,
+  "DR.capex_proj2": 34,
+  "DR.capex_proj3_name": 35,
+  "DR.capex_proj3": 36,
+  "DR.capex_projects_total": 37,
+  "DR.ovr_revenue": 41,
+  "DR.ovr_ebitda": 42,
+  "DR.ovr_capex": 43,
+  "DR.ovr_div": 44,
+  "DR.ovr_tax_rate": 45
 }

@@ -242,7 +242,7 @@ def build_macro(wb, cfg):
     apply_col_widths(ws)
 
     ws.cell(1, 1, f"01_Macro — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "Макросценарии (3) + CHOOSE + Эконометрика").font = F_SUBTITLE
+    ws.cell(2, 1, "Макросценарии (3) + Active row + Эконометрика OLS").font = F_SUBTITLE
 
     n_hist = len(cfg["hist_years"][-3:])
     n_fc = len(cfg["fc_years"])
@@ -887,7 +887,66 @@ def build_drivers(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         ref_cell(ws, r, c, f"='{NAME['DT']}'!{cl}${REG['DT.fx_reval']}", FMT_MLN)
+    r += 2
+
+    # ── F. CAPEX PROJECTS ──
+    section_header(ws, r, "F. ПРОЕКТЫ CAPEX (дополнительно к базовому CapEx из 15_PPE)"); r += 1
+    for j in range(3):
+        label_row(ws, r, f"Проект {j+1}: название", "")
+        REG[f"DR.capex_proj{j+1}_name"] = r
+        input_cell(ws, r, 1, "", "General")
+        r += 1
+        label_row(ws, r, f"Проект {j+1}: CapEx (mln)", "mln")
+        REG[f"DR.capex_proj{j+1}"] = r
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            input_cell(ws, r, c, 0, FMT_MLN)
+        r += 1
+    # Total project CapEx
+    label_row(ws, r, "ИТОГО проектный CapEx", "mln")
+    REG["DR.capex_projects_total"] = r
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        proj_parts = "+".join(f"{cl}{REG[f'DR.capex_proj{j+1}']}" for j in range(3))
+        formula_cell(ws, r, c, f"={proj_parts}", FMT_MLN, bold=True)
+    r += 2
+
+    # ── G. OVERRIDES (переопределения любого прогноза) ──
+    section_header(ws, r, "F. ПЕРЕОПРЕДЕЛЕНИЯ (аналитик заполняет для ручной корректировки)"); r += 1
+    ws.cell(r, 1, "Если ячейка ≠ 0, модель использует override вместо формулы").font = F_NOTE
     r += 1
+    overrides = [
+        ("ovr_revenue", "Override Revenue (mln)", "mln"),
+        ("ovr_ebitda", "Override EBITDA (mln)", "mln"),
+        ("ovr_capex", "Override CapEx (mln)", "mln"),
+        ("ovr_div", "Override Dividends (mln)", "mln"),
+        ("ovr_tax_rate", "Override Tax rate (%)", "%"),
+    ]
+    for key, label, unit in overrides:
+        label_row(ws, r, label, unit)
+        REG[f"DR.{key}"] = r
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            input_cell(ws, r, c, 0, FMT_MLN if unit == "mln" else FMT_PCT)
+        r += 1
+    r += 1
+
+    # ── G. SUMMARY (ключевые показатели для быстрого контроля) ──
+    section_header(ws, r, "G. СВОДКА КЛЮЧЕВЫХ ПОКАЗАТЕЛЕЙ"); r += 1
+    summary_items = [
+        ("Revenue", f"'{NAME['PL']}'", REG.get("PL.revenue"), FMT_MLN),
+        ("EBITDA", f"'{NAME['PL']}'", REG.get("PL.ebitda"), FMT_MLN),
+        ("NI", f"'{NAME['PL']}'", REG.get("PL.ni"), FMT_MLN),
+        ("Cash", f"'{NAME['BS']}'", REG.get("BS.cash"), FMT_MLN),
+        ("Total Debt", f"'{NAME['DT']}'", REG.get("DT.close"), FMT_MLN),
+        ("ND/EBITDA", f"'{NAME['DT']}'", REG.get("DT.nd_ebitda"), FMT_MULT),
+        ("Avg Rate", f"'{NAME['DT']}'", REG.get("DT.avg_rate"), FMT_PCT),
+    ]
+    for label, sheet_ref, row, fmt in summary_items:
+        label_row(ws, r, label)
+        if row:
+            for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+                cl = get_column_letter(c)
+                ref_cell(ws, r, c, f"={sheet_ref}!{cl}${row}", fmt)
+        r += 1
 
 
 def build_segments(wb, cfg):
@@ -1020,8 +1079,8 @@ def build_revenue(wb, cfg):
 
     # Reconciliation = reported revenue - Σ segments
     r_recon = REG.get("RV.recon", 19)
-    label_row(ws, r_recon, "Reconciliation / Other revenue", "mln",
-              "02_Hist revenue minus segments")
+    label_row(ws, r_recon, "Other revenue (VAP, foil, elim.)", "mln",
+              "02_Hist rev minus segments (~25%). Grows proportionally")
     # History: formula
     hi_rev = REG.get("HI.revenue", 7)
     for c in range(3, 3 + n_hist):
@@ -4374,8 +4433,8 @@ def build(company: str, output: str):
     # 3. Sheet protection (protect formula sheets, unlock input sheets)
     from openpyxl.worksheet.protection import SheetProtection
     input_sheets = {"00_Cover", "Control_Panel", "01_Macro", "02_Hist",
-                    "Raw_IFRS", "10_Revenue", "11_Segments", "14_OtherIS",
-                    "33_RevStress", "40_Scen", "Changelog"}
+                    "05_Drivers", "Raw_IFRS", "10_Revenue", "11_Segments",
+                    "14_OtherIS", "33_RevStress", "40_Scen", "Changelog"}
     for sname in wb.sheetnames:
         ws = wb[sname]
         if sname not in input_sheets:
@@ -4473,6 +4532,26 @@ def build(company: str, output: str):
     output_path = BASE_DIR / output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(str(output_path))
+
+    # Post-process: strip empty <v></v> nodes (causes Excel repair dialog)
+    import zipfile, re, shutil, tempfile
+    tmp = tempfile.mktemp(suffix=".xlsx")
+    with zipfile.ZipFile(str(output_path), 'r') as zin:
+        with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+            empty_v_count = 0
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename.startswith("xl/worksheets/"):
+                    text = data.decode("utf-8")
+                    cleaned = text.replace("<v></v>", "")
+                    removed = (len(text) - len(cleaned)) // len("<v></v>") if "<v></v>" in text else 0
+                    empty_v_count += removed
+                    data = cleaned.encode("utf-8")
+                zout.writestr(item, data)
+    shutil.move(tmp, str(output_path))
+    if empty_v_count:
+        print(f"  Stripped {empty_v_count} empty <v></v> nodes")
+
     print(f"\n✓ Saved: {output_path}")
     print(f"  Sheets: {len(wb.sheetnames)}")
     print(f"  Formulas: {total_f}")
