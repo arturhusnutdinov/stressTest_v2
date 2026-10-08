@@ -1170,11 +1170,11 @@ def build_bs(wb, cfg):
         formula_cell(ws, r_ta, c, f"={cl}{r_tca}+{cl}{r_tnca}", FMT_MLN, bold=True)
         cl_keys = ["ap", "st_debt", "lease_cl", "tax_pay", "other_cl"]
         formula_cell(ws, r_tcl, c,
-                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in cl_keys),
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in cl_keys),
                      FMT_MLN, bold=True)
         ncl_keys = ["lt_debt", "lease_ncl", "prov", "dtl", "other_ncl"]
         formula_cell(ws, r_tncl, c,
-                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in ncl_keys),
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in ncl_keys),
                      FMT_MLN, bold=True)
         formula_cell(ws, r_tl, c, f"={cl}{r_tcl}+{cl}{r_tncl}", FMT_MLN, bold=True)
         eq_keys = ["sc", "apic", "re", "aoci"]
@@ -1270,11 +1270,9 @@ def build_bs(wb, cfg):
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
-        # Tax Payable = current tax if positive, else carry forward prev (receivable)
+        # Tax Payable = current tax (can be negative = receivable)
         formula_cell(ws, REG["BS.tax_pay"], c_idx,
-                     f"=IF('{NAME['TX']}'!{cl}${REG['TX.current']}>0,"
-                     f"'{NAME['TX']}'!{cl}${REG['TX.current']},"
-                     f"{prev}{REG['BS.tax_pay']})",
+                     f"='{NAME['TX']}'!{cl}${REG['TX.current']}",
                      FMT_MLN)
 
         # Other CL = TCL(history) - known_CL (plug to preserve total)
@@ -2695,8 +2693,6 @@ def build_cf(wb, cfg):
         formula_cell(ws, REG["CF.interest_paid"], c_idx, "=0", FMT_MLN)
 
         # CFO = NI + DA + impairment + deferred_tax - WC_change + other
-        # Interest: flows through NI (already deducted). No add-back needed.
-        # Interest_paid in CFF set to 0 below (US GAAP / simplified IFRS)
         cfo_parts = [f"{cl}{REG['CF.ni']}", f"{cl}{REG['CF.da']}", f"{cl}{REG['CF.impairment']}",
                      f"{cl}{REG['CF.deferred_tax']}", f"-{cl}{REG['CF.wc_change']}",
                      f"{cl}{REG['CF.other_noncash']}"]
