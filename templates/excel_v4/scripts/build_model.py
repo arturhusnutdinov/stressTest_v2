@@ -1674,55 +1674,74 @@ def build_checks(wb, cfg):
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
-    # ── History consistency: calc sheets reproduce 02_Hist on history columns ──
-    # Catches wiring errors when data sources are reconnected
+    # ── ТОЖДЕСТВА: error count (always must be 0) ──
+    r_err = 24
+    REG["CK.error_count"] = r_err
+    label_row(ws, r_err, "ОШИБКИ ТОЖДЕСТВ (всегда должно быть 0)", "", "Книга неверна если > 0")
+
+    # ── ФЛАГИ СОСТОЯНИЯ (в стрессе могут быть > 0) ──
+    r_flags = r_err + 2
+    label_row(ws, r_flags, "ФЛАГИ СОСТОЯНИЯ (стресс)", "", "Сигнал о заёмщике, не ошибка книги")
+
+    # ── СВЕРКА ИСТОРИИ (отдельный блок, cols C-E only) ──
+    r_hist_base = r_flags + 2
+    section_header(ws, r_hist_base, "СВЕРКА ИСТОРИИ (прогнозный лист = 02_Hist)")
     hist_checks = [
         ("Rev: 10_Revenue = 02_Hist", f"'{NAME['RV']}'", REG['RV.total_rev'], "HI.revenue"),
         ("COGS: 12_COGS = 02_Hist", f"'{NAME['CG']}'", REG['CG.total'], "HI.cogs"),
         ("SGA: 13_SGA = 02_Hist", f"'{NAME['SA']}'", REG['SA.sga_total'], "HI.sga"),
-        ("PPE: 15_PPE = 02_Hist", f"'{NAME['PP']}'", REG['PP.net_close'], "HI.ppe_net"),
+        ("PPE: 15_PPE = 02_Hist (col E only)", f"'{NAME['PP']}'", REG['PP.net_close'], "HI.ppe_net"),
         ("BS: 20_BS TA = 02_Hist", f"'{NAME['BS']}'", REG['BS.ta'], "HI.ta"),
     ]
-    r_hist_base = REG.get("CK.error_count", 24) - len(hist_checks) - 1
-    section_header(ws, r_hist_base, "СВЕРКА ИСТОРИИ (прогнозный лист = 02_Hist)")
     for i, (label, sheet_ref, calc_row, hi_key) in enumerate(hist_checks):
         r_hc = r_hist_base + 1 + i
         label_row(ws, r_hc, label, "mln", "Должно быть ~0")
         hi_row = REG.get(hi_key)
         if hi_row:
-            for c in range(3, 3 + n_hist):
+            # PPE: only last hist year (earlier years may be empty)
+            cols_range = [3 + n_hist - 1] if "PPE" in label else range(3, 3 + n_hist)
+            for c in cols_range:
                 cl = get_column_letter(c)
                 formula_cell(ws, r_hc, c,
                              f"=ROUND({sheet_ref}!{cl}${calc_row}"
                              f"-'{NAME['HI']}'!{cl}${hi_row},1)",
                              FMT_RATIO)
 
-    # Error count: check integrity + detect errors in key cells
-    r_err = REG["CK.error_count"]
-    label_row(ws, r_err, "ОШИБОК ВСЕГО (тождества + ошибочные значения)", "", "Должно быть 0")
+    r_hist_err = r_hist_base + len(hist_checks) + 1
+    label_row(ws, r_hist_err, "ОШИБКИ ИСТОРИИ", "", "Должно быть 0")
+    ws.cell(r_hist_err, 1).font = F_LABEL_B
     ws.cell(r_err, 1).font = F_LABEL_B
+    ws.cell(r_flags, 1).font = F_LABEL_B
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
-        # Part 1: integrity checks > tolerance (should be 0)
-        check_rows = [REG["CK.bs_check"], REG["CK.cf_check"], REG["CK.ppe_roll"],
-                      REG["CK.debt_roll"], REG["CK.equity_roll"],
-                      REG["CK.st_lt_check"], REG["CK.schedule_check"],
-                      REG["CK.interest_check"]]
-        parts = [f"IF(ISERROR({cl}{r}),1,IF(ABS({cl}{r})>1,1,0))" for r in check_rows]
-        # Part 2: flag checks (should be 0)
-        flag_rows = [REG["CK.rc_limit"], REG["CK.funding_gap"],
-                     REG["CK.cash_min"], REG["CK.maint_debt"]]
-        parts += [f"IF(IFERROR({cl}{r},0)>0,1,0)" for r in flag_rows]
-        # Part 3: ISERROR on key model cells
+        # ТОЖДЕСТВА: always 0, otherwise model is broken
+        identity_rows = [REG["CK.bs_check"], REG["CK.cf_check"], REG["CK.ppe_roll"],
+                         REG["CK.debt_roll"], REG["CK.equity_roll"],
+                         REG["CK.st_lt_check"], REG["CK.schedule_check"],
+                         REG["CK.interest_check"], REG["CK.su_balance"]]
+        id_parts = [f"IF(ISERROR({cl}{r}),1,IF(ABS({cl}{r})>1,1,0))" for r in identity_rows]
+        # + ISERROR on key cells
         key_cells = [
             f"'{NAME['PL']}'!{cl}${REG['PL.ni']}",
             f"'{NAME['BS']}'!{cl}${REG['BS.ta']}",
             f"'{NAME['BS']}'!{cl}${REG['BS.cash']}",
             f"'{NAME['CF']}'!{cl}${REG['CF.cfo']}",
-            f"'{NAME['VL']}'!$C${REG['VL.wacc']}",
         ]
-        parts += [f"IF(ISERROR({ref}),1,0)" for ref in key_cells]
-        formula_cell(ws, r_err, c_idx, "=" + "+".join(parts), FMT_INT, bold=True)
+        id_parts += [f"IF(ISERROR({ref}),1,0)" for ref in key_cells]
+        formula_cell(ws, r_err, c_idx, "=" + "+".join(id_parts), FMT_INT, bold=True)
+
+        # ФЛАГИ СОСТОЯНИЯ: OK to be > 0 in stress
+        flag_rows = [REG["CK.rc_limit"], REG["CK.funding_gap"],
+                     REG["CK.cash_min"], REG["CK.maint_debt"]]
+        fl_parts = [f"IF(IFERROR({cl}{r},0)>0,1,0)" for r in flag_rows]
+        formula_cell(ws, r_flags, c_idx, "=" + "+".join(fl_parts), FMT_INT)
+
+    # History error count (cols C:E)
+    for c in range(3, 3 + n_hist):
+        cl = get_column_letter(c)
+        hist_parts = [f"IF(ABS(IFERROR({cl}{r_hist_base+1+i},0))>1,1,0)"
+                      for i in range(len(hist_checks))]
+        formula_cell(ws, r_hist_err, c, "=" + "+".join(hist_parts), FMT_INT, bold=True)
 
 
 def build_cogs(wb, cfg):
@@ -4009,8 +4028,13 @@ def build_other_is(wb, cfg):
     ]:
         r = REG[f"OI.{key}"]
         label_row(ws, r, label, unit)
-        for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
+        # History: input (fill_data fills)
+        for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_MLN)
+        # Forecast: carry forward from last history (not empty)
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            prev = get_column_letter(c - 1)
+            formula_cell(ws, r, c, f"={prev}{r}", FMT_MLN)
 
 
 def build_changelog(wb, cfg):
