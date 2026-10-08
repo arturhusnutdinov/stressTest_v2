@@ -839,11 +839,20 @@ def build_revenue(wb, cfg):
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
-    # Reconciliation: reported revenue - Σ segments (for history)
-    # In forecast: carry forward last reconciliation value
+    # Reconciliation = reported revenue - Σ segments
     r_recon = REG.get("RV.recon", 19)
     label_row(ws, r_recon, "Reconciliation / Other revenue", "mln",
-              "Reported total − Σ segments (captures VAP, foil, eliminations)")
+              "02_Hist revenue minus segments")
+    # History: formula
+    hi_rev = REG.get("HI.revenue", 7)
+    for c in range(3, 3 + n_hist):
+        cl = get_column_letter(c)
+        seg_parts = "+".join(
+            f"{cl}{REG.get('RV.' + seg['key'] + '_rev', 10)}"
+            for seg in cfg["segments"])
+        formula_cell(ws, r_recon, c,
+                     f"='{NAME['HI']}'!{cl}${hi_rev}-({seg_parts})", FMT_MLN)
+    # Forecast
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         # Д2: Reconciliation grows proportionally to segment total (not frozen)
         # recon_t = recon_prev × (Σseg_t / Σseg_prev)
@@ -2405,19 +2414,33 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.nd']}/{ebitda_ref},0)",
                      FMT_MULT)
 
-    # Historical inputs (last hist year column)
-    for k in ["term_open", "term_close"]:
-        input_cell(ws, REG[f"DT.{k}"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_open"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_close"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_limit"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.open"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.close"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.funding_gap_accum"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.funding_need"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.fx_reval"], 3, 0, FMT_MLN)
+    # Historical inputs — formulas from 02_Hist for ALL hist years
+    hi_st = REG.get("HI.st_debt")
+    hi_lt = REG.get("HI.lt_debt")
+    hi_cash = REG.get("HI.cash")
+    hi_int = REG.get("HI.interest")
+    for hc in range(3, 3 + n_hist):
+        cl_h = get_column_letter(hc)
+        if hi_st and hi_lt:
+            td = f"ABS('{NAME['HI']}'!{cl_h}${hi_st})+ABS('{NAME['HI']}'!{cl_h}${hi_lt})"
+            for k in ["term_open", "term_close", "open", "close"]:
+                ref_cell(ws, REG[f"DT.{k}"], hc, f"={td}", FMT_MLN)
+            ref_cell(ws, REG["DT.st"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_st})", FMT_MLN)
+            ref_cell(ws, REG["DT.lt"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_lt})", FMT_MLN)
+            if hi_cash:
+                ref_cell(ws, REG["DT.nd"], hc, f"={td}-ABS('{NAME['HI']}'!{cl_h}${hi_cash})", FMT_MLN)
+        if hi_int:
+            ref_cell(ws, REG["DT.interest_term"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
+            ref_cell(ws, REG["DT.interest"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
+        if hi_int and hi_st and hi_lt:
+            formula_cell(ws, REG["DT.avg_rate"], hc,
+                         f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_int})/({td}),0.08)", FMT_PCT)
+        input_cell(ws, REG["DT.rc_open"], hc, 0, FMT_MLN)
+        input_cell(ws, REG["DT.rc_close"], hc, 0, FMT_MLN)
+        ref_cell(ws, REG["DT.rc_limit"], hc, f"='Control_Panel'!$C${REG.get('CP.rc_limit',56)}", FMT_MLN)
+        input_cell(ws, REG["DT.funding_gap_accum"], hc, 0, FMT_MLN)
+        input_cell(ws, REG["DT.funding_need"], hc, 0, FMT_MLN)
+        input_cell(ws, REG["DT.fx_reval"], hc, 0, FMT_MLN)
 
     # ── G. HISTORICAL CALIBRATION (informational) ──
     section_header(ws, REG["DT.cal_st_share"] - 1,
@@ -2431,7 +2454,22 @@ def build_debt(wb, cfg):
         ("cal_st_flag", "Флаг: модельная ST/LT ≠ ист. ±15 п.п.", ""),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, "")
-    # Calibration formulas — historical columns only (filled by fill_data)
+    # Calibration formulas for last hist column
+    lhc = 3 + n_hist - 1
+    cl_lh = get_column_letter(lhc)
+    if hi_st and hi_lt:
+        formula_cell(ws, REG["DT.cal_st_share"], lhc,
+                     f"=IFERROR({cl_lh}{REG['DT.st']}/({cl_lh}{REG['DT.st']}+{cl_lh}{REG['DT.lt']}),0)", FMT_PCT)
+    hi_da = REG.get("HI.da")
+    hi_capex = REG.get("HI.capex")
+    if hi_da and hi_capex:
+        formula_cell(ws, REG["DT.cal_maint_share"], lhc,
+                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_lh}${hi_da})/ABS('{NAME['HI']}'!{cl_lh}${hi_capex}),0)", FMT_PCT)
+    ri_kr = REG.get("RI.kr_row")
+    if ri_kr:
+        formula_cell(ws, REG["DT.cal_spread"], lhc,
+                     f"=MAX(0,{cl_lh}{REG['DT.avg_rate']}-'{NAME['RI']}'!G${ri_kr})", FMT_PCT2)
+    input_cell(ws, REG["DT.cal_tenor"], lhc, 2.0, FMT_RATIO)  # fill_data computes
 
 
 def build_lease(wb, cfg):
@@ -2748,7 +2786,19 @@ def build_tax(wb, cfg):
                        ("dtl_open", "DTL начало"), ("dtl_close", "DTL конец")]:
         label_row(ws, REG[f"TX.{key}"], label, "mln")
 
-    # Tax formulas
+    # History: DTA/DTL from 02_Hist (last hist col)
+    lhc = 3 + n_hist - 1
+    cl_lh = get_column_letter(lhc)
+    hi_dta = REG.get("HI.dta")
+    hi_dtl = REG.get("HI.dtl")
+    if hi_dta:
+        ref_cell(ws, REG["TX.dta_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
+        ref_cell(ws, REG["TX.dta_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
+    if hi_dtl:
+        ref_cell(ws, REG["TX.dtl_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
+        ref_cell(ws, REG["TX.dtl_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
+
+    # Tax formulas (forecast)
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
