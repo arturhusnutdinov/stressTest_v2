@@ -1831,45 +1831,40 @@ def fill_bs_history(wb, data: dict, company: str):
     # Other_CL = TCL - (AP + STD + Lease_CL + Tax_Pay) — absorbs unmapped CL items
     # Other_NCL = TNCL - (LTD + Lease_NCL + Provisions + DTL) — absorbs unmapped NCL items
     # Other_CA = TCA - (Cash + AR + INV) — absorbs unmapped CA items
+    # Other items: compute as plug, write to 02_Hist, 20_BS refs 02_Hist
+    ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
     for yr_idx, yr in enumerate(hist_3):
         col = COL_START + yr_idx
-        tca = abs(bs.get("total_ca", bs.get("total_current_assets", {})).get(yr, 0))
-        tcl = abs(bs.get("total_cl", bs.get("total_current_liabilities", {})).get(yr, 0))
-        tncl_src = abs(bs.get("total_ncl", bs.get("total_non_current_liabilities", {})).get(yr, 0))
+        cl = get_column_letter(col)
 
-        if tca > 0:
-            known_ca = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
-                          ["cash", "accounts_receivable", "inventory"])
-            other_ca = tca - known_ca
-            if other_ca > 0:
-                ws.cell(REG["BS.other_ca"], col, round(other_ca, 1)).font = F_INPUT
-                ws.cell(REG["BS.other_ca"], col).number_format = FMT_MLN
+        plugs = [
+            ("other_ca", ["cash", "accounts_receivable", "inventory"],
+             "total_ca", "total_current_assets"),
+            ("other_nca", ["ppe_net", "intangibles", "dta", "rou_asset", "goodwill"],
+             "total_nca", "total_non_current_assets"),
+            ("other_cl", ["accounts_payable", "short_term_debt", "lease_liab_current", "taxes_payable"],
+             "total_cl", "total_current_liabilities"),
+            ("other_ncl", ["long_term_debt", "dtl", "lease_liab_noncurrent", "provisions"],
+             "total_ncl", "total_non_current_liabilities"),
+        ]
+        for other_key, known_keys, total_key, alt_total_key in plugs:
+            total_v = abs((bs.get(total_key) or bs.get(alt_total_key) or {}).get(yr, 0))
+            if total_v > 0:
+                known = sum(abs(bs.get(k, {}).get(yr, 0)) for k in known_keys)
+                plug_val = total_v - known
+                # Write to 02_Hist
+                hi_row = REG.get(f"HI.{other_key}")
+                if hi_row and ws_hi:
+                    ws_hi.cell(hi_row, col, round(plug_val, 1)).font = F_INPUT
+                    ws_hi.cell(hi_row, col).number_format = FMT_MLN
+                # 20_BS: ref to 02_Hist
+                bs_row = REG.get(f"BS.{other_key}")
+                if bs_row and hi_row:
+                    ws.cell(bs_row, col).value = f"='02_Hist'!{cl}${hi_row}"
+                    ws.cell(bs_row, col).font = F_REF
+                    ws.cell(bs_row, col).number_format = FMT_MLN
 
-        # Also compute Other_NCA from TNCA
-        tnca_src = abs(bs.get("total_nca", bs.get("total_non_current_assets", {})).get(yr, 0))
-        if tnca_src > 0:
-            known_nca = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
-                           ["ppe_net", "intangibles", "dta", "rou_asset", "goodwill"])
-            other_nca = tnca_src - known_nca
-            if other_nca > 0:
-                ws.cell(REG["BS.other_nca"], col, round(other_nca, 1)).font = F_INPUT
-
-        if tcl > 0:
-            known_cl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
-                          ["accounts_payable", "short_term_debt", "lease_liab_current"
-                          ]) + bs.get("taxes_payable", {}).get(yr, 0)
-            other_cl = tcl - known_cl
-            if other_cl > 0:
-                ws.cell(REG["BS.other_cl"], col, round(other_cl, 1)).font = F_INPUT
-
-        if tncl_src > 0:
-            known_ncl = sum(abs(bs.get(k, {}).get(yr, 0)) for k in
-                           ["long_term_debt", "dtl", "lease_liab_noncurrent"])
-            other_ncl = tncl_src - known_ncl
-            if other_ncl > 0:
-                ws.cell(REG["BS.other_ncl"], col, round(other_ncl, 1)).font = F_INPUT
-
-    print(f"    BS history: {filled} metrics filled, Other CL/NCL/CA from totals")
+    print(f"    BS history: {filled} metrics filled, Other as plugs → 02_Hist refs")
 
 
 def fill_wc_days(wb, data: dict, company: str):

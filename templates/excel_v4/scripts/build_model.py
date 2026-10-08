@@ -2489,6 +2489,24 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.cal_maint_share"], hc,
                      f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_da})/ABS('{NAME['HI']}'!{cl_h}${hi_capex}),0)",
                      FMT_PCT)
+    # Spread = avg_rate - KeyRate
+    ri_kr = REG.get("RI.kr_row")
+    if ri_kr:
+        formula_cell(ws, REG["DT.cal_spread"], hc,
+                     f"=MAX(0,{cl_h}{REG['DT.avg_rate']}-'{NAME['RI']}'!G${ri_kr})",
+                     FMT_PCT2)
+    # Avg tenor from instruments (SUMPRODUCT of balance × maturity_year / balance)
+    # Simplified: count maturities from Raw_IFRS Maturity col vs last hist year
+    ri_start = REG.get("RI.debt_start_row", 69)
+    ri_end = REG.get("RI.debt_end_row", 89)
+    last_hist_yr = cfg["hist_years"][-1]
+    # Tenor ≈ SUMPRODUCT(Balance × (Maturity_year - last_yr)) / SUM(Balance)
+    # Since maturity is text, use IFERROR to extract year
+    formula_cell(ws, REG["DT.cal_tenor"], hc,
+                 f"=IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_start}:D${ri_end},"
+                 f"MAX(0,'{NAME['DS']}'!G${5}:G${5+ri_end-ri_start}-{last_hist_yr}))"
+                 f"/SUM('{NAME['RI']}'!D${ri_start}:D${ri_end}),2)",
+                 FMT_RATIO)
 
 
 def build_lease(wb, cfg):
