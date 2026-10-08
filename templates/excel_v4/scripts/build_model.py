@@ -1588,6 +1588,19 @@ def build_checks(wb, cfg):
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
+    # ── History consistency: forecast sheets reproduce historical fact ──
+    # Revenue: 10_Revenue total = 02_Hist revenue
+    # COGS: 12_COGS total = 02_Hist cogs
+    # These catch wiring errors when 11_Segments is reconnected
+    r_hist_rev = REG.get("CK.error_count", 24) - 2  # 2 rows before error_count
+    label_row(ws, r_hist_rev, "Rev: 10_Revenue = 02_Hist (история)", "mln", "Должно быть ~0")
+    for c in range(3, 3 + n_hist):
+        cl = get_column_letter(c)
+        formula_cell(ws, r_hist_rev, c,
+                     f"=ROUND('{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
+                     f"-'{NAME['HI']}'!{cl}${REG.get('HI.revenue', 7)},1)",
+                     FMT_RATIO)
+
     # Error count: check integrity + detect errors in key cells
     r_err = REG["CK.error_count"]
     label_row(ws, r_err, "ОШИБОК ВСЕГО (тождества + ошибочные значения)", "", "Должно быть 0")
