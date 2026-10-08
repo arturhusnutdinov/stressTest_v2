@@ -594,11 +594,46 @@ def build_raw_ifrs(wb, cfg):
         section_header(ws, r, section_name); r += 1
         for key in keys:
             label_row(ws, r, key, "mln")
-            # Yellow input cells for last 4 historical years
             for c in range(3, 3 + len(cfg["hist_years"][-4:])):
                 input_cell(ws, r, c, None, FMT_MLN)
             r += 1
         r += 1
+
+    # ── ДОЛГОВОЙ ПОРТФЕЛЬ — ИНСТРУМЕНТЫ ──
+    # Analyst fills: Name, Kind, CCY, Balance, Rate, Maturity per instrument
+    # _Debt_Schedule reads from here (no external source file needed)
+    max_inst = 20
+    section_header(ws, r, "ДОЛГОВОЙ ПОРТФЕЛЬ — ИНСТРУМЕНТЫ"); r += 1
+    # Headers
+    debt_headers = ["Инструмент", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
+    for j, h in enumerate(debt_headers):
+        ws.cell(r, 1 + j, h).font = F_YEAR
+    REG["RI.debt_header_row"] = r
+    r += 1
+    REG["RI.debt_start_row"] = r
+    # 20 instrument rows + 1 Other
+    for i in range(max_inst + 1):
+        lbl = f"Other (мелкие)" if i == max_inst else ""
+        ws.cell(r + i, 1, lbl).font = F_LABEL if i == max_inst else F_INPUT
+        # A=Name, B=Kind, C=CCY, D=Balance, E=Rate, F=Maturity
+        for col_idx, fmt in [(1, "General"), (2, "General"), (3, "General"),
+                              (4, FMT_MLN), (5, FMT_PCT2), (6, "General")]:
+            c = ws.cell(r + i, col_idx)
+            c.font = F_INPUT
+            c.number_format = fmt
+    REG["RI.debt_end_row"] = r + max_inst
+    REG["RI.debt_other_row"] = r + max_inst
+    REG["RI.debt_count"] = max_inst
+    r += max_inst + 2
+
+    # KeyRate forecast row (for floating rate instruments)
+    section_header(ws, r, "СТАВКА ЦБ (прогноз)"); r += 1
+    label_row(ws, r, "KeyRate forecast", "%")
+    REG["RI.kr_row"] = r
+    for c_idx, yr in enumerate(cfg["fc_years"]):
+        ws.cell(r, 7 + c_idx, yr).font = F_YEAR  # year label
+        input_cell(ws, r, 7 + c_idx, 0.12, FMT_PCT)
+    r += 2
 
 
 def build_hist(wb, cfg):
@@ -3853,10 +3888,19 @@ def build_debt_schedule(wb, cfg):
     ws = wb["_Debt_Schedule"]
     apply_col_widths(ws)
     ws.cell(1, 1, "DEBT SCHEDULE — Per-Instrument (Technical)").font = F_TITLE
-    ws.cell(2, 1, "Canonical instruments: BOND_BULLET / BOND_FLOAT / TERM_AMORT / RC").font = F_SUBTITLE
+    ws.cell(2, 1, "All instrument data from Raw_IFRS (single source)").font = F_SUBTITLE
 
     fc = cfg["fc_years"]
     n_fc = len(fc)
+
+    # KeyRate forecast in row 3 — refs to Raw_IFRS
+    ri_kr_row = REG.get("RI.kr_row")
+    ws.cell(3, 1, "KeyRate forecast").font = F_NOTE
+    if ri_kr_row:
+        for yr_idx in range(n_fc):
+            bc = 8 + yr_idx * 5
+            ref_cell(ws, 3, bc,
+                     f"='{NAME['RI']}'!{get_column_letter(7 + yr_idx)}${ri_kr_row}", FMT_PCT)
 
     # Header: instrument info (cols A-G) + per-year blocks (H onwards)
     info_headers = ["№", "Instrument", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
@@ -3872,12 +3916,72 @@ def build_debt_schedule(wb, cfg):
             ws.cell(3, base_col + j, f"{yr}E").font = F_YEAR
             ws.cell(4, base_col + j, sub).font = F_YEAR
 
-    # Instruments will be filled by fill_data (rows 5+)
-    # Row N+5 = TOTAL row with SUM formulas
+    # Instrument rows: reference Raw_IFRS (single source of debt data)
+    max_instruments = REG.get("RI.debt_count", 20)
+    ri_start = REG.get("RI.debt_start_row", 70)
 
-    # Placeholder: 20 instrument rows + Other + total
-    max_instruments = 20
-    r_total = 5 + max_instruments + 1 + 1  # +1 Other row, +1 gap
+    for i in range(max_instruments + 1):  # +1 for Other row
+        r = 5 + i
+        ri_r = ri_start + i
+        # Cols A-G: refs to Raw_IFRS instrument data
+        # A=№, B=Name, C=Kind, D=CCY, E=Balance, F=Rate, G=Maturity
+        ws.cell(r, 1, i + 1 if i < max_instruments else "").font = F_LABEL
+        ref_cell(ws, r, 2, f"='{NAME['RI']}'!A${ri_r}", "General")   # Name
+        ref_cell(ws, r, 3, f"='{NAME['RI']}'!B${ri_r}", "General")   # Kind
+        ref_cell(ws, r, 4, f"='{NAME['RI']}'!C${ri_r}", "General")   # CCY
+        ref_cell(ws, r, 5, f"='{NAME['RI']}'!D${ri_r}", FMT_MLN)     # Balance
+        ref_cell(ws, r, 6, f"='{NAME['RI']}'!E${ri_r}", FMT_PCT2)    # Rate
+        ref_cell(ws, r, 7, f"='{NAME['RI']}'!F${ri_r}", "General")   # Maturity
+
+        # Per-year schedule: Opening/Mandatory/Refi/Interest/Close
+        cp_refi_bonds = REG.get("CP.refi_pct_bonds")
+        cp_refi_bank = REG.get("CP.refi_pct_bank")
+        ri_kr_row = REG.get("RI.kr_row", 3)
+
+        for yr_idx, yr in enumerate(fc):
+            bc = 8 + yr_idx * yr_cols_per
+            cl_open = get_column_letter(bc)
+            cl_mand = get_column_letter(bc + 1)
+            cl_refi = get_column_letter(bc + 2)
+
+            # Opening
+            if yr_idx == 0:
+                # First year: from Raw_IFRS balance
+                ref_cell(ws, r, bc, f"=$E${r}", FMT_MLN)  # = own Balance col
+            else:
+                prev_close = get_column_letter(bc - 1)
+                formula_cell(ws, r, bc, f"={prev_close}{r}", FMT_MLN)
+
+            # Mandatory = IF(maturity contains year, opening, 0)
+            formula_cell(ws, r, bc + 1,
+                         f"=IF(ISNUMBER(SEARCH(\"{yr}\",$G${r})),{cl_open}{r},0)",
+                         FMT_MLN)
+
+            # Refi = Mandatory × refi_pct (bonds vs bank by Kind)
+            if cp_refi_bonds and cp_refi_bank:
+                formula_cell(ws, r, bc + 2,
+                             f"={cl_mand}{r}*IF(OR($C${r}=\"BOND_BULLET\",$C${r}=\"BOND_FLOAT\"),"
+                             f"'Control_Panel'!$C${cp_refi_bonds},"
+                             f"'Control_Panel'!$C${cp_refi_bank})",
+                             FMT_MLN)
+            else:
+                formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
+
+            # Interest = Opening × rate
+            # Floating (BOND_FLOAT/RC): rate = KeyRate + spread
+            # Fixed: rate = contract rate from col F
+            kr_col_idx = 7 + yr_idx  # KeyRate in Raw_IFRS RI.kr_row
+            kr_ref = f"'{NAME['RI']}'!{get_column_letter(kr_col_idx)}${ri_kr_row}"
+            formula_cell(ws, r, bc + 3,
+                         f"={cl_open}{r}*IF(OR($C${r}=\"BOND_FLOAT\",$C${r}=\"RC\"),"
+                         f"{kr_ref}+$F${r},$F${r})",
+                         FMT_MLN)
+
+            # Close = Open - Mandatory + Refi
+            formula_cell(ws, r, bc + 4,
+                         f"={cl_open}{r}-{cl_mand}{r}+{cl_refi}{r}", FMT_MLN)
+
+    r_total = 5 + max_instruments + 1 + 1  # +1 Other, +1 gap
     ws.cell(r_total, 1, "").font = F_LABEL_B
     ws.cell(r_total, 2, "ИТОГО").font = F_LABEL_B
 

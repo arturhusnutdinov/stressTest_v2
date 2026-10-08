@@ -459,5 +459,11 @@
   "HI.tcl": 64,
   "HI.tncl": 65,
   "HI.other_opex": 66,
-  "HI.impairment": 67
+  "HI.impairment": 67,
+  "RI.debt_header_row": 68,
+  "RI.debt_start_row": 69,
+  "RI.debt_end_row": 89,
+  "RI.debt_other_row": 89,
+  "RI.debt_count": 20,
+  "RI.kr_row": 92
 }

@@ -766,16 +766,18 @@ def fill_debt_schedule(wb, data: dict, company: str):
         target_nd_ebitda = _proj.get("model", {}).get("custom", {}).get("debt", {}).get("target_net_debt_ebitda",
                            _proj.get("model", {}).get("standard", {}).get("debt", {}).get("target_net_debt_ebitda", 3.5))
 
-    # Write KeyRate forecast to row 3 of _Debt_Schedule (reference for floating instruments)
-    kr_row = 3  # row 3 = KeyRate forecast
-    ws.cell(kr_row, 1, "KeyRate forecast").font = F_NOTE
+    # Write KeyRate forecast to Raw_IFRS (RI.kr_row)
+    # _Debt_Schedule reads from Raw_IFRS via formulas (build_model sets refs)
+    ri_kr_row = REG.get("RI.kr_row")
+    ws_ri = wb["Raw_IFRS"]
+    if ri_kr_row:
+        for yr_idx, yr in enumerate(fc_years):
+            kr_val = kr_forecast.get(yr, kr_forecast.get(int(yr), 0.12))
+            ws_ri.cell(ri_kr_row, 7 + yr_idx, kr_val).font = F_INPUT
+            ws_ri.cell(ri_kr_row, 7 + yr_idx).number_format = FMT_PCT
+
     yr_start = 8
     cols_per = 5
-    for yr_idx, yr in enumerate(fc_years):
-        bc = yr_start + yr_idx * cols_per
-        kr_val = kr_forecast.get(yr, kr_forecast.get(int(yr), 0.12))
-        ws.cell(kr_row, bc, kr_val).font = F_INPUT
-        ws.cell(kr_row, bc).number_format = FMT_PCT
 
     # Sort by balance descending
     instruments = sorted(debt_instruments,
@@ -834,83 +836,24 @@ def fill_debt_schedule(wb, data: dict, company: str):
                 mat_year = y
                 break
 
-        # Write instrument info
-        ws.cell(r, 1, i + 1).font = F_LABEL
-        ws.cell(r, 2, name).font = F_LABEL
-        ws.cell(r, 3, kind).font = F_LABEL
-        ws.cell(r, 4, ccy).font = F_LABEL
-        ws.cell(r, 5, round(bal_mln, 1)).font = F_INPUT
-        ws.cell(r, 5).number_format = FMT_MLN
-        ws.cell(r, 6, rate).font = F_INPUT
-        ws.cell(r, 6).number_format = FMT_PCT2
-        ws.cell(r, 7, maturity).font = F_LABEL
+        # Write instrument info to Raw_IFRS (single source)
+        # _Debt_Schedule reads from Raw_IFRS via formulas
+        ws_ri = wb["Raw_IFRS"]
+        ri_start = REG.get("RI.debt_start_row", 70)
+        ri_r = ri_start + i
+        ws_ri.cell(ri_r, 1, name).font = F_INPUT           # A: Name
+        ws_ri.cell(ri_r, 2, kind).font = F_INPUT            # B: Kind
+        ws_ri.cell(ri_r, 3, ccy).font = F_INPUT             # C: CCY
+        ws_ri.cell(ri_r, 4, round(bal_mln, 1)).font = F_INPUT  # D: Balance
+        ws_ri.cell(ri_r, 4).number_format = FMT_MLN
+        ws_ri.cell(ri_r, 5, rate).font = F_INPUT            # E: Rate
+        ws_ri.cell(ri_r, 5).number_format = FMT_PCT2
+        ws_ri.cell(ri_r, 6, maturity).font = F_INPUT         # F: Maturity
 
-        # Per-year schedule
-        for yr_idx, yr in enumerate(fc_years):
-            bc = yr_start + yr_idx * cols_per  # base column
-            cl_open = get_column_letter(bc)
-            cl_mand = get_column_letter(bc + 1)
-            cl_refi = get_column_letter(bc + 2)
-            cl_int = get_column_letter(bc + 3)
-            cl_close = get_column_letter(bc + 4)
+        # Per-year schedule formulas already in build_model (refs to Raw_IFRS)
+        # No fill_data override needed
 
-            if yr_idx == 0:
-                # Opening = instrument balance
-                ws.cell(r, bc, round(bal_mln, 1)).font = F_INPUT
-                ws.cell(r, bc).number_format = FMT_MLN
-            else:
-                # Opening = prev year close
-                prev_close_col = get_column_letter(bc - 1)  # prev year Close col
-                formula_cell(ws, r, bc, f"={prev_close_col}{r}", FMT_MLN)
-
-            # Mandatory = full balance at maturity OR at refi maturity (original + tenor)
-            # After refi: instrument gets new maturity = mat_year + tenor
-            cp_tenor = REG.get("CP.term_tenor")
-            tenor_val = 5  # default
-            is_mat_year = (mat_year and mat_year == yr)
-            is_refi_mat = False
-            if mat_year and cp_tenor:
-                refi_mat = mat_year + tenor_val
-                is_refi_mat = (refi_mat == yr) and (refi_mat != mat_year)
-            if is_mat_year or is_refi_mat:
-                formula_cell(ws, r, bc + 1, f"={cl_open}{r}", FMT_MLN)
-            else:
-                formula_cell(ws, r, bc + 1, "=0", FMT_MLN)
-
-            # Refi = Mandatory × refi_pct (scenario-dependent, by instrument type)
-            # BOND_* → CP.refi_pct_bonds, others (TERM/bank) → CP.refi_pct_bank
-            refi_pct_row = REG.get("CP.refi_pct_bonds") if kind.startswith("BOND") \
-                else REG.get("CP.refi_pct_bank")
-            if refi_pct_row:
-                formula_cell(ws, r, bc + 2,
-                             f"={cl_mand}{r}*'Control_Panel'!$C${refi_pct_row}",
-                             FMT_MLN)
-            else:
-                formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
-
-            # Interest = AVG(open, close) × rate
-            # BOND_FLOAT: rate = KeyRate(from row 3) + spread (from $F = contract spread)
-            # BOND_BULLET/OTHER: rate = contract rate from $F
-            if kind == "BOND_FLOAT":
-                # Floating: KeyRate + spread
-                kr_col = get_column_letter(bc)  # KeyRate in same year block, row 3
-                rate_ref = f"({kr_col}${kr_row}+$F${r})"  # KeyRate + spread
-            elif kind == "RC":
-                # RC: typically KeyRate + premium
-                kr_col = get_column_letter(bc)
-                rate_ref = f"({kr_col}${kr_row}+$F${r})"
-            else:
-                rate_ref = f"$F${r}"  # fixed contract rate
-
-            formula_cell(ws, r, bc + 3,
-                         f"={cl_open}{r}*{rate_ref}", FMT_MLN)  # opening only (no circular)
-
-            # Close = Open - Mandatory + Refi
-            formula_cell(ws, r, bc + 4,
-                         f"={cl_open}{r}-{cl_mand}{r}+{cl_refi}{r}", FMT_MLN)
-
-    # Other bucket: reconcile so that schedule total = BS total exactly
-    # Other = BS_total - Σ(top_N rounded) to absorb rounding differences
+    # Other bucket: write to Raw_IFRS "Other" row
     bs_d = data.get("bs", {})
     last_yr = SOURCES[company]["hist_years"][-1]
     st_bs = abs(bs_d.get("short_term_debt", {}).get(last_yr, 0))
@@ -918,31 +861,16 @@ def fill_debt_schedule(wb, data: dict, company: str):
     bs_total_mln = st_bs + lt_bs
     reconciled_other = bs_total_mln - top_n_balance
     if reconciled_other < 0:
-        reconciled_other = other_balance  # fallback
-    r_other = 5 + max_inst
-    if other_balance > 0 or reconciled_other > 0:
-        ws.cell(r_other, 2, f"Other ({len(instruments) - max_inst} instruments)").font = F_LABEL_B
-        ws.cell(r_other, 5, round(reconciled_other, 1)).font = F_INPUT
-        ws.cell(r_other, 5).number_format = FMT_MLN
+        reconciled_other = other_balance
+    ws_ri = wb["Raw_IFRS"]
+    ri_other = REG.get("RI.debt_other_row")
+    if ri_other and (other_balance > 0 or reconciled_other > 0):
+        ws_ri.cell(ri_other, 1, f"Other ({len(instruments) - max_inst} instruments)").font = F_INPUT
+        ws_ri.cell(ri_other, 4, round(reconciled_other, 1)).font = F_INPUT
+        ws_ri.cell(ri_other, 4).number_format = FMT_MLN
         avg_other_rate = other_interest / other_balance if other_balance > 0 else 0.08
-        ws.cell(r_other, 6, round(avg_other_rate, 4)).font = F_INPUT
-        ws.cell(r_other, 6).number_format = FMT_PCT2
-
-        for yr_idx, yr in enumerate(fc_years):
-            bc = yr_start + yr_idx * cols_per
-            if yr_idx == 0:
-                ws.cell(r_other, bc, round(other_balance, 1)).font = F_INPUT
-            else:
-                prev_close = get_column_letter(bc - 1)
-                formula_cell(ws, r_other, bc, f"={prev_close}{r_other}", FMT_MLN)
-            formula_cell(ws, r_other, bc + 1, "=0", FMT_MLN)  # no maturity schedule
-            formula_cell(ws, r_other, bc + 2, "=0", FMT_MLN)
-            cl_open = get_column_letter(bc)
-            cl_close = get_column_letter(bc + 4)
-            formula_cell(ws, r_other, bc + 3,
-                         f"=({cl_open}{r_other}+{cl_close}{r_other})/2*$F${r_other}", FMT_MLN)
-            formula_cell(ws, r_other, bc + 4,
-                         f"={cl_open}{r_other}", FMT_MLN)  # no repay for other
+        ws_ri.cell(ri_other, 5, round(avg_other_rate, 4)).font = F_INPUT
+        ws_ri.cell(ri_other, 5).number_format = FMT_PCT2
 
     print(f"    Debt schedule: {max_inst} instruments + Other, per-year formulas")
 
@@ -1246,7 +1174,7 @@ def fill_debt_schedule(wb, data: dict, company: str):
               f"spread={spread_hist*100:.2f}%")
 
     print(f"    17_Debt: mandatory + refi + interest + ST/LT + FX linked to _Debt_Schedule")
-    print(f"    Floating rate: KeyRate from row {kr_row} + spread per instrument")
+    print(f"    Floating rate: KeyRate from Raw_IFRS row {ri_kr_row} + spread per instrument")
     print(f"    Target ND/EBITDA: {target_nd_ebitda}x (CP row {cp_target_row})")
 
 
