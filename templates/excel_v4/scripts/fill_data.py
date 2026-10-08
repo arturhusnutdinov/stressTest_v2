@@ -649,9 +649,11 @@ def fill_revenue(wb, data: dict, company: str):
             if year in vol_data and sg_vol_r:
                 ws_sg.cell(sg_vol_r, col, round(vol_data[year], 0)).font = F_INPUT
                 ws_sg.cell(sg_vol_r, col).number_format = FMT_INT
+                print(f"      11_Seg: {seg_label} vol {year}={vol_data[year]:.0f} → r{sg_vol_r} c{col}")
             if year in price_data and sg_price_r:
                 ws_sg.cell(sg_price_r, col, round(price_data[year], 0)).font = F_INPUT
                 ws_sg.cell(sg_price_r, col).number_format = FMT_INT
+                print(f"      11_Seg: {seg_label} price {year}={price_data[year]:.0f} → r{sg_price_r} c{col}")
 
         # Forecast: macro-driven price via OLS chain-link or EWA carry-forward
         fc_years = src["fc_years"]
@@ -1258,28 +1260,51 @@ def fill_revenue_reconciliation(wb, data: dict, company: str):
     r_recon = REG.get("RV.recon", 19)
     r_total = REG.get("RV.total_rev", 20)
 
+    # Compute segment revenue from Python data (not Excel cells — can't eval formulas)
+    segments_data = data.get("segments", [])
+    seg_vp: Dict[str, Dict[str, Dict[int, float]]] = {}
+    for item in segments_data:
+        seg = item["segment"]
+        met = item["metric"]
+        seg_vp.setdefault(seg, {}).setdefault(met, {})[item["year"]] = item["value"]
+
+    # Supplement from YAML
+    yaml_path = SV2_ROOT / f"companies/{company}/configs/project.yaml"
+    if yaml_path.exists():
+        import yaml
+        proj = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        custom_segs = proj.get("model", {}).get("custom", {}).get("revenue", {}).get("segments", {})
+        name_map = {"primary_al": "Primary Aluminium", "alumina": "Alumina",
+                     "other": "Other", "nickel": "Nickel", "copper": "Copper", "pgm": "PGM"}
+        for sk, sc in custom_segs.items():
+            dn = name_map.get(sk, sk.title())
+            for yr, vol in sc.get("volume_history", {}).items():
+                seg_vp.setdefault(dn, {}).setdefault("sales_kt", {})[int(yr)] = float(vol)
+            for yr, p in sc.get("price_history", {}).items():
+                pv = float(p)
+                if pv > 100000:
+                    pv = pv / 1000
+                seg_vp.setdefault(dn, {}).setdefault("avg_price_usd_t", {})[int(yr)] = pv
+
     filled = 0
     for yr_idx, yr in enumerate(hist_years):
         col = COL_START + yr_idx
         reported_rev = abs(is_d.get("revenue", {}).get(yr, 0))
-        # Σ segments = total formula evaluates to... but we can't read formula result
-        # Instead: compute segment sum from data
+        # Compute segment sum from Python data (only MODEL segments, not all)
+        seg_configs_local = {
+            "rusal": [("Primary Aluminium", "seg1"), ("Alumina", "seg2")],
+            "nornickel": [("Nickel", "seg1"), ("Copper", "seg2"), ("PGM", "seg3")],
+        }
+        model_segs = seg_configs_local.get(company, [])
         seg_sum = 0
-        for seg_key in ["seg1", "seg2", "seg3"]:
-            rev_r = REG.get(f"RV.{seg_key}_rev")
-            if rev_r:
-                cell_val = ws.cell(rev_r, col).value
-                if isinstance(cell_val, (int, float)):
-                    seg_sum += abs(cell_val)
-                elif isinstance(cell_val, str) and cell_val.startswith("="):
-                    # Formula — can't evaluate, estimate from vol × price
-                    vol_r = REG.get(f"RV.{seg_key}_vol")
-                    price_r = REG.get(f"RV.{seg_key}_price")
-                    if vol_r and price_r:
-                        v = ws.cell(vol_r, col).value
-                        p = ws.cell(price_r, col).value
-                        if isinstance(v, (int, float)) and isinstance(p, (int, float)):
-                            seg_sum += v * p / 1000
+        for seg_label_r, _ in model_segs:
+            for seg_name, metrics in seg_vp.items():
+                if seg_label_r.lower() in seg_name.lower():
+                    vol_d = metrics.get("sales_kt", metrics.get("production_kt", {}))
+                    price_d = metrics.get("avg_price_usd_t", {})
+                    if yr in vol_d and yr in price_d:
+                        seg_sum += vol_d[yr] * price_d[yr] / 1000
+                    break
 
         if reported_rev > 0:
             recon = reported_rev - seg_sum
@@ -2468,8 +2493,9 @@ def fill_all(company: str, model_path: str):
     print("\n3. Filling 02_Hist (IS/BS/CF)...")
     fill_hist_sheet(wb, data, company)
 
-    print("\n4. Filling 11_Segments (operational)...")
-    fill_segments(wb, data, company)
+    # 11_Segments: data now filled via fill_revenue → SG.{key}_vol/price rows
+    # Old fill_segments created dynamic layout that conflicted with build_segments
+    print("\n4. 11_Segments: filled via fill_revenue (REG-registered rows)")
 
     print("\n5. Filling 01_Macro (factors + scenarios)...")
     fill_macro(wb, data, company)

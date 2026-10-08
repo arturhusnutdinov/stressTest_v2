@@ -3909,6 +3909,10 @@ def build(company: str, output: str):
         print(f"  {name}...")
         builder(wb, cfg)
 
+    # ── Save updated REG to reg.json (so fill_data sees runtime keys) ──
+    reg_path = BASE_DIR / "reg.json"
+    reg_path.write_text(json.dumps(REG, indent=2, ensure_ascii=False), encoding="utf-8")
+
     # ── Post-processing: Excel settings ──
     print("  Post-processing...")
 
