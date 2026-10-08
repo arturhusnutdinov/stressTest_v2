@@ -21,22 +21,36 @@
 
 ### Где лежат файлы
 ```
-stressTest_v2/templates/excel_v4/
-├── scripts/
-│   ├── build_model.py      # генератор модели
-│   ├── fill_data.py         # загрузка данных
-│   ├── verify_model.py      # верификация
-│   └── styles.py            # стили
-├── data/
-│   └── {company}/           # ← сюда кладёт аналитик
-│       ├── project.yaml     # конфигурация (создаём)
-│       └── source.xlsx      # МСФО данные (создаём из PDF)
-├── model/                   # ← сюда попадает результат
-├── docs/
-│   ├── Model_Methodology.md
-│   └── AI_MODEL_BUILD_GUIDE.md (этот файл)
-└── reg.json                 # реестр строк
+stressTest_v2/
+├── companies/{company}/
+│   ├── data/
+│   │   ├── {company}_complete_v4.xlsx   # ← парсенная МСФО отчётность
+│   │   ├── parsed/                      # промежуточные файлы парсера
+│   │   ├── debt/                        # долговой портфель
+│   │   ├── operational/                 # операционные данные (vol, price)
+│   │   └── macro/                       # макро-факторы
+│   └── configs/
+│       ├── project.yaml                 # ← конфигурация модели (создаём)
+│       └── stress_scenarios.yaml        # сценарии стресс-теста
+├── templates/excel_v4/
+│   ├── scripts/
+│   │   ├── build_model.py      # генератор модели (~5500 строк)
+│   │   ├── fill_data.py         # загрузка данных (~2700 строк)
+│   │   ├── verify_model.py      # Block F верификация
+│   │   └── styles.py            # стили
+│   ├── model/                   # ← результат: model_{company}.xlsx
+│   ├── docs/
+│   │   ├── Model_Methodology.md
+│   │   └── AI_MODEL_BUILD_GUIDE.md (этот файл)
+│   └── reg.json                 # реестр строк (auto-saved by build_model)
+└── data_mart_v2.db              # SQLite БД с агрегированными данными
 ```
+
+### Подготовка данных для нового эмитента
+1. Создать `companies/{company}/data/` — положить отчётность (PDF/Excel)
+2. Парсить отчётность → `{company}_complete_v4.xlsx` (IS/BS/CF/Debt/Segments)
+3. Создать `companies/{company}/configs/project.yaml` — конфигурация
+4. fill_data.py загрузит данные из xlsx + yaml + БД
 
 ---
 
@@ -240,16 +254,36 @@ scenarios:
 
 ---
 
-## Шаг 3: Заполнение source.xlsx
+## Шаг 3: Заполнение {company}_complete_v4.xlsx
 
-Создать Excel файл с листами:
-1. **IS** — P&L за 3 года
-2. **BS** — Баланс за 3 года
-3. **CF** — ОДДС за 3 года
-4. **Debt** — Список инструментов
-5. **Segments** — Операционные данные (если есть)
+Создать Excel файл `companies/{company}/data/{company}_complete_v4.xlsx` с листами:
+1. **IS** — P&L за 3+ лет (revenue, cogs, sga, da, interest, tax, ni)
+2. **BS** — Баланс за 3+ лет (все статьи: cash, ar, inv, ppe, debt, equity...)
+3. **CF** — ОДДС за 3+ лет (cfo, cfi, cff, capex)
+4. **Debt** — Список инструментов (name, type, currency, outstanding, rate, maturity)
+5. **Segments** — Операционные данные (volume, price per segment)
+6. **Macro** — Исторические макро-факторы (LME, FX, CPI, PPI)
 
 Формат: строки = статьи, столбцы = годы. Знаки: расход = отрицательный.
+Ключи статей: стандартизованные (revenue, cogs, sga, accounts_receivable, inventory, etc.)
+
+### Маппинг ключей IS
+```
+revenue, cogs, gross_profit, sga, total_da, ebitda, ebit,
+interest_expense, other_financial, other_operating_expenses,
+asset_impairment, ebt, tax_expense, net_income
+```
+
+### Маппинг ключей BS
+```
+cash, accounts_receivable, inventory, other_ca, total_ca,
+ppe_net, ppe_gross, accumulated_depreciation, rou_asset,
+goodwill, intangibles, dta, other_nca, total_assets,
+accounts_payable, short_term_debt, taxes_payable, other_cl,
+long_term_debt, lease_liab_current, lease_liab_noncurrent,
+provisions, dtl, other_ncl, total_liabilities,
+share_capital, apic, retained_earnings, aoci, total_equity
+```
 
 ---
 
@@ -355,7 +389,7 @@ python3 -B scripts/build_model.py ...
 - [ ] МСФО данные извлечены (IS/BS/CF × 3 года)
 - [ ] Долговой портфель (инструменты, ставки, сроки)
 - [ ] project.yaml создан с правильной отраслью
-- [ ] source.xlsx заполнен
+- [ ] {company}_complete_v4.xlsx заполнен (IS/BS/CF/Debt/Segments)
 - [ ] build_model.py отработал без ошибок
 - [ ] fill_data.py отработал без ошибок
 - [ ] Excel пересчитан (25 iterations)
