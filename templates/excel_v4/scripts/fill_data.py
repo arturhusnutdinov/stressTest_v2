@@ -1885,12 +1885,14 @@ def fill_bs_history(wb, data: dict, company: str):
 
     # BS → HI mapping for reference formulas (20_BS ← 02_Hist)
     bs_to_hi = {
-        "cash": "cash", "ar": "ar", "inv": "inv",
-        "ppe": "ppe_net", "goodwill": "goodwill", "intang": "intang",
-        "dta": "dta", "ap": "ap", "st_debt": "st_debt",
-        "lt_debt": "lt_debt", "dtl": "dtl", "re": "re",
-        "tca": "tca", "tnca": "tnca", "ta": "ta",
-        "tl": "tl", "equity": "te",
+        "cash": "cash", "ar": "ar", "inv": "inv", "other_ca": "other_ca",
+        "ppe": "ppe_net", "rou": "rou", "goodwill": "goodwill", "intang": "intang",
+        "dta": "dta", "other_nca": "other_nca",
+        "ap": "ap", "st_debt": "st_debt", "tax_pay": "tax_pay", "other_cl": "other_cl",
+        "lt_debt": "lt_debt", "lease_cl": "lease_cl", "lease_ncl": "lease_ncl",
+        "prov": "prov", "dtl": "dtl", "other_ncl": "other_ncl",
+        "sc": "sc", "apic": "apic", "re": "re", "aoci": "aoci",
+        "equity": "te",
     }
 
     filled = 0
@@ -2031,26 +2033,20 @@ def fill_wc_days(wb, data: dict, company: str):
     inv_hist = bs_d.get("inventory", {})
     ap_hist = bs_d.get("accounts_payable", {})
 
-    computed = 0
+    # WC days history: build_model sets formulas (AR/Rev×365 from 02_Hist)
+    # Compute values in Python for CP calibration (don't write to cells)
+    computed_days = {"dso": [], "dio": [], "dpo": []}
     for year in hist_years:
-        col = 3 + hist_years.index(year)
         rev = abs(rev_hist.get(year, 0))
         cogs = abs(cogs_hist.get(year, 0))
         ar = abs(ar_hist.get(year, 0))
         inv_ = abs(inv_hist.get(year, 0))
         ap = abs(ap_hist.get(year, 0))
         if rev > 0:
-            dso = ar / rev * 365
-            ws.cell(REG["WC.dso"], col, round(dso, 0)).font = F_INPUT
-            ws.cell(REG["WC.dso"], col).number_format = FMT_DAYS
+            computed_days["dso"].append(ar / rev * 365)
         if cogs > 0:
-            dio = inv_ / cogs * 365
-            dpo = ap / cogs * 365
-            ws.cell(REG["WC.dio"], col, round(dio, 0)).font = F_INPUT
-            ws.cell(REG["WC.dio"], col).number_format = FMT_DAYS
-            ws.cell(REG["WC.dpo"], col, round(dpo, 0)).font = F_INPUT
-            ws.cell(REG["WC.dpo"], col).number_format = FMT_DAYS
-        computed += 1
+            computed_days["dio"].append(inv_ / cogs * 365)
+            computed_days["dpo"].append(ap / cogs * 365)
 
     # Forecast: WC days from Control_Panel (build_model sets formula =CP.wc_dso etc.)
     # Calibrate CP values from EWA of history (03_Assump rows 13-15)
@@ -2059,14 +2055,9 @@ def fill_wc_days(wb, data: dict, company: str):
     assump_rows = {"dso": 13, "dio": 14, "dpo": 15}
     cp_keys = {"dso": REG.get("CP.wc_dso"), "dio": REG.get("CP.wc_dio"),
                "dpo": REG.get("CP.wc_dpo")}
-    # Compute EWA average from history for CP calibration
+    # Compute EWA average from Python data for CP calibration
     for metric_key, assump_row in assump_rows.items():
-        vals = []
-        for yr in hist_years:
-            c = COL_START + hist_years.index(yr)
-            v = ws.cell(REG[f"WC.{metric_key}"], c).value
-            if isinstance(v, (int, float)) and v > 0:
-                vals.append(v)
+        vals = computed_days.get(metric_key, [])
         if vals:
             ewa_avg = sum(vals) / len(vals)  # simple average
             cp_row = cp_keys.get(metric_key)
@@ -2115,7 +2106,7 @@ def fill_wc_days(wb, data: dict, company: str):
                 ws.cell(REG["WC.ap"], col, round(-ap_v, 1)).font = F_INPUT
             ws.cell(REG["WC.ap"], col).number_format = FMT_MLN
 
-    print(f"    WC days: {computed} historical years computed, forecast carry-forwarded")
+    print(f"    WC days: {len(computed_days.get('dso',[]))} historical years computed, forecast carry-forwarded")
     print(f"    WC balances: AR/INV/AP filled for {len(hist_years)} hist years")
 
 
@@ -2519,7 +2510,8 @@ def fill_all(company: str, model_path: str):
     print("\n7a. Filling statement sheets history (PL/CF col E)...")
     fill_statement_history(wb, data, company)
 
-    print("\n7b. Filling 20_BS history column from 02_Hist...")
+    # 7b. BS history: build_model sets refs for mapped items; fill remaining
+    print("\n7b. Filling 20_BS residual history (Other items, tax_pay, equity)...")
     fill_bs_history(wb, data, company)
 
     print("\n8. Computing WC days + filling COGS/SGA from history...")

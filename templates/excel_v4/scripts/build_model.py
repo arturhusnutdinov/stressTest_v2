@@ -654,13 +654,27 @@ def build_hist(wb, cfg):
         ("lease_cl", "Обяз. по аренде (кратк.)", "mln"),
         ("lease_ncl", "Обяз. по аренде (долг.)", "mln"),
         ("prov", "Резервы", "mln"),
+        ("other_cl", "Прочие кратк. обяз.", "mln"),
+        ("other_ncl", "Прочие долг. обяз.", "mln"),
         ("dtl", "Отложенное нал. обяз.", "mln"),
         ("tl", "Итого обязательства", "mln"),
         ("equity", "Собственный капитал", "mln"),
         ("re", "Нераспр. прибыль", "mln"),
+        ("sc", "Уставный капитал", "mln"),
+        ("apic", "Добавочный капитал", "mln"),
+        ("aoci", "Прочий совокупный доход", "mln"),
+        ("other_ca", "Прочие оборотные активы", "mln"),
+        ("other_nca", "Прочие внеоборотные", "mln"),
+        ("tax_pay", "Налоги к уплате", "mln"),
     ]
+    # Assign missing HI rows dynamically
+    hi_next = max((v for k, v in REG.items() if k.startswith("HI.")), default=58) + 1
     for key, label, unit in bs_rows:
-        r = REG.get(f"HI.{key}", r_bs)
+        r = REG.get(f"HI.{key}")
+        if r is None:
+            r = hi_next
+            REG[f"HI.{key}"] = r
+            hi_next += 1
         label_row(ws, r, label, unit)
         for c in range(3, 3 + len(cfg["hist_years"])):
             input_cell(ws, r, c, 0, FMT_MLN)
@@ -1070,8 +1084,10 @@ def build_bs(wb, cfg):
     r_check = REG["BS.check"]
     label_row(ws, r_check, "Контроль: А − О − К", "mln", "Должно быть = 0")
 
-    # Formulas for totals (all forecast columns)
+    # ── History: filled by fill_data (fill_bs_history writes refs to 02_Hist) ──
     n_hist = len(cfg["hist_years"][-3:])
+
+    # ── Forecast columns: cross-sheet links ──
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
 
@@ -1233,8 +1249,10 @@ def build_pl(wb, cfg):
     r_nm = REG["PL.net_margin"]
     label_row(ws, r_nm, "Net margin", "%")
 
-    # Formulas for forecast columns
+    # ── History: filled by fill_data (fill_statement_history writes refs to 02_Hist) ──
     n_hist = len(cfg["hist_years"][-3:])
+
+    # ── Forecast columns ──
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
 
@@ -1824,9 +1842,21 @@ def build_wc(wb, cfg):
     for key, label in [("dso", "DSO (дни)"), ("dio", "DIH (дни)"), ("dpo", "DPO (дни)")]:
         r = REG[f"WC.{key}"]
         label_row(ws, r, label, "дни")
-        # History: input (filled by fill_data from computed values)
+        # History: computed from BS/PL (eliminate literals)
+        # DSO = AR/Revenue×365, DIH = INV/COGS×365, DPO = AP/COGS×365
+        driver_map = {"dso": ("HI.ar", "HI.revenue"), "dio": ("HI.inv", "HI.cogs"), "dpo": ("HI.ap", "HI.cogs")}
+        num_key, den_key = driver_map[key]
         for c in range(3, 3 + n_hist):
-            input_cell(ws, r, c, 0, FMT_DAYS)
+            cl = get_column_letter(c)
+            num_r = REG.get(num_key)
+            den_r = REG.get(den_key)
+            if num_r and den_r:
+                formula_cell(ws, r, c,
+                             f"=IFERROR(ABS('{NAME['HI']}'!{cl}${num_r})"
+                             f"/ABS('{NAME['HI']}'!{cl}${den_r})*365,0)",
+                             FMT_DAYS)
+            else:
+                input_cell(ws, r, c, 0, FMT_DAYS)
         # Forecast: reference Control_Panel if available, else carry forward
         cp_row = cp_days.get(key)
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
