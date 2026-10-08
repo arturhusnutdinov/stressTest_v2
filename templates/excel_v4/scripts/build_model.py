@@ -2422,19 +2422,49 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.nd']}/{ebitda_ref},0)",
                      FMT_MULT)
 
-    # Historical inputs (last hist year column)
-    for k in ["term_open", "term_close"]:
-        input_cell(ws, REG[f"DT.{k}"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_open"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_close"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_limit"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.open"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.close"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.funding_gap_accum"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.funding_need"], 3, 0, FMT_MLN)
-    input_cell(ws, REG["DT.fx_reval"], 3, 0, FMT_MLN)
+    # Historical inputs — formulas referencing 02_Hist (no literals)
+    hc = 3 + n_hist - 1  # last history column
+    cl_h = get_column_letter(hc)
+    hi_st = REG.get("HI.st_debt")
+    hi_lt = REG.get("HI.lt_debt")
+    hi_cash = REG.get("HI.cash")
+    hi_int = REG.get("HI.interest")
+    # Total debt = ST + LT from 02_Hist
+    if hi_st and hi_lt:
+        total_debt = f"ABS('{NAME['HI']}'!{cl_h}${hi_st})+ABS('{NAME['HI']}'!{cl_h}${hi_lt})"
+        ref_cell(ws, REG["DT.term_open"], hc, f"={total_debt}", FMT_MLN)
+        ref_cell(ws, REG["DT.term_close"], hc, f"={total_debt}", FMT_MLN)
+        ref_cell(ws, REG["DT.open"], hc, f"={total_debt}", FMT_MLN)
+        ref_cell(ws, REG["DT.close"], hc, f"={total_debt}", FMT_MLN)
+        ref_cell(ws, REG["DT.st"], hc,
+                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_st})", FMT_MLN)
+        ref_cell(ws, REG["DT.lt"], hc,
+                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_lt})", FMT_MLN)
+        # ND = debt - cash
+        if hi_cash:
+            ref_cell(ws, REG["DT.nd"], hc,
+                     f"={total_debt}-ABS('{NAME['HI']}'!{cl_h}${hi_cash})", FMT_MLN)
+    # Interest from 02_Hist
+    if hi_int:
+        ref_cell(ws, REG["DT.interest_term"], hc,
+                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
+        ref_cell(ws, REG["DT.interest"], hc,
+                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
+    # Avg rate = interest / debt
+    if hi_int and hi_st and hi_lt:
+        formula_cell(ws, REG["DT.avg_rate"], hc,
+                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_int})/({total_debt}),0.08)",
+                     FMT_PCT)
+    # RC = 0 in history
+    input_cell(ws, REG["DT.rc_open"], hc, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_close"], hc, 0, FMT_MLN)
+    # RC limit from CP
+    ref_cell(ws, REG["DT.rc_limit"], hc,
+             f"='Control_Panel'!$C${REG.get('CP.rc_limit', 56)}", FMT_MLN)
+    # Zeros
+    input_cell(ws, REG["DT.funding_gap_accum"], hc, 0, FMT_MLN)
+    input_cell(ws, REG["DT.funding_need"], hc, 0, FMT_MLN)
+    input_cell(ws, REG["DT.fx_reval"], hc, 0, FMT_MLN)
 
     # ── G. HISTORICAL CALIBRATION (informational) ──
     section_header(ws, REG["DT.cal_st_share"] - 1,
@@ -2448,7 +2478,17 @@ def build_debt(wb, cfg):
         ("cal_st_flag", "Флаг: модельная ST/LT ≠ ист. ±15 п.п.", ""),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, "")
-    # Calibration formulas — historical columns only (filled by fill_data)
+    # Calibration formulas for history column
+    if hi_st and hi_lt:
+        formula_cell(ws, REG["DT.cal_st_share"], hc,
+                     f"=IFERROR({cl_h}{REG['DT.st']}/({cl_h}{REG['DT.st']}+{cl_h}{REG['DT.lt']}),0)",
+                     FMT_PCT)
+    hi_da = REG.get("HI.da")
+    hi_capex = REG.get("HI.capex")
+    if hi_da and hi_capex:
+        formula_cell(ws, REG["DT.cal_maint_share"], hc,
+                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_da})/ABS('{NAME['HI']}'!{cl_h}${hi_capex}),0)",
+                     FMT_PCT)
 
 
 def build_lease(wb, cfg):
