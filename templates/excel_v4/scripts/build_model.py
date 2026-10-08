@@ -1141,11 +1141,11 @@ def build_bs(wb, cfg):
         formula_cell(ws, r_ta, c, f"={cl}{r_tca}+{cl}{r_tnca}", FMT_MLN, bold=True)
         cl_keys = ["ap", "st_debt", "lease_cl", "tax_pay", "other_cl"]
         formula_cell(ws, r_tcl, c,
-                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in cl_keys),
+                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in cl_keys),
                      FMT_MLN, bold=True)
         ncl_keys = ["lt_debt", "lease_ncl", "prov", "dtl", "other_ncl"]
         formula_cell(ws, r_tncl, c,
-                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in ncl_keys),
+                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in ncl_keys),
                      FMT_MLN, bold=True)
         formula_cell(ws, r_tl, c, f"={cl}{r_tcl}+{cl}{r_tncl}", FMT_MLN, bold=True)
         eq_keys = ["sc", "apic", "re", "aoci"]
@@ -1175,16 +1175,16 @@ def build_bs(wb, cfg):
         formula_cell(ws, r_ta, c_idx,
                      f"={cl}{r_tca}+{cl}{r_tnca}", FMT_MLN, bold=True)
 
-        # TCL = sum of CL items
+        # TCL = sum of ABS(CL items) — handles negative tax_pay
         cl_keys = ["ap", "st_debt", "lease_cl", "tax_pay", "other_cl"]
         formula_cell(ws, r_tcl, c_idx,
-                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in cl_keys),
+                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in cl_keys),
                      FMT_MLN, bold=True)
 
-        # TNCL = sum of NCL items
+        # TNCL = sum of ABS(NCL items)
         ncl_keys = ["lt_debt", "lease_ncl", "prov", "dtl", "other_ncl"]
         formula_cell(ws, r_tncl, c_idx,
-                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in ncl_keys),
+                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in ncl_keys),
                      FMT_MLN, bold=True)
 
         # TL = TCL + TNCL

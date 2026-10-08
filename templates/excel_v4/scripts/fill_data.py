@@ -1918,7 +1918,13 @@ def fill_bs_history(wb, data: dict, company: str):
         for other_key, known_keys, total_key, alt_key in plugs:
             total_v = abs((bs.get(total_key) or bs.get(alt_key) or {}).get(yr, 0))
             if total_v > 0:
-                known = sum(abs(bs.get(k, {}).get(yr, 0)) for k in known_keys)
+                # Use abs for assets/liabilities, but preserve sign for items like tax_pay
+                known = 0
+                for k in known_keys:
+                    v = bs.get(k, {}).get(yr, 0)
+                    # BS items: liabilities positive in BS, assets positive in BS
+                    # Use abs consistently — BS formulas also use abs refs to 02_Hist
+                    known += abs(v) if v else 0
                 plug_val = total_v - known
                 hi_row = REG.get(f"HI.{other_key}")
                 bs_row = REG.get(f"BS.{other_key}")
