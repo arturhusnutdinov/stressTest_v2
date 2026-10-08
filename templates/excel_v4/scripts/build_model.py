@@ -2469,7 +2469,16 @@ def build_debt(wb, cfg):
     if ri_kr:
         formula_cell(ws, REG["DT.cal_spread"], lhc,
                      f"=MAX(0,{cl_lh}{REG['DT.avg_rate']}-'{NAME['RI']}'!G${ri_kr})", FMT_PCT2)
-    input_cell(ws, REG["DT.cal_tenor"], lhc, 2.0, FMT_RATIO)  # fill_data computes
+    # Avg tenor = SUMPRODUCT(balance × (maturity_year - last_yr)) / SUM(balance)
+    # Extract year from maturity text via RIGHT(text,4)
+    ri_s = REG.get("RI.debt_start_row", 69)
+    ri_e = REG.get("RI.debt_end_row", 89)
+    last_yr = cfg["hist_years"][-1]
+    formula_cell(ws, REG["DT.cal_tenor"], lhc,
+                 f"=IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_s}:D${ri_e},"
+                 f"MAX(0,VALUE(RIGHT('{NAME['RI']}'!F${ri_s}:F${ri_e},4))-{last_yr}))"
+                 f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),2)",
+                 FMT_RATIO)
 
 
 def build_lease(wb, cfg):

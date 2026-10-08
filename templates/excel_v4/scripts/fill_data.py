@@ -1215,22 +1215,7 @@ def fill_debt_schedule(wb, data: dict, company: str):
         da_last = abs(data.get("is", {}).get("total_da", {}).get(last_yr, 0))
         capex_last = abs(data.get("cf", {}).get("capex", {}).get(last_yr, 0))
         maint_share_hist = da_last / capex_last if capex_last > 0 else 0
-        # Calibration: build_model sets formulas for ST share, maint, spread
-        # Only tenor needs fill_data (computed from instrument maturities)
-        if debt_instruments:
-            w_tenor = w_bal_t = 0
-            for inst in debt_instruments:
-                b = abs(float(inst.get("opening_balance", 0) or 0))
-                mat = str(inst.get("maturity_date", ""))
-                for y in range(last_yr, last_yr + 20):
-                    if str(y) in mat:
-                        w_tenor += b * (y - last_yr)
-                        w_bal_t += b
-                        break
-            if w_bal_t > 0:
-                avg_tenor = w_tenor / w_bal_t
-                ws_dt.cell(REG["DT.cal_tenor"], hc, round(avg_tenor, 1)).font = F_INPUT
-                ws_dt.cell(REG["DT.cal_tenor"], hc).number_format = FMT_RATIO
+        # All calibration: build_model sets formulas (ST share, maint, spread, tenor)
 
         # 5. Debt-financed capex = (ΔDebt - refi) / CapEx — needs prev year, skip if unavailable
         # 6. ST flag: for forecast years, compare model ST% vs hist median
