@@ -600,22 +600,14 @@ def build_raw_ifrs(wb, cfg):
         r += 1
 
     # ── ДОЛГОВОЙ ПОРТФЕЛЬ — ИНСТРУМЕНТЫ ──
-    # Analyst fills: Name, Kind, CCY, Balance, Rate, Maturity per instrument
-    # _Debt_Schedule reads from here (no external source file needed)
     max_inst = 20
     section_header(ws, r, "ДОЛГОВОЙ ПОРТФЕЛЬ — ИНСТРУМЕНТЫ"); r += 1
-    # Headers
     debt_headers = ["Инструмент", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
     for j, h in enumerate(debt_headers):
         ws.cell(r, 1 + j, h).font = F_YEAR
-    REG["RI.debt_header_row"] = r
-    r += 1
+    REG["RI.debt_header_row"] = r; r += 1
     REG["RI.debt_start_row"] = r
-    # 20 instrument rows + 1 Other
     for i in range(max_inst + 1):
-        lbl = f"Other (мелкие)" if i == max_inst else ""
-        ws.cell(r + i, 1, lbl).font = F_LABEL if i == max_inst else F_INPUT
-        # A=Name, B=Kind, C=CCY, D=Balance, E=Rate, F=Maturity
         for col_idx, fmt in [(1, "General"), (2, "General"), (3, "General"),
                               (4, FMT_MLN), (5, FMT_PCT2), (6, "General")]:
             c = ws.cell(r + i, col_idx)
@@ -626,12 +618,11 @@ def build_raw_ifrs(wb, cfg):
     REG["RI.debt_count"] = max_inst
     r += max_inst + 2
 
-    # KeyRate forecast row (for floating rate instruments)
     section_header(ws, r, "СТАВКА ЦБ (прогноз)"); r += 1
     label_row(ws, r, "KeyRate forecast", "%")
     REG["RI.kr_row"] = r
     for c_idx, yr in enumerate(cfg["fc_years"]):
-        ws.cell(r, 7 + c_idx, yr).font = F_YEAR  # year label
+        ws.cell(r, 7 + c_idx, yr).font = F_YEAR
         input_cell(ws, r, 7 + c_idx, 0.12, FMT_PCT)
     r += 2
 
@@ -848,19 +839,11 @@ def build_revenue(wb, cfg):
             formula_cell(ws, base_r + 2, c,
                          f"={col_l}{base_r}*{col_l}{base_r+1}/1000", FMT_MLN, bold=True)
 
-    # Reconciliation = reported revenue - Σ segments
+    # Reconciliation: reported revenue - Σ segments (for history)
+    # In forecast: carry forward last reconciliation value
     r_recon = REG.get("RV.recon", 19)
     label_row(ws, r_recon, "Reconciliation / Other revenue", "mln",
-              "= 02_Hist revenue − Σ segments")
-    # History: formula = '02_Hist'!revenue - Σ segment_revenues
-    hi_rev = REG.get("HI.revenue", 7)
-    for c in range(3, 3 + n_hist):
-        cl = get_column_letter(c)
-        seg_parts = "+".join(
-            f"{cl}{REG.get('RV.' + seg['key'] + '_rev', 10)}"
-            for seg in cfg["segments"])
-        formula_cell(ws, r_recon, c,
-                     f"='{NAME['HI']}'!{cl}${hi_rev}-({seg_parts})", FMT_MLN)
+              "Reported total − Σ segments (captures VAP, foil, eliminations)")
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         # Д2: Reconciliation grows proportionally to segment total (not frozen)
         # recon_t = recon_prev × (Σseg_t / Σseg_prev)
@@ -2422,49 +2405,19 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.nd']}/{ebitda_ref},0)",
                      FMT_MULT)
 
-    # Historical inputs — formulas referencing 02_Hist (no literals)
-    hc = 3 + n_hist - 1  # last history column
-    cl_h = get_column_letter(hc)
-    hi_st = REG.get("HI.st_debt")
-    hi_lt = REG.get("HI.lt_debt")
-    hi_cash = REG.get("HI.cash")
-    hi_int = REG.get("HI.interest")
-    # Total debt = ST + LT from 02_Hist
-    if hi_st and hi_lt:
-        total_debt = f"ABS('{NAME['HI']}'!{cl_h}${hi_st})+ABS('{NAME['HI']}'!{cl_h}${hi_lt})"
-        ref_cell(ws, REG["DT.term_open"], hc, f"={total_debt}", FMT_MLN)
-        ref_cell(ws, REG["DT.term_close"], hc, f"={total_debt}", FMT_MLN)
-        ref_cell(ws, REG["DT.open"], hc, f"={total_debt}", FMT_MLN)
-        ref_cell(ws, REG["DT.close"], hc, f"={total_debt}", FMT_MLN)
-        ref_cell(ws, REG["DT.st"], hc,
-                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_st})", FMT_MLN)
-        ref_cell(ws, REG["DT.lt"], hc,
-                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_lt})", FMT_MLN)
-        # ND = debt - cash
-        if hi_cash:
-            ref_cell(ws, REG["DT.nd"], hc,
-                     f"={total_debt}-ABS('{NAME['HI']}'!{cl_h}${hi_cash})", FMT_MLN)
-    # Interest from 02_Hist
-    if hi_int:
-        ref_cell(ws, REG["DT.interest_term"], hc,
-                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
-        ref_cell(ws, REG["DT.interest"], hc,
-                 f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
-    # Avg rate = interest / debt
-    if hi_int and hi_st and hi_lt:
-        formula_cell(ws, REG["DT.avg_rate"], hc,
-                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_int})/({total_debt}),0.08)",
-                     FMT_PCT)
-    # RC = 0 in history
-    input_cell(ws, REG["DT.rc_open"], hc, 0, FMT_MLN)
-    input_cell(ws, REG["DT.rc_close"], hc, 0, FMT_MLN)
-    # RC limit from CP
-    ref_cell(ws, REG["DT.rc_limit"], hc,
-             f"='Control_Panel'!$C${REG.get('CP.rc_limit', 56)}", FMT_MLN)
-    # Zeros
-    input_cell(ws, REG["DT.funding_gap_accum"], hc, 0, FMT_MLN)
-    input_cell(ws, REG["DT.funding_need"], hc, 0, FMT_MLN)
-    input_cell(ws, REG["DT.fx_reval"], hc, 0, FMT_MLN)
+    # Historical inputs (last hist year column)
+    for k in ["term_open", "term_close"]:
+        input_cell(ws, REG[f"DT.{k}"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_open"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_close"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.rc_limit"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.open"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.close"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.st"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.lt"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.funding_gap_accum"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.funding_need"], 3, 0, FMT_MLN)
+    input_cell(ws, REG["DT.fx_reval"], 3, 0, FMT_MLN)
 
     # ── G. HISTORICAL CALIBRATION (informational) ──
     section_header(ws, REG["DT.cal_st_share"] - 1,
@@ -2478,35 +2431,7 @@ def build_debt(wb, cfg):
         ("cal_st_flag", "Флаг: модельная ST/LT ≠ ист. ±15 п.п.", ""),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, "")
-    # Calibration formulas for history column
-    if hi_st and hi_lt:
-        formula_cell(ws, REG["DT.cal_st_share"], hc,
-                     f"=IFERROR({cl_h}{REG['DT.st']}/({cl_h}{REG['DT.st']}+{cl_h}{REG['DT.lt']}),0)",
-                     FMT_PCT)
-    hi_da = REG.get("HI.da")
-    hi_capex = REG.get("HI.capex")
-    if hi_da and hi_capex:
-        formula_cell(ws, REG["DT.cal_maint_share"], hc,
-                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_da})/ABS('{NAME['HI']}'!{cl_h}${hi_capex}),0)",
-                     FMT_PCT)
-    # Spread = avg_rate - KeyRate
-    ri_kr = REG.get("RI.kr_row")
-    if ri_kr:
-        formula_cell(ws, REG["DT.cal_spread"], hc,
-                     f"=MAX(0,{cl_h}{REG['DT.avg_rate']}-'{NAME['RI']}'!G${ri_kr})",
-                     FMT_PCT2)
-    # Avg tenor from instruments (SUMPRODUCT of balance × maturity_year / balance)
-    # Simplified: count maturities from Raw_IFRS Maturity col vs last hist year
-    ri_start = REG.get("RI.debt_start_row", 69)
-    ri_end = REG.get("RI.debt_end_row", 89)
-    last_hist_yr = cfg["hist_years"][-1]
-    # Tenor ≈ SUMPRODUCT(Balance × (Maturity_year - last_yr)) / SUM(Balance)
-    # Since maturity is text, use IFERROR to extract year
-    formula_cell(ws, REG["DT.cal_tenor"], hc,
-                 f"=IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_start}:D${ri_end},"
-                 f"MAX(0,'{NAME['DS']}'!G${5}:G${5+ri_end-ri_start}-{last_hist_yr}))"
-                 f"/SUM('{NAME['RI']}'!D${ri_start}:D${ri_end}),2)",
-                 FMT_RATIO)
+    # Calibration formulas — historical columns only (filled by fill_data)
 
 
 def build_lease(wb, cfg):
@@ -2823,23 +2748,7 @@ def build_tax(wb, cfg):
                        ("dtl_open", "DTL начало"), ("dtl_close", "DTL конец")]:
         label_row(ws, REG[f"TX.{key}"], label, "mln")
 
-    # History: DTA/DTL from 02_Hist (last hist col)
-    last_hist_col = 3 + n_hist - 1
-    cl_h = get_column_letter(last_hist_col)
-    hi_dta = REG.get("HI.dta")
-    hi_dtl = REG.get("HI.dtl")
-    if hi_dta:
-        ref_cell(ws, REG["TX.dta_open"], last_hist_col,
-                 f"='{NAME['HI']}'!{cl_h}${hi_dta}", FMT_MLN)
-        ref_cell(ws, REG["TX.dta_close"], last_hist_col,
-                 f"='{NAME['HI']}'!{cl_h}${hi_dta}", FMT_MLN)
-    if hi_dtl:
-        ref_cell(ws, REG["TX.dtl_open"], last_hist_col,
-                 f"='{NAME['HI']}'!{cl_h}${hi_dtl}", FMT_MLN)
-        ref_cell(ws, REG["TX.dtl_close"], last_hist_col,
-                 f"='{NAME['HI']}'!{cl_h}${hi_dtl}", FMT_MLN)
-
-    # Tax formulas (forecast)
+    # Tax formulas
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
@@ -3970,19 +3879,10 @@ def build_debt_schedule(wb, cfg):
     ws = wb["_Debt_Schedule"]
     apply_col_widths(ws)
     ws.cell(1, 1, "DEBT SCHEDULE — Per-Instrument (Technical)").font = F_TITLE
-    ws.cell(2, 1, "All instrument data from Raw_IFRS (single source)").font = F_SUBTITLE
+    ws.cell(2, 1, "Canonical instruments: BOND_BULLET / BOND_FLOAT / TERM_AMORT / RC").font = F_SUBTITLE
 
     fc = cfg["fc_years"]
     n_fc = len(fc)
-
-    # KeyRate forecast in row 3 — refs to Raw_IFRS
-    ri_kr_row = REG.get("RI.kr_row")
-    ws.cell(3, 1, "KeyRate forecast").font = F_NOTE
-    if ri_kr_row:
-        for yr_idx in range(n_fc):
-            bc = 8 + yr_idx * 5
-            ref_cell(ws, 3, bc,
-                     f"='{NAME['RI']}'!{get_column_letter(7 + yr_idx)}${ri_kr_row}", FMT_PCT)
 
     # Header: instrument info (cols A-G) + per-year blocks (H onwards)
     info_headers = ["№", "Instrument", "Kind", "CCY", "Balance (mln)", "Rate", "Maturity"]
@@ -3998,72 +3898,12 @@ def build_debt_schedule(wb, cfg):
             ws.cell(3, base_col + j, f"{yr}E").font = F_YEAR
             ws.cell(4, base_col + j, sub).font = F_YEAR
 
-    # Instrument rows: reference Raw_IFRS (single source of debt data)
-    max_instruments = REG.get("RI.debt_count", 20)
-    ri_start = REG.get("RI.debt_start_row", 70)
+    # Instruments will be filled by fill_data (rows 5+)
+    # Row N+5 = TOTAL row with SUM formulas
 
-    for i in range(max_instruments + 1):  # +1 for Other row
-        r = 5 + i
-        ri_r = ri_start + i
-        # Cols A-G: refs to Raw_IFRS instrument data
-        # A=№, B=Name, C=Kind, D=CCY, E=Balance, F=Rate, G=Maturity
-        ws.cell(r, 1, i + 1 if i < max_instruments else "").font = F_LABEL
-        ref_cell(ws, r, 2, f"='{NAME['RI']}'!A${ri_r}", "General")   # Name
-        ref_cell(ws, r, 3, f"='{NAME['RI']}'!B${ri_r}", "General")   # Kind
-        ref_cell(ws, r, 4, f"='{NAME['RI']}'!C${ri_r}", "General")   # CCY
-        ref_cell(ws, r, 5, f"='{NAME['RI']}'!D${ri_r}", FMT_MLN)     # Balance
-        ref_cell(ws, r, 6, f"='{NAME['RI']}'!E${ri_r}", FMT_PCT2)    # Rate
-        ref_cell(ws, r, 7, f"='{NAME['RI']}'!F${ri_r}", "General")   # Maturity
-
-        # Per-year schedule: Opening/Mandatory/Refi/Interest/Close
-        cp_refi_bonds = REG.get("CP.refi_pct_bonds")
-        cp_refi_bank = REG.get("CP.refi_pct_bank")
-        ri_kr_row = REG.get("RI.kr_row", 3)
-
-        for yr_idx, yr in enumerate(fc):
-            bc = 8 + yr_idx * yr_cols_per
-            cl_open = get_column_letter(bc)
-            cl_mand = get_column_letter(bc + 1)
-            cl_refi = get_column_letter(bc + 2)
-
-            # Opening
-            if yr_idx == 0:
-                # First year: from Raw_IFRS balance
-                ref_cell(ws, r, bc, f"=$E${r}", FMT_MLN)  # = own Balance col
-            else:
-                prev_close = get_column_letter(bc - 1)
-                formula_cell(ws, r, bc, f"={prev_close}{r}", FMT_MLN)
-
-            # Mandatory = IF(maturity contains year, opening, 0)
-            formula_cell(ws, r, bc + 1,
-                         f"=IF(ISNUMBER(SEARCH(\"{yr}\",$G${r})),{cl_open}{r},0)",
-                         FMT_MLN)
-
-            # Refi = Mandatory × refi_pct (bonds vs bank by Kind)
-            if cp_refi_bonds and cp_refi_bank:
-                formula_cell(ws, r, bc + 2,
-                             f"={cl_mand}{r}*IF(OR($C${r}=\"BOND_BULLET\",$C${r}=\"BOND_FLOAT\"),"
-                             f"'Control_Panel'!$C${cp_refi_bonds},"
-                             f"'Control_Panel'!$C${cp_refi_bank})",
-                             FMT_MLN)
-            else:
-                formula_cell(ws, r, bc + 2, f"={cl_mand}{r}", FMT_MLN)
-
-            # Interest = Opening × rate
-            # Floating (BOND_FLOAT/RC): rate = KeyRate + spread
-            # Fixed: rate = contract rate from col F
-            kr_col_idx = 7 + yr_idx  # KeyRate in Raw_IFRS RI.kr_row
-            kr_ref = f"'{NAME['RI']}'!{get_column_letter(kr_col_idx)}${ri_kr_row}"
-            formula_cell(ws, r, bc + 3,
-                         f"={cl_open}{r}*IF(OR($C${r}=\"BOND_FLOAT\",$C${r}=\"RC\"),"
-                         f"{kr_ref}+$F${r},$F${r})",
-                         FMT_MLN)
-
-            # Close = Open - Mandatory + Refi
-            formula_cell(ws, r, bc + 4,
-                         f"={cl_open}{r}-{cl_mand}{r}+{cl_refi}{r}", FMT_MLN)
-
-    r_total = 5 + max_instruments + 1 + 1  # +1 Other, +1 gap
+    # Placeholder: 20 instrument rows + Other + total
+    max_instruments = 20
+    r_total = 5 + max_instruments + 1 + 1  # +1 Other row, +1 gap
     ws.cell(r_total, 1, "").font = F_LABEL_B
     ws.cell(r_total, 2, "ИТОГО").font = F_LABEL_B
 
