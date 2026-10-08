@@ -1786,16 +1786,19 @@ def fill_statement_history(wb, data: dict, company: str):
     pl_map = {
         "revenue": "revenue", "cogs": "cogs", "gross_profit": "gp",
         "sga": "sga", "ebitda": "ebitda", "ebit": "ebit",
-        "interest_expense": "interest", "ebt": "ebt",
-        "tax_expense": "tax", "net_income": "ni",
+        "interest_expense": "interest", "other_financial": "other_fin",
+        "ebt": "ebt", "tax_expense": "tax", "net_income": "ni",
         "total_da": "da",
+        "other_operating_expenses": "other_opex", "asset_impairment": "impairment",
+        "other_opex": "other_opex", "impairment": "impairment",
     }
     # PL ← 02_Hist reference mapping
     pl_to_hi = {
         "revenue": "revenue", "cogs": "cogs", "gp": "gp",
         "sga": "sga", "ebitda": "ebitda", "ebit": "ebit",
-        "interest": "interest", "ebt": "ebt",
-        "tax": "tax", "ni": "ni", "da": "da",
+        "interest": "interest", "other_fin": "other_fin",
+        "ebt": "ebt", "tax": "tax", "ni": "ni", "da": "da",
+        "other_opex": "other_opex", "impairment": "impairment",
     }
     ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
     hist_3 = src["hist_years"][-N_HIST_DISPLAY:]
@@ -1824,28 +1827,22 @@ def fill_statement_history(wb, data: dict, company: str):
 
     # Д1: Fill missing PL items as residuals so history satisfies its own formulas
     # other_opex = EBITDA - GP - SGA (makes Валовая + SGA + other = EBITDA)
-    # impairment = EBIT - EBITDA + DA (makes EBITDA - DA - impairment = EBIT)
+    # other_opex and impairment as FORMULAS (computed from other PL items)
+    # other_opex = EBITDA - GP - SGA (residual)
+    # impairment = EBITDA - DA - EBIT (residual)
+    r_oo = REG.get("PL.other_opex")
+    r_imp = REG.get("PL.impairment")
     for yr in hist_3:
         col = COL_START + hist_3.index(yr)
-        gp = is_d.get("gross_profit", {}).get(yr, 0) or 0
-        sga = is_d.get("sga", {}).get(yr, 0) or 0
-        ebitda = is_d.get("ebitda", {}).get(yr, 0) or 0
-        ebit = is_d.get("ebit", {}).get(yr, 0) or 0
-        da = is_d.get("total_da", {}).get(yr, 0) or 0
-        # other_opex = EBITDA - GP - SGA
-        other_opex = ebitda - gp - sga
-        if abs(other_opex) > 1:
-            r_oo = REG.get("PL.other_opex")
-            if r_oo:
-                ws_pl.cell(r_oo, col, round(other_opex, 1)).font = F_INPUT
-                ws_pl.cell(r_oo, col).number_format = FMT_MLN
-        # impairment = EBIT - EBITDA + DA (sign: EBIT = EBITDA - DA - impairment)
-        impairment = ebitda - abs(da) - ebit
-        if abs(impairment) > 1:
-            r_imp = REG.get("PL.impairment")
-            if r_imp:
-                ws_pl.cell(r_imp, col, round(impairment, 1)).font = F_INPUT
-                ws_pl.cell(r_imp, col).number_format = FMT_MLN
+        cl = get_column_letter(col)
+        if r_oo:
+            formula_cell(ws_pl, r_oo, col,
+                         f"={cl}{REG['PL.ebitda']}-{cl}{REG['PL.gp']}-{cl}{REG['PL.sga']}",
+                         FMT_MLN)
+        if r_imp:
+            formula_cell(ws_pl, r_imp, col,
+                         f"={cl}{REG['PL.ebitda']}-ABS({cl}{REG['PL.da']})-{cl}{REG['PL.ebit']}",
+                         FMT_MLN)
 
     print(f"    CF history: {filled} metrics for {last_yr}, cash={cash_close}")
     print(f"    PL history: {len(pl_map)} metrics × {len(hist_3)} years ({pl_refs} refs to 02_Hist)")
@@ -1911,7 +1908,20 @@ def fill_bs_history(wb, data: dict, company: str):
                 if r:
                     row_accum[r] = row_accum.get(r, 0) + val
 
+        # Skip total rows (build_model sets formulas for these)
+        total_rows = {REG.get(f"BS.{k}") for k in
+                      ["tca", "tnca", "ta", "tcl", "tncl", "tl", "te", "check"]}
         for r, val in row_accum.items():
+            if r in total_rows:
+                # Write to 02_Hist only (BS cell has formula from build_model)
+                for bk, hk in bs_to_hi.items():
+                    if REG.get(f"BS.{bk}") == r:
+                        hi_row = REG.get(f"HI.{hk}")
+                        if hi_row and ws_hi:
+                            ws_hi.cell(hi_row, col, round(val, 1)).font = F_INPUT
+                            ws_hi.cell(hi_row, col).number_format = FMT_MLN
+                        break
+                continue
             # Try to create reference to 02_Hist instead of literal
             # Find corresponding HI row
             bs_key_name = None

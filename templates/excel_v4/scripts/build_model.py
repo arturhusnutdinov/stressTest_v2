@@ -666,6 +666,12 @@ def build_hist(wb, cfg):
         ("other_ca", "Прочие оборотные активы", "mln"),
         ("other_nca", "Прочие внеоборотные", "mln"),
         ("tax_pay", "Налоги к уплате", "mln"),
+        ("tca", "Итого оборотные активы", "mln"),
+        ("tnca", "Итого внеоборотные активы", "mln"),
+        ("tcl", "Итого краткосрочные обяз.", "mln"),
+        ("tncl", "Итого долгосрочные обяз.", "mln"),
+        ("other_opex", "Прочие опер. расходы (IS)", "mln"),
+        ("impairment", "Обесценение (IS)", "mln"),
     ]
     # Assign missing HI rows dynamically
     hi_next = max((v for k, v in REG.items() if k.startswith("HI.")), default=58) + 1
@@ -1084,8 +1090,35 @@ def build_bs(wb, cfg):
     r_check = REG["BS.check"]
     label_row(ws, r_check, "Контроль: А − О − К", "mln", "Должно быть = 0")
 
-    # ── History: filled by fill_data (fill_bs_history writes refs to 02_Hist) ──
+    # ── History: line items filled by fill_data (refs to 02_Hist) ──
+    # Totals as formulas (not literals) for history too
     n_hist = len(cfg["hist_years"][-3:])
+    for c in range(3, 3 + n_hist):
+        cl = get_column_letter(c)
+        ca_keys = ["cash", "ar", "inv", "other_ca"]
+        formula_cell(ws, r_tca, c,
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in ca_keys),
+                     FMT_MLN, bold=True)
+        nca_keys = ["ppe", "rou", "goodwill", "intang", "dta", "other_nca"]
+        formula_cell(ws, r_tnca, c,
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in nca_keys),
+                     FMT_MLN, bold=True)
+        formula_cell(ws, r_ta, c, f"={cl}{r_tca}+{cl}{r_tnca}", FMT_MLN, bold=True)
+        cl_keys = ["ap", "st_debt", "lease_cl", "tax_pay", "other_cl"]
+        formula_cell(ws, r_tcl, c,
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in cl_keys),
+                     FMT_MLN, bold=True)
+        ncl_keys = ["lt_debt", "lease_ncl", "prov", "dtl", "other_ncl"]
+        formula_cell(ws, r_tncl, c,
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in ncl_keys),
+                     FMT_MLN, bold=True)
+        formula_cell(ws, r_tl, c, f"={cl}{r_tcl}+{cl}{r_tncl}", FMT_MLN, bold=True)
+        eq_keys = ["sc", "apic", "re", "aoci"]
+        formula_cell(ws, r_te, c,
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in eq_keys),
+                     FMT_MLN, bold=True)
+        formula_cell(ws, r_check, c,
+                     f"={cl}{r_ta}-{cl}{r_tl}-{cl}{r_te}", FMT_RATIO, bold=True)
 
     # ── Forecast columns: cross-sheet links ──
     for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
@@ -1606,18 +1639,28 @@ def build_checks(wb, cfg):
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
-    # ── History consistency: forecast sheets reproduce historical fact ──
-    # Revenue: 10_Revenue total = 02_Hist revenue
-    # COGS: 12_COGS total = 02_Hist cogs
-    # These catch wiring errors when 11_Segments is reconnected
-    r_hist_rev = REG.get("CK.error_count", 24) - 2  # 2 rows before error_count
-    label_row(ws, r_hist_rev, "Rev: 10_Revenue = 02_Hist (история)", "mln", "Должно быть ~0")
-    for c in range(3, 3 + n_hist):
-        cl = get_column_letter(c)
-        formula_cell(ws, r_hist_rev, c,
-                     f"=ROUND('{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
-                     f"-'{NAME['HI']}'!{cl}${REG.get('HI.revenue', 7)},1)",
-                     FMT_RATIO)
+    # ── History consistency: calc sheets reproduce 02_Hist on history columns ──
+    # Catches wiring errors when data sources are reconnected
+    hist_checks = [
+        ("Rev: 10_Revenue = 02_Hist", f"'{NAME['RV']}'", REG['RV.total_rev'], "HI.revenue"),
+        ("COGS: 12_COGS = 02_Hist", f"'{NAME['CG']}'", REG['CG.total'], "HI.cogs"),
+        ("SGA: 13_SGA = 02_Hist", f"'{NAME['SA']}'", REG['SA.sga_total'], "HI.sga"),
+        ("PPE: 15_PPE = 02_Hist", f"'{NAME['PP']}'", REG['PP.net_close'], "HI.ppe_net"),
+        ("BS: 20_BS TA = 02_Hist", f"'{NAME['BS']}'", REG['BS.ta'], "HI.ta"),
+    ]
+    r_hist_base = REG.get("CK.error_count", 24) - len(hist_checks) - 1
+    section_header(ws, r_hist_base, "СВЕРКА ИСТОРИИ (прогнозный лист = 02_Hist)")
+    for i, (label, sheet_ref, calc_row, hi_key) in enumerate(hist_checks):
+        r_hc = r_hist_base + 1 + i
+        label_row(ws, r_hc, label, "mln", "Должно быть ~0")
+        hi_row = REG.get(hi_key)
+        if hi_row:
+            for c in range(3, 3 + n_hist):
+                cl = get_column_letter(c)
+                formula_cell(ws, r_hc, c,
+                             f"=ROUND({sheet_ref}!{cl}${calc_row}"
+                             f"-'{NAME['HI']}'!{cl}${hi_row},1)",
+                             FMT_RATIO)
 
     # Error count: check integrity + detect errors in key cells
     r_err = REG["CK.error_count"]
