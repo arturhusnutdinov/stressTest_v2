@@ -1135,22 +1135,8 @@ def fill_debt_schedule(wb, data: dict, company: str):
         ws_dt.cell(REG["DT.cal_spread"], hc, round(spread_hist, 4)).font = F_INPUT
         ws_dt.cell(REG["DT.cal_spread"], hc).number_format = FMT_PCT2
 
-        # 4. Average tenor (weighted by balance)
-        if debt_instruments:
-            w_tenor = w_bal_t = 0
-            for inst in debt_instruments:
-                b = abs(float(inst.get("opening_balance", 0) or 0))
-                mat = str(inst.get("maturity_date", ""))
-                for y in range(last_yr, last_yr + 20):
-                    if str(y) in mat:
-                        tenor = y - last_yr
-                        w_tenor += b * tenor
-                        w_bal_t += b
-                        break
-            if w_bal_t > 0:
-                avg_tenor = w_tenor / w_bal_t
-                ws_dt.cell(REG["DT.cal_tenor"], hc, round(avg_tenor, 1)).font = F_INPUT
-                ws_dt.cell(REG["DT.cal_tenor"], hc).number_format = FMT_RATIO
+        # 4. Average tenor: build_model sets SUMPRODUCT formula from Raw_IFRS
+        # (no literal write needed)
 
         # 5. Debt-financed capex = (ΔDebt - refi) / CapEx — needs prev year, skip if unavailable
         # 6. ST flag: for forecast years, compare model ST% vs hist median
