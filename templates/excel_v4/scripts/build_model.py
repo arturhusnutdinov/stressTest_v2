@@ -291,12 +291,22 @@ def build_macro(wb, cfg):
     # Store active scenario base row for other sheets
     REG["MA.act_base"] = act_base + 2
 
-    # ── Econometric display ──
+    # ── Econometric display: OLS Revenue ~ β × Δln(Factor) ──
     econ_base = act_base + n_f + 4
     section_header(ws, econ_base, "ЭКОНОМЕТРИКА: Revenue ~ β × Δln(Factor)")
-    for i, label in enumerate(["β (эластичность)", "R² (коэфф. детерминации)", "α (константа)"]):
-        r = econ_base + 2 + i
-        label_row(ws, r, label)
+    ws.cell(econ_base + 1, 1, "Результаты OLS из fill_data (β, R², α)").font = F_NOTE
+    r_beta = econ_base + 2
+    r_r2 = econ_base + 3
+    r_alpha = econ_base + 4
+    label_row(ws, r_beta, "β (эластичность)", "x", "fill_data computes from history")
+    input_cell(ws, r_beta, 3, 1.0, FMT_RATIO)
+    label_row(ws, r_r2, "R² (коэфф. детерминации)", "%")
+    input_cell(ws, r_r2, 3, 0, FMT_PCT2)
+    label_row(ws, r_alpha, "α (константа)", "x")
+    input_cell(ws, r_alpha, 3, 0, FMT_RATIO)
+    REG["MA.econ_beta"] = r_beta
+    REG["MA.econ_r2"] = r_r2
+    REG["MA.econ_alpha"] = r_alpha
 
 
 def build_assump(wb, cfg):

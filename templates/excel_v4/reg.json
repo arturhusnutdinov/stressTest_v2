@@ -40,8 +40,8 @@
   "MA.act_cpi": 47,
   "MA.act_ppi": 48,
   "MA.econ_beta_rev": 52,
-  "MA.econ_r2": 53,
-  "MA.econ_alpha": 54,
+  "MA.econ_r2": 51,
+  "MA.econ_alpha": 52,
   "HI.revenue": 7,
   "HI.cogs": 8,
   "HI.gp": 9,
@@ -479,5 +479,6 @@
   "DR.interest_income": 23,
   "DR.cny_share": 26,
   "DR.rub_share": 27,
-  "DR.fx_impact": 28
+  "DR.fx_impact": 28,
+  "MA.econ_beta": 50
 }

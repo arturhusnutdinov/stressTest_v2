@@ -725,14 +725,34 @@ def fill_revenue(wb, data: dict, company: str):
                                   f"({len(dx)} obs, factor={factor_name})")
 
         # Forecast: DON'T override — build_model creates formulas in 11_Segments
-        # Write OLS β to CP.rev_elasticity (for Revenue method 2)
+        # Write OLS results to CP + 01_Macro econ block
         if factor_name and beta_price != 1.0:
             cp_elast_row = REG.get("CP.rev_elasticity")
             if cp_elast_row:
                 ws_cp = wb["Control_Panel"]
                 ws_cp.cell(cp_elast_row, 3, round(beta_price, 3)).font = F_INPUT
                 ws_cp.cell(cp_elast_row, 3).number_format = FMT_RATIO
-            print(f"    {seg_label} OLS β={beta_price:.3f} → CP.rev_elasticity")
+            # Write to 01_Macro econ block
+            ws_ma = wb["01_Macro"]
+            ma_beta = REG.get("MA.econ_beta")
+            ma_r2 = REG.get("MA.econ_r2")
+            ma_alpha = REG.get("MA.econ_alpha")
+            if ma_beta:
+                ws_ma.cell(ma_beta, 3, round(beta_price, 3)).font = F_INPUT
+            if ma_r2:
+                # Compute R² from the regression
+                if dx and dy:
+                    n = len(dx)
+                    mx = sum(dx) / n
+                    my = sum(dy) / n
+                    ss_tot = sum((dy[j]-my)**2 for j in range(n))
+                    ss_res = sum((dy[j] - (alpha_price + beta_price*dx[j]))**2 for j in range(n))
+                    r2 = 1 - ss_res/ss_tot if ss_tot > 0 else 0
+                    ws_ma.cell(ma_r2, 3, round(r2, 4)).font = F_INPUT
+                    ws_ma.cell(ma_r2, 3).number_format = FMT_PCT2
+            if ma_alpha:
+                ws_ma.cell(ma_alpha, 3, round(alpha_price, 4)).font = F_INPUT
+            print(f"    {seg_label} OLS β={beta_price:.3f} R²={r2:.3f} → CP + 01_Macro")
 
 
 def fill_debt_schedule(wb, data: dict, company: str):
