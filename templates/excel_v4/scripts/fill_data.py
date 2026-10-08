@@ -1349,12 +1349,8 @@ def fill_debt_hist(wb, data: dict, company: str):
             interest = abs(is_data.get("finance_cost_net", {}).get(last_yr, 0))
         avg_rate = interest / total if total > 0 and interest > 0 else 0.08
 
-    # Avg rate: forecast cols only (history = build_model formula)
-    fc_start_col = hc + 1
-    for c in range(fc_start_col, fc_start_col + len(fc_years)):
-        ws.cell(REG["DT.avg_rate"], c, round(avg_rate, 4)).font = F_INPUT
-        ws.cell(REG["DT.avg_rate"], c).number_format = FMT_PCT
-    print(f"    Avg rate (weighted from instruments): {avg_rate*100:.2f}%")
+    # Avg rate: build_model computes from _Debt_Schedule (total interest / opening)
+    print(f"    Avg rate: formula from _Debt_Schedule (historical: {avg_rate*100:.2f}%)")
     # History interest: build_model refs 02_Hist (no overwrite)
 
     # Fill mandatory repay from instrument maturities

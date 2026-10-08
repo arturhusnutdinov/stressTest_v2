@@ -2388,8 +2388,24 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.open"], c_idx,
                      f"={cl}{REG['DT.term_open']}+{cl}{REG['DT.rc_open']}",
                      FMT_MLN)
-        # FX revaluation — default 0, fill_data overrides from _Debt_Schedule
-        input_cell(ws, REG["DT.fx_reval"], c_idx, 0, FMT_MLN)
+        # FX revaluation = debt × currency_share × fx_change
+        # CNY share from Raw_IFRS instruments, FX change from CP
+        ri_s = REG.get("RI.debt_start_row", 69)
+        ri_e = REG.get("RI.debt_end_row", 89)
+        cp_fx_cny_chg = f"'Control_Panel'!$C${REG.get('CP.fx_usdcny_chg', 75)}"
+        cp_fx_rub_chg = f"'Control_Panel'!$C${REG.get('CP.fx_usdrub_chg', 76)}"
+        # CNY share = SUMPRODUCT(balance × (CCY="CNY")) / SUM(balance)
+        cny_share = (f"IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_s}:D${ri_e},"
+                     f"('{NAME['RI']}'!C${ri_s}:C${ri_e}=\"CNY\")*1)"
+                     f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),0)")
+        rub_share = (f"IFERROR(SUMPRODUCT('{NAME['RI']}'!D${ri_s}:D${ri_e},"
+                     f"('{NAME['RI']}'!C${ri_s}:C${ri_e}=\"RUB\")*1)"
+                     f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),0)")
+        # FX effect = -close × (cny_share × cny_chg + rub_share × rub_chg)
+        formula_cell(ws, REG["DT.fx_reval"], c_idx,
+                     f"=-{cl}{REG['DT.term_close']}*({cny_share}*{cp_fx_cny_chg}"
+                     f"+{rub_share}*{cp_fx_rub_chg})",
+                     FMT_MLN)
 
         formula_cell(ws, REG["DT.close"], c_idx,
                      f"={cl}{REG['DT.term_close']}+{cl}{REG['DT.rc_close']}"
@@ -2402,10 +2418,19 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.interest_term"], c_idx,
                      f"={cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']}",
                      FMT_MLN)
-        # RC interest: opening balance × rc_rate (NOT avg — avoids circular)
-        formula_cell(ws, REG["DT.interest_rc"], c_idx,
-                     f"={cl}{REG['DT.rc_open']}*{cp_rc_rate}",
-                     FMT_MLN)
+        # RC interest: opening × (KeyRate + RC spread from CP)
+        # KeyRate from Raw_IFRS for each forecast year
+        ri_kr = REG.get("RI.kr_row")
+        yr_idx_rc = c_idx - (3 + n_hist)
+        if ri_kr:
+            kr_ref = f"'{NAME['RI']}'!{get_column_letter(7 + yr_idx_rc)}${ri_kr}"
+            formula_cell(ws, REG["DT.interest_rc"], c_idx,
+                         f"={cl}{REG['DT.rc_open']}*({kr_ref}+{cp_rc_rate})",
+                         FMT_MLN)
+        else:
+            formula_cell(ws, REG["DT.interest_rc"], c_idx,
+                         f"={cl}{REG['DT.rc_open']}*{cp_rc_rate}",
+                         FMT_MLN)
         # Commitment fee: (limit - opening) × fee_rate
         formula_cell(ws, REG["DT.commit_fee"], c_idx,
                      f"=({cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
@@ -2422,12 +2447,17 @@ def build_debt(wb, cfg):
                      f"+{cl}{REG['DT.commit_fee']}"
                      f"+{penalty_int}",
                      FMT_MLN, bold=True)
-        # Avg rate: base from schedule (fill_data overrides with weighted avg)
-        # New debt premium: spread_base + spread_step × MAX(0, prev_ND/EBITDA - target)
-        # Blended: (term_rate × term_balance + new_rate × new_balance) / total
-        # Simplified: keep as input, fill_data computes from instruments
-        input_cell(ws, REG["DT.avg_rate"], c_idx, 0.10, FMT_PCT)
-        # Note: new term rate computed in _Debt_Schedule synthetic row
+        # Avg rate = total interest / total opening balance (from _Debt_Schedule)
+        ds_total = REG.get("DS.total_row", 27)
+        ds_yr_start = REG.get("DS.yr_start_col", 8)
+        ds_cols_per = REG.get("DS.cols_per_year", 5)
+        yr_idx = c_idx - (3 + n_hist)
+        ds_open_col = get_column_letter(ds_yr_start + yr_idx * ds_cols_per)      # Open
+        ds_int_col = get_column_letter(ds_yr_start + yr_idx * ds_cols_per + 3)   # Interest
+        formula_cell(ws, REG["DT.avg_rate"], c_idx,
+                     f"=IFERROR('{NAME['DS']}'!{ds_int_col}${ds_total}"
+                     f"/'{NAME['DS']}'!{ds_open_col}${ds_total},0.08)",
+                     FMT_PCT)
 
         # ── F. ST/LT: mandatory next year + RC + covenant reclass ──
         # ST = mandatory payments due within 12 months + RC balance
