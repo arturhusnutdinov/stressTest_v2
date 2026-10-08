@@ -711,6 +711,24 @@ def build_hist(wb, cfg):
         for c in range(3, 3 + len(cfg["hist_years"])):
             input_cell(ws, r, c, 0, FMT_MLN)
 
+    # TCA/TNCA/TA as formulas (not source values — ensures self-consistency)
+    n_hist_full = len(cfg["hist_years"])
+    hi_tca = REG.get("HI.tca")
+    hi_tnca = REG.get("HI.tnca")
+    hi_ta = REG.get("HI.ta")
+    if hi_tca and hi_tnca and hi_ta:
+        ca_keys = ["cash", "ar", "inv", "other_ca"]
+        nca_keys = ["ppe_net", "rou", "goodwill", "intang", "dta", "other_nca"]
+        for c in range(3, 3 + n_hist_full):
+            cl = get_column_letter(c)
+            ca_sum = "+".join(f"ABS({cl}{REG.get(f'HI.{k}', 99)})" for k in ca_keys if REG.get(f"HI.{k}"))
+            nca_sum = "+".join(f"ABS({cl}{REG.get(f'HI.{k}', 99)})" for k in nca_keys if REG.get(f"HI.{k}"))
+            if ca_sum:
+                formula_cell(ws, hi_tca, c, f"={ca_sum}", FMT_MLN)
+            if nca_sum:
+                formula_cell(ws, hi_tnca, c, f"={nca_sum}", FMT_MLN)
+            formula_cell(ws, hi_ta, c, f"={cl}{hi_tca}+{cl}{hi_tnca}", FMT_MLN)
+
     # CF section
     r_cf = REG.get("HI.cfo", 54)
     section_header(ws, r_cf - 1, "ДЕНЕЖНЫЕ ПОТОКИ (CF)")
@@ -758,12 +776,18 @@ def build_segments(wb, cfg):
         REG[f"SG.{key}_price"] = r
         for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_INT)
-        # Forecast: from 01_Macro active scenario
+        # Forecast: from 01_Macro if segment has commodity driver, else carry-forward
         act_base = REG.get("MA.act_base", 36)
+        has_driver = i < len(cfg.get("macro_factors", [])) - 2  # first N-2 factors are segment drivers
+        # Only seg1 and seg2 have commodity price drivers; seg3+ = carry-forward
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             cl = get_column_letter(c)
-            formula_cell(ws, r, c,
-                         f"='{NAME['MA']}'!{cl}${act_base + i}", FMT_INT)
+            prev = get_column_letter(c - 1)
+            if i < 2:  # seg1, seg2: macro price driver
+                formula_cell(ws, r, c,
+                             f"='{NAME['MA']}'!{cl}${act_base + i}", FMT_INT)
+            else:  # seg3+: carry-forward (no commodity driver)
+                formula_cell(ws, r, c, f"={prev}{r}", FMT_INT)
         r += 1
         # Revenue
         label_row(ws, r, "Выручка сегмента", "mln")
@@ -831,9 +855,14 @@ def build_revenue(wb, cfg):
             # Active scenario rows start at REG.get("MA.act_base", 36)
             act_base = REG.get("MA.act_base", 36)
             seg_idx = cfg["segments"].index(seg)
-            macro_price_row = act_base + seg_idx  # each segment maps to a factor
-            formula_cell(ws, base_r + 1, c,
-                         f"='{NAME['MA']}'!{col_l}${macro_price_row}", FMT_INT)
+            # Price: macro driver for seg1/seg2, carry-forward for seg3+
+            if seg_idx < 2:
+                macro_price_row = act_base + seg_idx
+                formula_cell(ws, base_r + 1, c,
+                             f"='{NAME['MA']}'!{col_l}${macro_price_row}", FMT_INT)
+            else:
+                formula_cell(ws, base_r + 1, c,
+                             f"={prev_col}{base_r + 1}", FMT_INT)
 
             # Revenue = vol × price / 1000
             formula_cell(ws, base_r + 2, c,
@@ -1340,6 +1369,12 @@ def build_pl(wb, cfg):
         # Interest ← 17_Debt (always negative in PL — expense)
         formula_cell(ws, REG["PL.interest"], c_idx,
                      f"=-ABS('{NAME['DT']}'!{cl}${REG['DT.interest']})", FMT_MLN)
+        # Interest income ← 14_OtherIS
+        ref_cell(ws, REG["PL.interest_income"], c_idx,
+                 f"='{NAME['OI']}'!{cl}${REG['OI.interest_income']}", FMT_MLN)
+        # Associates ← 14_OtherIS
+        ref_cell(ws, REG["PL.associates"], c_idx,
+                 f"='{NAME['OI']}'!{cl}${REG['OI.associates']}", FMT_MLN)
         # Other financial: OI.other_fin + net FX impact
         # FX on debt: negative (positive reval = debt up = loss)
         # FX on revenue: positive (CNY/RUB strengthening → USD revenue up from local-ccy sales)
