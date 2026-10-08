@@ -3775,35 +3775,40 @@ def build_guide(wb, cfg):
     ws.cell(2, 1, f"Финансовая модель {cfg['name']} · v4 · Excel-driven").font = F_SUBTITLE
 
     steps = [
-        ("ЭТАП 1: ПОДГОТОВКА ДАННЫХ", [
-            ("02_Hist", "Загрузить историческую отчётность МСФО (IS/BS/CF)"),
-            ("Raw_IFRS", "Детальные раскрытия МСФО (ноты)"),
-            ("11_Segments", "Операционные показатели по сегментам"),
-            ("01_Macro", "Макро-факторы и сценарии"),
+        ("ЭТАП 1: ВВОД ДАННЫХ (аналитик заполняет синие ячейки)", [
+            ("02_Hist", "IS/BS/CF история (3 года). ВСЕ расчётные листы ссылаются сюда"),
+            ("Raw_IFRS", "Долговой портфель: 20 инструментов + KeyRate forecast"),
+            ("11_Segments", "Объёмы/цены/выручка по сегментам (10_Revenue ссылается)"),
+            ("01_Macro", "Макро-факторы: 3 сценария (Base/Stress/Severe)"),
         ]),
-        ("ЭТАП 2: КАЛИБРОВКА", [
-            ("Control_Panel", "Настроить все 130+ параметров модели"),
-            ("90_Checks", "Проверить калибровочные значения"),
+        ("ЭТАП 2: НАСТРОЙКА МОДЕЛИ (Control Panel)", [
+            ("Control_Panel", "47+ параметров: методы, ставки, ковенанты, оценка"),
         ]),
-        ("ЭТАП 3: РАСЧЁТНЫЕ ЛИСТЫ (автоматически)", [
-            ("10_Revenue", "Выручка = Σ(Volume × Price) по сегментам"),
-            ("12_COGS", "Себестоимость (компонентная или ratio)"),
-            ("15_PPE", "PP&E corkscrew (CapEx → Dep → Net)"),
-            ("16_WC", "Оборотный капитал (DSO/DIO/DPO)"),
-            ("17_Debt", "Долговой портфель (instrument-level)"),
-            ("19_Tax", "Налоги (IAS 12, NOL, DTA/DTL)"),
+        ("ЭТАП 3: РАСЧЁТНЫЕ ЛИСТЫ (0 литералов, всё на формулах)", [
+            ("10_Revenue", "Выручка = Σ(Vol × Price) + Reconciliation (из 02_Hist)"),
+            ("12_COGS", "COGS: method switch (1=ratio, 2=component, 3=PPI)"),
+            ("13_SGA", "SGA = Revenue × ratio (из CP)"),
+            ("15_PPE", "PP&E corkscrew: Gross → CapEx → Dep → Net"),
+            ("16_WC", "WC: DSO/DIH/DPO (формулы из 02_Hist, не литералы)"),
+            ("17_Debt", "Долг: waterfall + penalty rate + history refs 02_Hist"),
+            ("18_Lease", "IFRS 16: ROU + Liability"),
+            ("19_Tax", "IAS 12: DTA/DTL refs 02_Hist, NOL carryforward"),
         ]),
         ("ЭТАП 4: ФИНАНСОВЫЕ ОТЧЁТЫ", [
-            ("21_PL", "P&L: Revenue → EBITDA → EBIT → NI"),
-            ("20_BS", "Баланс: A = L + E (проверка)"),
-            ("23_CF", "ОДДС (косвенный метод)"),
+            ("21_PL", "P&L: history = refs 02_Hist, other_opex/impairment = формулы"),
+            ("20_BS", "Баланс: ABS() в TCL/TNCL, Other = plug → 02_Hist refs"),
+            ("23_CF", "ОДДС: CFF включает new_term (always finances)"),
+            ("24_Equity", "RE: дивиденды PREV year, buyback, covenant-gated"),
         ]),
-        ("ЭТАП 5: АНАЛИЗ", [
-            ("30_Ratios", "Ключевые коэффициенты (25+ метрик)"),
-            ("31_Score", "Кредитный рейтинг (S&P 4-factor)"),
-            ("32_Covenants", "Мониторинг ковенантов"),
-            ("35_Valuation", "Оценка (DCF + SOTP + Sensitivity)"),
-            ("Model_Output", "Сводный дашборд"),
+        ("ЭТАП 5: АНАЛИТИКА И ПРОВЕРКИ", [
+            ("30_Ratios", "25+ коэффициентов"),
+            ("31_Score", "S&P 4-factor rating (EBITDA sign protection)"),
+            ("32_Covenants", "5 ковенантов + breach tracking"),
+            ("33_RevStress", "Reverse stress + Tornado"),
+            ("40_Scen", "5 аналитических стресс-сценариев"),
+            ("35_Valuation", "DCF (WACC) + SOTP + Sensitivity"),
+            ("90_Checks", "15 проверок + 5 history checks = ДОЛЖНО БЫТЬ 0"),
+            ("Model_Output", "Сводный дашборд (144 ссылки)"),
         ]),
     ]
 
