@@ -223,15 +223,16 @@ Scenario design:
 - **Stress**: commodity −20%, FX +15% devaluation, CPI/PPI +2pp
 - **Severe**: commodity −40%, FX = Base (pure price shock, shows true leverage)
 
-### Rusal (all identities = 0, closed-form plug, max_cash 2,000)
+### Rusal (all identities = 0, cycle = 9 cells, closed-form plug)
 | Сценарий | EBITDA Y1/Y2/Y3 | Rating | Cash | Debt Y3 | Vol.Repay |
 |----------|-----------------|--------|------|---------|-----------|
-| Base (Al 2800) | 2,967 / 3,494 / 3,499 | BB→BBB | 2,359→2,904 | 8,580 (−12%) | 0/359/851 |
-| Stress (Al 2240+FX) | 3,749 / 3,438 / 2,771 | BBB | 3,313→2,207 | 7,128 (−26%) | 0/1,313/617 |
-| Severe (Al 1680, FX=Base) | −1,759 / −1,463 / −1,642 | D | 500→500 | 21,584 (+125%) | 0 |
+| Base (Al 2800) | 2,934 / 3,226 / 3,145 | BB→BBB | 2,317→2,603 | 8,580 (−12%) | 0/317/851 |
+| Stress (Al 2240+FX) | 1,150 / 1,298 / 1,138 | B/B/B | 618→500 | 9,504 (−1%) | 0 |
+| Severe (Al 1680, FX=Base) | −1,976 / −1,889 / −2,186 | D/D/D | 500→500 | 22,359 (+133%) | 0 |
 
-WAC: **9.6%→9.0%** | COGS FX: ÷(1+ΔUSD/RUB) | Dividends: 50% | Max cash: 2,000
-Penalty (Severe): 448 → 4,096 → 5,655 (24% rate on breach)
+WAC: **9.6%→9.0%** | FX pass-through: 70% | Dividends: 50% | Max cash: 2,000
+FX reval → OCI (IAS 21). Alumina = LME × 16% (from CP).
+Penalty (Severe): 694 → 4,303 → 5,967 (24% rate on breach)
 Closed-form funding plug: no iteration divergence at EBITDA<0
 
 ### Nornickel (all identities = 0)
