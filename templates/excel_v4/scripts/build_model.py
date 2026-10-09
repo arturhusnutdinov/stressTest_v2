@@ -1553,10 +1553,19 @@ def build_bs(wb, cfg):
         formula_cell(ws, REG["BS.rou"], c_idx,
                      f"='{NAME['LS']}'!{cl}${REG['LS.rou_close']}", FMT_MLN)
 
-        for key in ["other_ca", "goodwill", "intang", "other_nca",
+        for key in ["other_ca", "goodwill", "intang",
                      "other_cl", "prov",
                      "other_ncl", "sc", "apic"] + (["aoci"] if nci_pct == 0 else []):
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
+        # Other NCA: carry-forward + associates income (equity method increases investment)
+        oi_assoc = REG.get("OI.associates")
+        if oi_assoc:
+            formula_cell(ws, REG["BS.other_nca"], c_idx,
+                         f"={prev}{REG['BS.other_nca']}+'{NAME['OI']}'!{cl}${oi_assoc}",
+                         FMT_MLN)
+        else:
+            formula_cell(ws, REG["BS.other_nca"], c_idx,
+                         f"={prev}{REG['BS.other_nca']}", FMT_MLN)
 
 
 def build_pl(wb, cfg):
@@ -1642,12 +1651,14 @@ def build_pl(wb, cfg):
         cp_fx_rub = f"'Control_Panel'!$C${REG.get('CP.fx_usdrub_chg', 76)}"
         rev_ref = f"'{NAME['PL']}'!{cl}${REG['PL.revenue']}"
         cogs_ref = f"ABS('{NAME['PL']}'!{cl}${REG['PL.cogs']})"
-        # Revenue FX gain: when local ccy strengthens (negative USDXXX change), rev in USD goes up
+        # Per-year FX from 05_Drivers (not CP scalar)
+        dr_fx_r = REG.get("DR.fx_usdrub_chg")
+        fx_rub_yr = f"'{NAME['DR']}'!{cl}${dr_fx_r}" if dr_fx_r else cp_fx_rub
+        # Revenue FX gain: when local ccy strengthens, rev in USD goes up
         rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
-                  f"+{rev_ref}*{cp_rev_rub}*(-{cp_fx_rub})")
-        # Cost FX: in other_fin (below EBITDA, but keeps BS balanced)
-        # RUB cost saving from devaluation
-        cost_fx = f"-{cogs_ref}*{cp_cost_rub}*(-{cp_fx_rub})"
+                  f"+{rev_ref}*{cp_rev_rub}*(-{fx_rub_yr})")
+        # Cost FX: RUB cost saving from devaluation
+        cost_fx = f"-{cogs_ref}*{cp_cost_rub}*(-{fx_rub_yr})"
         formula_cell(ws, REG["PL.other_fin"], c_idx,
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}"
@@ -2498,9 +2509,9 @@ def build_debt(wb, cfg):
                      FMT_MLN)
 
         # ── B. TERM DEBT corkscrew ──
-        # term_open = prev term_close
+        # term_open = prev term_close + prev FX_reval (carry revaluation forward)
         formula_cell(ws, REG["DT.term_open"], c_idx,
-                     f"={prev}{REG['DT.term_close']}", FMT_MLN)
+                     f"={prev}{REG['DT.term_close']}+{prev}{REG['DT.fx_reval']}", FMT_MLN)
         # Mandatory — input, filled by fill_data from schedule
         input_cell(ws, REG["DT.mandatory"], c_idx, 0, FMT_MLN)
         # Refi — input, filled by fill_data (= mandatory × refi_pct)
@@ -2662,9 +2673,12 @@ def build_debt(wb, cfg):
                      f"('{NAME['RI']}'!C${ri_s}:C${ri_e}=\"RUB\")*1)"
                      f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),0)")
         # FX effect = -close × (cny_share × cny_chg + rub_share × rub_chg)
+        # Per-year FX from 05_Drivers
+        dr_fx_debt = REG.get("DR.fx_usdrub_chg")
+        fx_rub_debt = f"'{NAME['DR']}'!{cl}${dr_fx_debt}" if dr_fx_debt else cp_fx_rub_chg
         formula_cell(ws, REG["DT.fx_reval"], c_idx,
                      f"=-{cl}{REG['DT.term_close']}*({cny_share}*{cp_fx_cny_chg}"
-                     f"+{rub_share}*{cp_fx_rub_chg})",
+                     f"+{rub_share}*{fx_rub_debt})",
                      FMT_MLN)
 
         formula_cell(ws, REG["DT.close"], c_idx,
@@ -2972,19 +2986,24 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
-        # Other non-cash: ΔTaxPay + ROU dep + lease interest
+        # Other non-cash: ΔTaxPay + Lease_dep + Lease_int + FX_reval_reversal
         formula_cell(ws, REG["CF.other_noncash"], c_idx,
                      f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}"
                      f"+ABS('{NAME['LS']}'!{cl}${REG['LS.rou_dep']})"
-                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}",
+                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}"
+                     f"+'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
                      FMT_MLN)
         # Interest paid: 0 in CFF (interest flows through NI in CFO)
         # US GAAP style: interest is operating, not financing
         formula_cell(ws, REG["CF.interest_paid"], c_idx, "=0", FMT_MLN)
 
-        # CFO = NI + DA + impairment + deferred_tax - WC_change + other
+        # CFO = NI + DA + impairment + deferred_tax - WC_change - associates + other_noncash
+        # Associates: non-cash equity method income, subtract from CFO
+        # FX reval: in other_noncash (not separate — matches auditor's fix)
+        assoc_adj = f"-'{NAME['OI']}'!{cl}${REG['OI.associates']}"
         cfo_parts = [f"{cl}{REG['CF.ni']}", f"{cl}{REG['CF.da']}", f"{cl}{REG['CF.impairment']}",
                      f"{cl}{REG['CF.deferred_tax']}", f"-{cl}{REG['CF.wc_change']}",
+                     assoc_adj,
                      f"{cl}{REG['CF.other_noncash']}"]
         formula_cell(ws, r_cfo, c_idx, "=" + "+".join(cfo_parts), FMT_MLN, bold=True)
 
@@ -4012,15 +4031,9 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.0, FMT_PCT)
     REG["CP.fx_usdcny_chg"] = r; r += 1
 
-    label_row(ws, r, "FX USDRUB change YoY", "%", "Auto from 05_Drivers")
+    label_row(ws, r, "FX USDRUB change YoY", "%", "Per-year from 05_Drivers")
     REG["CP.fx_usdrub_chg"] = r
-    dr_fx = REG.get("DR.fx_usdrub_chg")
-    if dr_fx:
-        # Average of 3 forecast years
-        ref_cell(ws, r, 3,
-                 f"=AVERAGE('{NAME['DR']}'!F${dr_fx}:H${dr_fx})", FMT_PCT)
-    else:
-        input_cell(ws, r, 3, 0.0, FMT_PCT)
+    input_cell(ws, r, 3, 0.0, FMT_PCT)  # placeholder, PL uses per-year refs
     r += 1
 
     label_row(ws, r, "Доля выручки в CNY", "%", "Из МСФО Note 4: geography")
