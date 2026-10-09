@@ -1724,9 +1724,10 @@ def build_pl(wb, cfg):
         # Per-year FX from 05_Drivers (not CP scalar)
         dr_fx_r = REG.get("DR.fx_usdrub_chg")
         fx_rub_yr = f"'{NAME['DR']}'!{cl}${dr_fx_r}" if dr_fx_r else cp_fx_rub
-        # Revenue FX gain: when local ccy strengthens, rev in USD goes up
-        rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
-                  f"+{rev_ref}*{cp_rev_rub}*(-{fx_rub_yr})")
+        # Revenue FX: apply same pass-through (contract lags apply to exports too)
+        cp_fxpt = f"'Control_Panel'!$C${REG.get('CP.fx_pass_through', 99)}"
+        rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})*{cp_fxpt}"
+                  f"+{rev_ref}*{cp_rev_rub}*(-{fx_rub_yr})*{cp_fxpt}")
         # Cost FX: now in 12_COGS (÷(1+ΔFXRUB)), not here (no double-count)
         # FX reval on debt → OCI (not PL) per IAS 21 — breaks 63-cell cycle
         formula_cell(ws, REG["PL.other_fin"], c_idx,
@@ -1736,6 +1737,16 @@ def build_pl(wb, cfg):
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
                  f"='{NAME['TX']}'!{cl}${REG['TX.total']}", FMT_MLN)
+
+        # Other opex = carry forward as % of revenue (history ratio ~4%)
+        prev_cl = get_column_letter(c_idx - 1)
+        prev_rev_ref = f"ABS('{NAME['RV']}'!{prev_cl}${REG['RV.total_rev']})"
+        formula_cell(ws, REG["PL.other_opex"], c_idx,
+                     f"=IFERROR({prev_cl}{REG['PL.other_opex']}*ABS({cl}{REG['PL.revenue']})"
+                     f"/MAX(1,{prev_rev_ref}),{prev_cl}{REG['PL.other_opex']})",
+                     FMT_MLN)
+        # Impairment = 0 in forecast (explicit assumption: no impairments planned)
+        formula_cell(ws, REG["PL.impairment"], c_idx, "=0", FMT_MLN)
 
         # GP = Revenue + COGS (COGS is negative)
         formula_cell(ws, REG["PL.gp"], c_idx,
