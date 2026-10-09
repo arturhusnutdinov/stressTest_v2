@@ -223,15 +223,15 @@ Scenario design:
 - **Stress**: commodity −20%, FX +15% devaluation, CPI/PPI +2pp
 - **Severe**: commodity −40%, FX = Base (pure price shock, shows true leverage)
 
-### Rusal (all identities = 0)
-| Сценарий | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Cash |
-|----------|-----------------|-----------------|------|
-| Base (Al 2800) | 2,967 / 3,494 / 3,499 | BB / BBB / BBB | 2,245→3,431 |
-| Stress (Al 2240+FX) | 980 / 395 / −90 | CCC / D / D | 694→500 |
-| Severe (Al 1680) | 941 / 337 / −222 | CCC / D / D | 840→500 |
+### Rusal (all identities = 0, closed-form plug, max_cash 2,000)
+| Сценарий | EBITDA Y1/Y2/Y3 | Rating | Cash | Vol.Repay |
+|----------|-----------------|--------|------|-----------|
+| Base (Al 2800) | 2,967 / 3,494 / 3,499 | BB→BBB | 2,359→2,904 | 0/359/851 |
+| Stress (Al 2240+FX) | 3,749 / 3,348 / 2,771 | BBB | 3,313→4,136 | 0/1,313/617 |
+| Severe (Al 1680, FX=Base) | −1,759 / −1,686 / −1,642 | D | 500→500 | 0 |
 
-WAC: **9.6%→9.0%** | COGS FX: ÷(1+ΔUSD/RUB) | Dividends: 50% payout
-Severe < Stress in Y3 (−222 vs −90) — pure price shock shows true operating leverage
+WAC: **9.6%→9.0%** | COGS FX: ÷(1+ΔUSD/RUB) | Dividends: 50% | Max cash: 2,000
+Severe = pure price shock → EBITDA deeply negative (true operating leverage)
 
 ### Nornickel (all identities = 0)
 | Сценарий | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Cash |
