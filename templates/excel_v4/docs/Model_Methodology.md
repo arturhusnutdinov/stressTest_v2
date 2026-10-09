@@ -216,24 +216,29 @@ Equity = EV − Net Debt
 
 ---
 
-## 9. Сценарии (верифицировано в Excel, 08.10.2026)
+## 9. Сценарии (верифицировано в Excel, 09.10.2026)
 
-### Rusal (54/54 тождеств = 0)
-| Сценарий | Revenue | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Penalty Y3 | Cash |
-|----------|---------|-----------------|-----------------|------------|------|
-| Base (Al 3200) | 17,391 | 5,039 / 4,728 / 4,099 | BBB / A / A | 0 | 4,293→7,148 |
-| Stress (Al 2000) | 11,162 | 1,153 / 760 / 441 | B / CCC / D | 1,441 | 694→500 |
-| Severe (Al 1700) | 9,423 | 1,149 / 740 / 375 | B / CCC / D | 1,475 | 840→500 |
+Scenario design:
+- **Base**: web consensus (Al 2800, Alumina 450, USD/RUB 85→99)
+- **Stress**: commodity −20%, FX +15% devaluation, CPI/PPI +2pp
+- **Severe**: commodity −40%, FX = Base (pure price shock, shows true leverage)
 
-AvgRate: **9.6%→9.0%** (WAC from instruments, declining with KeyRate)
-COGS FX: energy/labour ÷ (1+ΔUSD/RUB) — ruble devaluation lowers USD costs
+### Rusal (all identities = 0)
+| Сценарий | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Cash |
+|----------|-----------------|-----------------|------|
+| Base (Al 2800) | 2,967 / 3,494 / 3,499 | BB / BBB / BBB | 2,245→3,431 |
+| Stress (Al 2240+FX) | 980 / 395 / −90 | CCC / D / D | 694→500 |
+| Severe (Al 1680) | 941 / 337 / −222 | CCC / D / D | 840→500 |
 
-### Nornickel (54/54 тождеств = 0)
-| Сценарий | Revenue | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Cash |
-|----------|---------|-----------------|-----------------|------|
-| Base | 13,879 | 4,179 / 4,354 / 4,529 | BBB / BBB / BBB | 1,483→500 |
-| Stress | 11,818 | 3,559 / 3,384 / 3,209 | BBB / BB / BB | 1,324→500 |
-| Severe | 9,798 | 2,950 / 2,776 / 2,643 | BB / BB / BB | 1,336→500 |
+WAC: **9.6%→9.0%** | COGS FX: ÷(1+ΔUSD/RUB) | Dividends: 50% payout
+Severe < Stress in Y3 (−222 vs −90) — pure price shock shows true operating leverage
+
+### Nornickel (all identities = 0)
+| Сценарий | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Cash |
+|----------|-----------------|-----------------|------|
+| Base | 4,179 / 4,354 / 4,529 | BBB / BBB / BBB | 1,483→500 |
+| Stress | 3,559 / 3,384 / 3,209 | BBB / BB / BB | 1,324→500 |
+| Severe | 2,950 / 2,776 / 2,643 | BB / BB / BB | 1,336→500 |
 
 Nornickel: 0 flags even in Severe (strong credit profile)
 
