@@ -1620,8 +1620,13 @@ def build_bs(wb, cfg):
 
         for key in ["other_ca", "goodwill", "intang",
                      "other_cl", "prov",
-                     "other_ncl", "sc", "apic"] + (["aoci"] if nci_pct == 0 else []):
+                     "other_ncl", "sc", "apic"]:
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
+        # AOCI: carry-forward + FX reval on debt (moved from PL to OCI per IAS 21)
+        if nci_pct == 0:
+            formula_cell(ws, REG["BS.aoci"], c_idx,
+                         f"={prev}{REG['BS.aoci']}-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
+                         FMT_MLN)
         # Other NCA: carry-forward + associates income (equity method increases investment)
         oi_assoc = REG.get("OI.associates")
         if oi_assoc:
@@ -1723,9 +1728,9 @@ def build_pl(wb, cfg):
         rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
                   f"+{rev_ref}*{cp_rev_rub}*(-{fx_rub_yr})")
         # Cost FX: now in 12_COGS (÷(1+ΔFXRUB)), not here (no double-count)
+        # FX reval on debt → OCI (not PL) per IAS 21 — breaks 63-cell cycle
         formula_cell(ws, REG["PL.other_fin"], c_idx,
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}"
                      f"+{rev_fx}",
                      FMT_MLN)
         # Tax ← 19_Tax
@@ -3084,12 +3089,12 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
-        # Other non-cash: ΔTaxPay + Lease_dep + Lease_int + FX_reval_reversal
+        # Other non-cash: ΔTaxPay + Lease_dep + Lease_int
+        # FX reval removed — now in OCI (not PL), no CFO reversal needed
         formula_cell(ws, REG["CF.other_noncash"], c_idx,
                      f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}"
                      f"+ABS('{NAME['LS']}'!{cl}${REG['LS.rou_dep']})"
-                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}"
-                     f"+'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
+                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}",
                      FMT_MLN)
         # Interest paid: 0 in CFF (interest flows through NI in CFO)
         # US GAAP style: interest is operating, not financing
