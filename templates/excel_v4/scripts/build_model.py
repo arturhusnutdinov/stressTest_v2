@@ -2618,41 +2618,51 @@ def build_debt(wb, cfg):
 
         cbrc = f"{cl}{REG['DT.cash_before_rc']}"
 
-        # ── FUNDING NEED = MAX(0, min_cash - cash_before_RC) ──
-        # Exact: CF is deterministic (RC interest from opening, no cycle)
-        # No analytical correction needed — CF already includes all items
+        # ── CLOSED-FORM FUNDING PLUG (no circular iteration) ──
+        # Need₀ = MAX(0, min_cash - cash_before_RC)
+        # New term interest = P × rate (from opening, no avg to avoid circular)
+        # Tax shield = P × rate × tax_rate
+        # Net cash from P: P - P×rate×(1-t) = P × (1 - rate×(1-t))
+        # → P = Need₀ / (1 - rate×(1-t))
+        # Gate on PREV year data only (no circular) — determines rate, not access
+        cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
+        prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},99)"
+        gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
+        cp_pen_limit = f"'Control_Panel'!$C${REG.get('CP.penalty_limit', 73)}"
+        cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
+        # Rate for new debt: gate open → avg_rate, gate closed → penalty_rate
+        cp_penalty_rate = f"'Control_Panel'!$C${REG.get('CP.penalty_rate', 72)}"
+        new_rate = f"IF({gate},{cl}{REG['DT.avg_rate']},{cp_penalty_rate})"
+
+        need_raw = f"MAX(0,{cp_min_cash}-{cbrc})"
         need = f"{cl}{REG['DT.funding_need']}"
         formula_cell(ws, REG["DT.funding_need"], c_idx,
-                     f"=MAX(0,{cp_min_cash}-{cbrc})", FMT_MLN)
+                     f"={need_raw}", FMT_MLN)
+
+        # Since synthetic term interest = 0 in issuance year,
+        # net cash from new draw = draw amount (no interest deduction).
+        # No closed-form correction needed — need = exact amount.
+        gross_need = need
 
         # ── RC DRAW: covers need up to free limit ──
         free_limit = f"MAX(0,{cl}{REG['DT.rc_limit']}-{cl}{REG['DT.rc_open']})"
         formula_cell(ws, REG["DT.rc_draw"], c_idx,
-                     f"=IFERROR(MIN({free_limit},{need}),0)", FMT_MLN)
+                     f"=IFERROR(MIN({free_limit},{gross_need}),0)", FMT_MLN)
 
         # ── Residual after RC ──
-        residual = f"MAX(0,{need}-{cl}{REG['DT.rc_draw']})"
+        residual = f"MAX(0,{gross_need}-{cl}{REG['DT.rc_draw']})"
 
         # ── TERM-OUT: if utilization > trigger, convert RC to term ──
         cp_rc_trigger = f"'Control_Panel'!$C${REG.get('CP.rc_trigger', 65)}"
         util_after = f"IFERROR(({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})/{cl}{REG['DT.rc_limit']},0)"
         term_out = f"IF({util_after}>{cp_rc_trigger},({cl}{REG['DT.rc_open']}+{cl}{REG['DT.rc_draw']})-{cp_rc_trigger}*{cl}{REG['DT.rc_limit']},0)"
 
-        # ── NEW TERM: covers residual + term-out ──
-        # Gate determines RATE, not ACCESS: model finances the company
-        # When covenant breach → debt at penalty_rate, capped by penalty_limit
-        # If penalty_limit > 0 AND gate closed: new_term ≤ penalty_limit, rest → real gap
-        cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
-        prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},99)"
-        gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
-        cp_pen_limit = f"'Control_Panel'!$C${REG.get('CP.penalty_limit', 73)}"
+        # ── NEW TERM = residual + term_out ──
         full_need = f"({residual}+{term_out})"
-        # Gate open: full amount at normal rate
-        # Gate closed, limit=0: full amount at penalty rate (unlimited)
-        # Gate closed, limit>0: MIN(need, limit) at penalty, rest = unfunded gap
-        gated_amount = f"IF({cp_pen_limit}>0,MIN({full_need},{cp_pen_limit}),{full_need})"
+        # Penalty limit cap when gate closed
+        cp_pen_limit_val = f"IF({cp_pen_limit}>0,MIN({full_need},{cp_pen_limit}),{full_need})"
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR(IF({gate},{full_need},{gated_amount}),0)",
+                     f"=IFERROR(IF({gate},{full_need},{cp_pen_limit_val}),0)",
                      FMT_MLN)
 
         # ── Voluntary term: after RC repay, with covenant stops ──
