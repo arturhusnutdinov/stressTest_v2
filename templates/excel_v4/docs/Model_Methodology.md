@@ -224,14 +224,15 @@ Scenario design:
 - **Severe**: commodity −40%, FX = Base (pure price shock, shows true leverage)
 
 ### Rusal (all identities = 0, closed-form plug, max_cash 2,000)
-| Сценарий | EBITDA Y1/Y2/Y3 | Rating | Cash | Vol.Repay |
-|----------|-----------------|--------|------|-----------|
-| Base (Al 2800) | 2,967 / 3,494 / 3,499 | BB→BBB | 2,359→2,904 | 0/359/851 |
-| Stress (Al 2240+FX) | 3,749 / 3,348 / 2,771 | BBB | 3,313→4,136 | 0/1,313/617 |
-| Severe (Al 1680, FX=Base) | −1,759 / −1,686 / −1,642 | D | 500→500 | 0 |
+| Сценарий | EBITDA Y1/Y2/Y3 | Rating | Cash | Debt Y3 | Vol.Repay |
+|----------|-----------------|--------|------|---------|-----------|
+| Base (Al 2800) | 2,967 / 3,494 / 3,499 | BB→BBB | 2,359→2,904 | 8,580 (−12%) | 0/359/851 |
+| Stress (Al 2240+FX) | 3,749 / 3,438 / 2,771 | BBB | 3,313→2,207 | 7,128 (−26%) | 0/1,313/617 |
+| Severe (Al 1680, FX=Base) | −1,759 / −1,463 / −1,642 | D | 500→500 | 21,584 (+125%) | 0 |
 
 WAC: **9.6%→9.0%** | COGS FX: ÷(1+ΔUSD/RUB) | Dividends: 50% | Max cash: 2,000
-Severe = pure price shock → EBITDA deeply negative (true operating leverage)
+Penalty (Severe): 448 → 4,096 → 5,655 (24% rate on breach)
+Closed-form funding plug: no iteration divergence at EBITDA<0
 
 ### Nornickel (all identities = 0)
 | Сценарий | EBITDA Y1/Y2/Y3 | Rating Y1/Y2/Y3 | Cash |
