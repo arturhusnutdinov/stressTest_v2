@@ -817,7 +817,53 @@ def build_drivers(wb, cfg):
             formula_cell(ws, r, c,
                          f"='{NAME['MA']}'!{cl}${macro_row}", FMT_PCT)
         r += 1
+    # FX change row: Δ USD/RUB YoY (for cost conversion to USD)
+    label_row(ws, r, "Δ USD/RUB, YoY", "%", "Cost FX adjustment")
+    REG["DR.fx_usdrub_chg"] = r
+    # USD/RUB active scenario row
+    act_base = REG.get("MA.act_base", 39)
+    usdrub_row = act_base  # first factor after act_base is usually LME Al, 3rd is USD/RUB
+    # Find USD/RUB row in macro factors
+    for fi, f in enumerate(cfg.get("macro_factors", [])):
+        if "usd" in f.lower() and "rub" in f.lower():
+            usdrub_row = act_base + fi
+            break
+    # For first forecast year: use last non-empty hist col as anchor
+    # IF E38 empty, try D38, then C38 — handles missing 2025 data
+    first_fc_col = 3 + n_hist
+    cl_fc1 = get_column_letter(first_fc_col)
+    # Build anchor: last available value before forecast
+    anchor_parts = []
+    for hc in range(3 + n_hist - 1, 2, -1):
+        anchor_parts.append(f"'{NAME['MA']}'!{get_column_letter(hc)}${usdrub_row}")
+    anchor = anchor_parts[0]  # E38
+    if len(anchor_parts) > 1:
+        # Use fallback chain: IF(E38>0, E38, IF(D38>0, D38, C38))
+        anchor = anchor_parts[-1]
+        for a in reversed(anchor_parts[:-1]):
+            anchor = f"IF({a}>0,{a},{anchor})"
+    formula_cell(ws, r, first_fc_col,
+                 f"=IFERROR('{NAME['MA']}'!{cl_fc1}${usdrub_row}/{anchor}-1,0)",
+                 FMT_PCT)
+    # Subsequent years: simple YoY
+    for c in range(first_fc_col + 1, first_fc_col + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        prev_cl = get_column_letter(c - 1)
+        formula_cell(ws, r, c,
+                     f"=IFERROR('{NAME['MA']}'!{cl}${usdrub_row}/'{NAME['MA']}'!{prev_cl}${usdrub_row}-1,0)",
+                     FMT_PCT)
     r += 1
+
+    # RUB cost share
+    label_row(ws, r, "Доля затрат в RUB", "%")
+    REG["DR.rub_cost_share"] = r
+    cp_cost_rub = REG.get("CP.cost_rub_share")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        if cp_cost_rub:
+            ref_cell(ws, r, c, f"='Control_Panel'!$C${cp_cost_rub}", FMT_PCT)
+        else:
+            input_cell(ws, r, c, 0.55, FMT_PCT)
+    r += 2
 
     # ── C. COMMODITY CHAIN ──
     section_header(ws, r, "C. ТОВАРНАЯ ЦЕПОЧКА (цена → выручка)"); r += 1
@@ -1599,12 +1645,12 @@ def build_pl(wb, cfg):
         # Revenue FX gain: when local ccy strengthens (negative USDXXX change), rev in USD goes up
         rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
                   f"+{rev_ref}*{cp_rev_rub}*(-{cp_fx_rub})")
-        # Cost FX loss: when RUB strengthens, costs in USD go up (negative impact)
-        cost_fx = f"-{cogs_ref}*{cp_cost_rub}*(-{cp_fx_rub})"
+        # Cost FX: now in 12_COGS (÷(1+ΔUSD/RUB×RUB_share)), NOT in other_fin
+        # Avoids double-count (audit dефект 2)
         formula_cell(ws, REG["PL.other_fin"], c_idx,
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}"
-                     f"+{rev_fx}+{cost_fx}",
+                     f"+{rev_fx}",
                      FMT_MLN)
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
@@ -2054,10 +2100,16 @@ def build_cogs(wb, cfg):
                     vol_t = vol_ref.format(cl=cl)
                     vol_prev = vol_ref.format(cl=prev_cl)
                     # Indexation from 05_Drivers (energy → DR.energy_idx, labour → DR.labour_idx)
+                    # FX adjustment: divide by (1 + ΔUSD/RUB × RUB_share) to convert to USD
                     dr_idx = REG.get(f"DR.{'energy_idx' if comp == 'energy' else 'labour_idx'}")
+                    dr_fx = REG.get("DR.fx_usdrub_chg")
+                    dr_rub = REG.get("DR.rub_cost_share")
                     idx_factor = f"*(1+'{NAME['DR']}'!{cl}${dr_idx})" if dr_idx else ""
+                    fx_divisor = ""
+                    if dr_fx and dr_rub:
+                        fx_divisor = f"/(1+'{NAME['DR']}'!{cl}${dr_fx}*'{NAME['DR']}'!{cl}${dr_rub})"
                     formula_cell(ws, r, c,
-                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_factor},"
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_factor}{fx_divisor},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 else:
@@ -3523,11 +3575,17 @@ def build_covenants(wb, cfg):
         thresh_r = r
         r += 1
 
-        # Headroom / Breach
+        # Headroom / Breach (protected from negative EBITDA)
         label_row(ws, r, "Headroom / BREACH", "", "Положительное = запас, отрицательное = нарушение")
+        ebitda_ref = f"'{NAME['PL']}'!{get_column_letter(3+n_hist)}${REG['PL.ebitda']}"
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             cl = get_column_letter(c)
-            if direction == "max":
+            ebitda_c = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
+            if direction == "max" and "EBITDA" in label:
+                # ND/EBITDA: if EBITDA ≤ 0, headroom = -99 (always breached)
+                formula_cell(ws, r, c,
+                             f"=IF({ebitda_c}<=0,-99,{cl}{thresh_r}-{cl}{r-2})", fmt)
+            elif direction == "max":
                 formula_cell(ws, r, c, f"={cl}{thresh_r}-{cl}{r-2}", fmt)
             else:
                 formula_cell(ws, r, c, f"={cl}{r-2}-{cl}{thresh_r}", fmt)
@@ -3954,13 +4012,20 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0, FMT_INT)  # Default 0: assume waiver. Analyst enables for stress
     REG["CP.cov_reclass"] = r; r += 1
 
-    label_row(ws, r, "FX USDCNY change YoY", "%", "Δ курса: >0 = USD усиливается")
+    label_row(ws, r, "FX USDCNY change YoY", "%", "Input: no USD/CNY in macro yet")
     input_cell(ws, r, 3, 0.0, FMT_PCT)
     REG["CP.fx_usdcny_chg"] = r; r += 1
 
-    label_row(ws, r, "FX USDRUB change YoY", "%", "Δ курса: >0 = USD усиливается")
-    input_cell(ws, r, 3, 0.0, FMT_PCT)
-    REG["CP.fx_usdrub_chg"] = r; r += 1
+    label_row(ws, r, "FX USDRUB change YoY", "%", "Auto from 05_Drivers")
+    REG["CP.fx_usdrub_chg"] = r
+    dr_fx = REG.get("DR.fx_usdrub_chg")
+    if dr_fx:
+        # Average of 3 forecast years
+        ref_cell(ws, r, 3,
+                 f"=AVERAGE('{NAME['DR']}'!F${dr_fx}:H${dr_fx})", FMT_PCT)
+    else:
+        input_cell(ws, r, 3, 0.0, FMT_PCT)
+    r += 1
 
     label_row(ws, r, "Доля выручки в CNY", "%", "Из МСФО Note 4: geography")
     input_cell(ws, r, 3, cfg.get("rev_cny_share", 0.0), FMT_PCT)
@@ -4541,6 +4606,12 @@ def build(company: str, output: str):
             empty_v_count = 0
             for item in zin.infolist():
                 data = zin.read(item.filename)
+                # Fix calcPr: add fullCalcOnLoad if missing
+                if item.filename == "xl/workbook.xml":
+                    text = data.decode("utf-8")
+                    if "fullCalcOnLoad" not in text:
+                        text = text.replace('iterate="1"', 'fullCalcOnLoad="1" iterate="1"')
+                        data = text.encode("utf-8")
                 if item.filename.startswith("xl/worksheets/"):
                     text = data.decode("utf-8")
                     cleaned = text.replace("<v></v>", "")

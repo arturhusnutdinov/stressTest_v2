@@ -623,6 +623,27 @@ def fill_macro(wb, data: dict, company: str):
         r += 1
 
 
+    # Fill actual 2025 values into SCENARIO rows (history col E)
+    # This is the FX anchor — critical for cost FX adjustment
+    actual_2025 = {
+        "LME Aluminium": 2632, "LME Alumina": 353, "USD/RUB": 83.8,
+        "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017,
+    }
+    last_hist_col = 3 + len(src["hist_years"][-3:]) - 1  # col E
+    # Also fill all 3 scenario blocks with same 2025 values
+    # Write 2025 actuals by matching row labels in all scenario blocks + active
+    filled_2025 = 0
+    for r in range(6, 45):
+        lbl = ws.cell(r, 1).value
+        if lbl and isinstance(lbl, str):
+            val = actual_2025.get(lbl.strip())
+            if val is not None:
+                ws.cell(r, last_hist_col, round(val, 4)).font = F_INPUT
+                ws.cell(r, last_hist_col).number_format = FMT_RATIO if abs(val) < 100 else FMT_MLN0
+                filled_2025 += 1
+    print(f"    Macro 2025 actuals: {filled_2025} cells filled (col E)")
+
+
 def fill_revenue(wb, data: dict, company: str):
     """Fill 10_Revenue with historical segment volumes & prices.
 
