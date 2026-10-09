@@ -2665,33 +2665,30 @@ def build_debt(wb, cfg):
                      f"=IFERROR(IF({gate},{full_need},{cp_pen_limit_val}),0)",
                      FMT_MLN)
 
-        # ── Voluntary term: after RC repay, with covenant stops ──
+        # ── Voluntary term: leverage-driven + excess cash drain ──
         est_nd = f"({cl}{REG['DT.term_open']}-{cash_prev})"
         vol_available = f"MAX(0,{cbrc}-{cp_min_cash}-{cp_buffer}-{cl}{REG['DT.rc_open']})"
-        # Voluntary: waterfall RC → ST → LT, with covenant stops
-        # Stop 1: not if covenant breach
-        # Stop 2: not if NI < 0
-        # Stop 3: only if overleveraged (ND/EBITDA > target)
-        # Priority: RC already repaid via cash sweep.
-        #   Then: ST term first (cheaper to prepay, reduces refi peak)
-        #   Then: LT (with prepay premium)
         cp_prepay_prem = f"'Control_Panel'!$C${REG.get('CP.prepay_premium', 72)}"
-        # Max voluntary by leverage target
+        # A. Leverage-driven: repay if ND/EBITDA > target
         vol_max_lev = f"MAX(0,{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))"
-        # Total available
-        vol_total = f"MIN({vol_available}*{cp_sweep_pct},{vol_max_lev})"
+        # B. Excess cash drain: PREV year cash - max_cash (no circular)
+        cp_max_cash = f"'Control_Panel'!$C${REG.get('CP.max_cash', 55)}"
+        excess_cash = f"MAX(0,{cash_prev}-{cp_max_cash})"
+        # Total: max of leverage-driven and excess cash
+        vol_total = f"MIN({vol_available}*{cp_sweep_pct},MAX({vol_max_lev},{excess_cash}))"
         # ST balance proxy: prev year ST debt (from DT.st)
         st_balance = f"IFERROR({prev}{REG['DT.st']},0)"
         # vol_st = MIN(total, ST balance) — repay ST first, no premium
         vol_st = f"MIN({vol_total},{st_balance})"
         # vol_lt = remaining × (1/(1+premium)) — LT with prepay cost
         vol_lt = f"MAX(0,{vol_total}-{vol_st})/(1+{cp_prepay_prem})"
-        # voluntary_term = leverage-driven only (excess cash → dividends)
+        # voluntary_term: leverage-driven OR excess cash drain
+        # Leverage repay: NI>0, no breach, overleveraged → vol_st + vol_lt
+        # Excess cash: NI>0, no breach → excess (regardless of leverage)
+        lev_repay = f"IF(IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev},{vol_st}+{vol_lt},0)"
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
-                     f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,"
-                     f"NOT({cov_breach}),"
-                     f"IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev}),"
-                     f"MAX(0,{vol_st}+{vol_lt}),"
+                     f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,NOT({cov_breach})),"
+                     f"MAX({lev_repay},{excess_cash}),"
                      f"0),0)",
                      FMT_MLN)
 
