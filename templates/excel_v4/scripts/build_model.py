@@ -1645,12 +1645,13 @@ def build_pl(wb, cfg):
         # Revenue FX gain: when local ccy strengthens (negative USDXXX change), rev in USD goes up
         rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
                   f"+{rev_ref}*{cp_rev_rub}*(-{cp_fx_rub})")
-        # Cost FX: now in 12_COGS (÷(1+ΔUSD/RUB×RUB_share)), NOT in other_fin
-        # Avoids double-count (audit dефект 2)
+        # Cost FX: in other_fin (below EBITDA, but keeps BS balanced)
+        # RUB cost saving from devaluation
+        cost_fx = f"-{cogs_ref}*{cp_cost_rub}*(-{cp_fx_rub})"
         formula_cell(ws, REG["PL.other_fin"], c_idx,
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}"
-                     f"+{rev_fx}",
+                     f"+{rev_fx}+{cost_fx}",
                      FMT_MLN)
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
@@ -2100,16 +2101,11 @@ def build_cogs(wb, cfg):
                     vol_t = vol_ref.format(cl=cl)
                     vol_prev = vol_ref.format(cl=prev_cl)
                     # Indexation from 05_Drivers (energy → DR.energy_idx, labour → DR.labour_idx)
-                    # FX adjustment: divide by (1 + ΔUSD/RUB × RUB_share) to convert to USD
+                    # FX adjustment: via PL.other_fin (not COGS — keeps BS balanced)
                     dr_idx = REG.get(f"DR.{'energy_idx' if comp == 'energy' else 'labour_idx'}")
-                    dr_fx = REG.get("DR.fx_usdrub_chg")
-                    dr_rub = REG.get("DR.rub_cost_share")
                     idx_factor = f"*(1+'{NAME['DR']}'!{cl}${dr_idx})" if dr_idx else ""
-                    fx_divisor = ""
-                    if dr_fx and dr_rub:
-                        fx_divisor = f"/(1+'{NAME['DR']}'!{cl}${dr_fx}*'{NAME['DR']}'!{cl}${dr_rub})"
                     formula_cell(ws, r, c,
-                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_factor}{fx_divisor},"
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_factor},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 else:
