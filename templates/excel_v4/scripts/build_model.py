@@ -2194,9 +2194,16 @@ def build_cogs(wb, cfg):
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 else:
-                    # Other: proportional to revenue (transport, commissions)
+                    # Other (transport, etc.): volume-driven with PPI index + FX
+                    vol_t = vol_ref.format(cl=cl)
+                    vol_prev = vol_ref.format(cl=prev_cl)
+                    dr_transport = REG.get("DR.transport_idx")
+                    dr_fx = REG.get("DR.fx_usdrub_chg")
+                    idx_t = f"*(1+'{NAME['DR']}'!{cl}${dr_transport})" if dr_transport else ""
+                    fx_d = f"/(1+'{NAME['DR']}'!{cl}${dr_fx})" if dr_fx else ""
                     formula_cell(ws, r, c,
-                                 f"={rev_ref}*{cp_cogs_ratio}*{share_ref}",
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_t}{fx_d},"
+                                 f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
 
         # D&A in COGS (if applicable)

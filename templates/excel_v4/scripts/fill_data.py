@@ -1263,10 +1263,13 @@ def fill_debt_schedule(wb, data: dict, company: str):
             rub_sum = (f"SUMPRODUCT(({close_col}5:{close_col}{r_inst_end})"
                        f"*(ISNUMBER(SEARCH(\"RUB\",$D$5:$D${r_inst_end}))))")
 
-            # FX effect = -balance × pct_change (positive change = USD strengthens = gain on debt)
-            # Sign: positive FX reval = gain (debt decreases), negative = loss
-            cny_ref = f"'Control_Panel'!$C${cp_fx_cny}" if cp_fx_cny else "0"
-            rub_ref = f"'Control_Panel'!$C${cp_fx_rub}" if cp_fx_rub else "0"
+            # FX effect per year from 05_Drivers (not CP scalar)
+            dr_fx_cny = REG.get("DR.fx_usdcny_chg")
+            dr_fx_rub = REG.get("DR.fx_usdrub_chg")
+            # Per-year refs: col F/G/H in 05_Drivers
+            fc_col_dr = get_column_letter(COL_START + N_HIST_DISPLAY + yr_idx)
+            cny_ref = f"'05_Drivers'!{fc_col_dr}${dr_fx_cny}" if dr_fx_cny else "0"
+            rub_ref = f"'05_Drivers'!{fc_col_dr}${dr_fx_rub}" if dr_fx_rub else "0"
 
             formula_cell(ws, r_fx_label, bc + 4,
                          f"=-({cny_sum})*{cny_ref}", FMT_MLN)
@@ -1276,10 +1279,7 @@ def fill_debt_schedule(wb, data: dict, company: str):
                          f"={close_col}{r_fx_label}+{close_col}{r_fx_label+1}",
                          FMT_MLN, bold=True)
 
-            # Link to 17_Debt FX reval
-            fx_total_col = get_column_letter(bc + 4)
-            formula_cell(ws_dt, REG["DT.fx_reval"], c_dt,
-                         f"='_Debt_Schedule'!{fx_total_col}${r_fx_label+2}", FMT_MLN)
+            # 17_Debt FX reval: build_model computes from 05_Drivers (not overwritten here)
 
         print(f"    FX revaluation: CNY + RUB exposure, linked to CP FX assumptions")
 
@@ -1922,14 +1922,8 @@ def fill_bs_history(wb, data: dict, company: str):
                       ["tca", "tnca", "ta", "tcl", "tncl", "tl", "te", "check"]}
         for r, val in row_accum.items():
             if r in total_rows:
-                # Write to 02_Hist only (BS cell has formula from build_model)
-                for bk, hk in bs_to_hi.items():
-                    if REG.get(f"BS.{bk}") == r:
-                        hi_row = REG.get(f"HI.{hk}")
-                        if hi_row and ws_hi:
-                            ws_hi.cell(hi_row, col, round(val, 1)).font = F_INPUT
-                            ws_hi.cell(hi_row, col).number_format = FMT_MLN
-                        break
+                # Skip both BS and 02_Hist for totals (build_model sets formulas)
+                # 02_Hist TCA/TNCA/TA are SUM formulas, not source literals
                 continue
             # Try to create reference to 02_Hist instead of literal
             # Find corresponding HI row
