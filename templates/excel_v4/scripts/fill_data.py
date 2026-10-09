@@ -2494,9 +2494,11 @@ def fill_macro_forecasts(wb, data: dict, company: str):
     scenario_filled = 0
     scen_data = web_scenarios.get(company, {})
     base_vals = scen_data.get("base", {})
-    # Base scenario rows start at r8
-    for r in range(8, 20):
+    # Base scenario rows: r8 to first empty row (stop before Stress)
+    for r in range(8, 8 + 10):
         label = ws.cell(r, 1).value
+        if not label:
+            break  # end of Base block — don't touch Stress/Severe
         if label and isinstance(label, str) and label.strip() in base_vals:
             vals = base_vals[label.strip()]
             for i, v in enumerate(vals[:len(fc_years)]):

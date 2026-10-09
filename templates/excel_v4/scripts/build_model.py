@@ -828,14 +828,18 @@ def build_drivers(wb, cfg):
     ]
     # Link to 01_Macro CPI/PPI
     act_base = REG.get("MA.act_base", 39)
+    # Find CPI/PPI rows by name in macro_factors (not by fixed offset)
+    factors_list = cfg.get("macro_factors", [])
+    cpi_offset = next((i for i, f in enumerate(factors_list) if "CPI" in f.upper()), len(factors_list) - 2)
+    ppi_offset = next((i for i, f in enumerate(factors_list) if "PPI" in f.upper()), len(factors_list) - 1)
+
     for drv_key, label, macro_type in cost_drivers:
         label_row(ws, r, label, "%")
         REG[f"DR.{drv_key}"] = r
-        # History: input
         for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_PCT)
-        # Forecast: from 01_Macro (CPI = act_base+4, PPI = act_base+5)
-        macro_row = act_base + 4 if macro_type == "CPI" else act_base + 5
+        # Forecast: CPI/PPI from active scenario by name
+        macro_row = act_base + cpi_offset if macro_type == "CPI" else act_base + ppi_offset
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             cl = get_column_letter(c)
             formula_cell(ws, r, c,
@@ -3091,14 +3095,12 @@ def build_cf(wb, cfg):
 
         # FX effect: reverse non-cash FX from NI
         # Debt reval: add back (was subtracted from PL.other_fin)
-        # Revenue/cost FX: these ARE real cash effects (priced in local ccy) → do NOT reverse
-        # Only reverse the debt reval component (non-cash translation)
-        formula_cell(ws, REG["CF.fx"], c_idx,
-                     f"='{NAME['DT']}'!{cl}${REG['DT.fx_reval']}", FMT_MLN)
+        # FX on cash = 0 (debt FX is non-cash, reversed in CFO other_noncash)
+        formula_cell(ws, REG["CF.fx"], c_idx, "=0", FMT_MLN)
 
-        # Net change = CFO + CFI + CFF + FX
+        # Net change = CFO + CFI + CFF (no separate FX — already in CFO reversal)
         formula_cell(ws, r_net, c_idx,
-                     f"={cl}{r_cfo}+{cl}{r_cfi}+{cl}{r_cff}+{cl}{REG['CF.fx']}", FMT_MLN, bold=True)
+                     f"={cl}{r_cfo}+{cl}{r_cfi}+{cl}{r_cff}", FMT_MLN, bold=True)
 
         # Cash opening = prev closing
         formula_cell(ws, REG["CF.cash_open"], c_idx, f"={prev}{REG['CF.cash_close']}", FMT_MLN)
