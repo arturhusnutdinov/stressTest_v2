@@ -2972,7 +2972,7 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
-        # Other non-cash: ΔTaxPay + ROU dep + lease interest (non-cash items not in WC)
+        # Other non-cash: ΔTaxPay + ROU dep + lease interest
         formula_cell(ws, REG["CF.other_noncash"], c_idx,
                      f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}"
                      f"+ABS('{NAME['LS']}'!{cl}${REG['LS.rou_dep']})"
