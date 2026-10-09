@@ -2444,10 +2444,10 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             },
             # Severe: commodity -40%, FX +30%
             "severe": {
-                "LME Aluminium":  [1920, 1800, 1680],
-                "LME Alumina":    [210, 204, 198],
-                "USD/RUB":        [110, 124, 129],
-                "USD/CNY":        [7.5, 7.3, 7.1],
+                "LME Aluminium":  [1680, 1650, 1620],  # −40% from base
+                "LME Alumina":    [270, 258, 246],      # −40%
+                "USD/RUB":        [85, 95, 99],         # = Base (pure price shock)
+                "USD/CNY":        [7.0, 6.7, 6.5],     # = Base
                 "Brent":          [42, 41, 39],
                 "CPI RU":         [0.12, 0.10, 0.08],
                 "PPI RU":         [0.08, 0.06, 0.05],
@@ -2484,23 +2484,34 @@ def fill_macro_forecasts(wb, data: dict, company: str):
         },
     }
 
-    # Write BASE scenario only (Stress/Severe are formulas in build_model)
+    # Write ALL scenarios (Base as input, Stress/Severe to protect from overwrite)
     scenario_filled = 0
     scen_data = web_scenarios.get(company, {})
-    base_vals = scen_data.get("base", {})
-    # Base scenario rows: r8 to first empty row (stop before Stress)
-    for r in range(8, 8 + 10):
-        label = ws.cell(r, 1).value
-        if not label:
-            break  # end of Base block — don't touch Stress/Severe
-        if label and isinstance(label, str) and label.strip() in base_vals:
-            vals = base_vals[label.strip()]
-            for i, v in enumerate(vals[:len(fc_years)]):
-                c = fc_start_col + i
-                ws.cell(r, c, round(v, 4)).font = F_INPUT
-                ws.cell(r, c).number_format = '#,##0.00' if abs(v) < 100 else '#,##0'
-                scenario_filled += 1
-            scenario_filled += 1
+    # Count factors from actual Base block (r8 until empty row)
+    n_f = 0
+    for check_r in range(8, 20):
+        if ws.cell(check_r, 1).value:
+            n_f += 1
+        else:
+            break
+    sc_starts = [8, 8 + n_f + 3, 8 + 2 * (n_f + 3)]
+    sc_names = ["base", "stress", "severe"]
+    for sc_idx, sc_name in enumerate(sc_names):
+        sc_vals = scen_data.get(sc_name, {})
+        if not sc_vals:
+            continue
+        sc_start = sc_starts[sc_idx]
+        for r in range(sc_start, sc_start + n_f + 1):
+            label = ws.cell(r, 1).value
+            if not label:
+                break
+            if label and isinstance(label, str) and label.strip() in sc_vals:
+                vals = sc_vals[label.strip()]
+                for i, v in enumerate(vals[:len(fc_years)]):
+                    c = fc_start_col + i
+                    ws.cell(r, c, round(v, 4)).font = F_INPUT
+                    ws.cell(r, c).number_format = '#,##0.00' if abs(v) < 100 else '#,##0'
+                    scenario_filled += 1
 
     print(f"    Macro forecasts: {filled} historical + {scenario_filled} scenario cells")
 

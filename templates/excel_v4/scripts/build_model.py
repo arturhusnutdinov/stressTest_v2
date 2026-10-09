@@ -1996,12 +1996,9 @@ def build_checks(wb, cfg):
                      f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}",
                      FMT_RATIO)
 
-        # #6 Cash ≥ min_cash OR FundingGap > 0 (both = OK, neither = fail)
-        # Returns 0 if OK, 1 if fail (cash < min AND gap = 0)
-        cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
+        # #6 Cash ≥ 0 (unconditional — catches iteration non-convergence)
         formula_cell(ws, REG["CK.cash_min"], c_idx,
-                     f"=IF(OR('{NAME['BS']}'!{cl}${REG['BS.cash']}>={cp_min},"
-                     f"'{NAME['DT']}'!{cl}${REG['DT.funding_gap']}>0),0,1)",
+                     f"=IF('{NAME['BS']}'!{cl}${REG['BS.cash']}>=0,0,1)",
                      FMT_INT)
 
         # #7 Maintenance capex not financed by new debt
