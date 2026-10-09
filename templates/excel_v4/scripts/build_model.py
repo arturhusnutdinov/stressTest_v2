@@ -283,13 +283,18 @@ def build_macro(wb, cfg):
                         shock = -0.20 if s_idx == 1 else -0.40
                         formula_cell(ws, r, c, f"={cl}{base_r}*(1+{shock})", FMT_RATIO1)
                     elif factor in fx_factors:
-                        shock = 0.15 if s_idx == 1 else 0.30
-                        formula_cell(ws, r, c, f"={cl}{base_r}*(1+{shock})", FMT_RATIO1)
+                        # Stress: FX +15% devaluation. Severe: FX = Base (pure price shock)
+                        if s_idx == 1:
+                            formula_cell(ws, r, c, f"={cl}{base_r}*(1+0.15)", FMT_RATIO1)
+                        else:
+                            formula_cell(ws, r, c, f"={cl}{base_r}", FMT_RATIO1)
                     elif factor in rate_factors:
-                        shock = 0.02 if s_idx == 1 else 0.04
-                        formula_cell(ws, r, c, f"={cl}{base_r}+{shock}", FMT_RATIO1)
+                        shock = 0.02 if s_idx == 1 else 0
+                        if shock:
+                            formula_cell(ws, r, c, f"={cl}{base_r}+{shock}", FMT_RATIO1)
+                        else:
+                            formula_cell(ws, r, c, f"={cl}{base_r}", FMT_RATIO1)
                     else:
-                        # Default: carry Base
                         formula_cell(ws, r, c, f"={cl}{base_r}", FMT_RATIO1)
                 scenario_starts[i].append(r)
 
@@ -2094,6 +2099,22 @@ def build_checks(wb, cfg):
                       for i in range(len(hist_checks))]
         formula_cell(ws, r_hist_err, c, "=" + "+".join(hist_parts), FMT_INT, bold=True)
 
+    # ── ПРАВДОПОДОБИЕ ВХОДОВ (sanity check on driver indexes) ──
+    r_sanity = r_hist_err + 2
+    label_row(ws, r_sanity, "ПРАВДОПОДОБИЕ (индекс > 50% = подозр.)", "", "0 = OK")
+    dr_energy = REG.get("DR.energy_idx")
+    dr_labour = REG.get("DR.labour_idx")
+    dr_transport = REG.get("DR.transport_idx")
+    if dr_energy and dr_labour:
+        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            parts = []
+            for dr_r in [dr_energy, dr_labour, dr_transport]:
+                if dr_r:
+                    parts.append(f"IF(ABS('{NAME['DR']}'!{cl}${dr_r})>0.5,1,0)")
+            if parts:
+                formula_cell(ws, r_sanity, c, "=" + "+".join(parts), FMT_INT)
+
 
 def build_cogs(wb, cfg):
     """12_COGS — component-based or ratio-based COGS.
@@ -2651,7 +2672,7 @@ def build_debt(wb, cfg):
         vol_st = f"MIN({vol_total},{st_balance})"
         # vol_lt = remaining × (1/(1+premium)) — LT with prepay cost
         vol_lt = f"MAX(0,{vol_total}-{vol_st})/(1+{cp_prepay_prem})"
-        # voluntary_term = vol_st + vol_lt
+        # voluntary_term = leverage-driven only (excess cash → dividends)
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
                      f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,"
                      f"NOT({cov_breach}),"
@@ -3159,7 +3180,7 @@ def build_equity(wb, cfg):
                          f"MAX(0,{prev}{REG['EQ.ni']})*'Control_Panel'!$C${cp_payout_row})",
                          FMT_MLN)
         else:
-            payout = 0.6 if "Nornickel" in cfg.get("name", "") else 0.0
+            payout = 0.6 if "Nornickel" in cfg.get("name", "") else 0.5
             if payout > 0:
                 formula_cell(ws, REG["EQ.div"], c_idx,
                              f"=IF({cov_check},0,"
@@ -4004,6 +4025,10 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Min cash target", "mln")
     input_cell(ws, r, 3, cfg.get("min_cash", 500), FMT_MLN0)
     REG["CP.min_cash"] = r; r += 1
+
+    label_row(ws, r, "Max cash (excess → voluntary repay)", "mln")
+    input_cell(ws, r, 3, cfg.get("min_cash", 500) * 4, FMT_MLN0)  # default 4× min
+    REG["CP.max_cash"] = r; r += 1
 
     label_row(ws, r, "RC лимит", "mln")
     input_cell(ws, r, 3, cfg.get("rc_limit", 2000), FMT_MLN0)
