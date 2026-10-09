@@ -2434,8 +2434,8 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             },
             # Stress: commodity -20%, FX +15%
             "stress": {
-                "LME Aluminium":  [2560, 2400, 2240],
-                "LME Alumina":    [280, 272, 264],
+                "LME Aluminium":  [2240, 2200, 2160],  # −20% from base
+                # LME Alumina: formula = LME_Al × 0.16 (in build_model)
                 "USD/RUB":        [98, 109, 114],
                 "USD/CNY":        [7.3, 7.0, 6.8],
                 "Brent":          [56, 54, 52],
@@ -2445,7 +2445,7 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             # Severe: commodity -40%, FX +30%
             "severe": {
                 "LME Aluminium":  [1680, 1650, 1620],  # −40% from base
-                "LME Alumina":    [270, 258, 246],      # −40%
+                # LME Alumina: formula = LME_Al × 0.16 (in build_model)
                 "USD/RUB":        [85, 95, 99],         # = Base (pure price shock)
                 "USD/CNY":        [7.0, 6.7, 6.5],     # = Base
                 "Brent":          [42, 41, 39],

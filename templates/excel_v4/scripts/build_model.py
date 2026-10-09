@@ -280,6 +280,14 @@ def build_macro(wb, cfg):
                 for c in range(fc_start, fc_start + n_fc):
                     cl = get_column_letter(c)
                     if factor in commodity_factors:
+                        # Alumina = 16% of LME Aluminium (linked, not independent)
+                        if "Alumina" in factor:
+                            # Alumina = LME Al × alumina_pct (from CP, default 16%)
+                            # Find Al row in this scenario (first factor)
+                            al_r = scenario_starts.get(0, [r])[s_idx] if s_idx < len(scenario_starts.get(0, [])) else r - 1
+                            cp_alumina_pct = f"'Control_Panel'!$C${REG.get('CP.alumina_lme_ratio', 99)}"
+                            formula_cell(ws, r, c, f"={cl}{al_r}*{cp_alumina_pct}", FMT_RATIO1)
+                            continue
                         shock = -0.20 if s_idx == 1 else -0.40
                         formula_cell(ws, r, c, f"={cl}{base_r}*(1+{shock})", FMT_RATIO1)
                     elif factor in fx_factors:
@@ -4125,6 +4133,10 @@ def build_control_panel(wb, cfg):
     REG["CP.fx_usdrub_chg"] = r
     input_cell(ws, r, 3, 0.0, FMT_PCT)  # placeholder, PL uses per-year refs
     r += 1
+
+    label_row(ws, r, "Alumina / LME ratio", "%", "Stress/Severe: Alumina = LME × ratio")
+    input_cell(ws, r, 3, 0.16, FMT_PCT)
+    REG["CP.alumina_lme_ratio"] = r; r += 1
 
     label_row(ws, r, "Доля выручки в CNY", "%", "Из МСФО Note 4: geography")
     input_cell(ws, r, 3, cfg.get("rev_cny_share", 0.0), FMT_PCT)
