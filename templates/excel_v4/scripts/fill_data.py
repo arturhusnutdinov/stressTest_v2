@@ -2425,7 +2425,7 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             # Base: consensus forecasts
             "base": {
                 "LME Aluminium":  [2800, 2750, 2700],  # Realized 2652 + moderate growth
-                "LME Alumina":    [450, 430, 410],      # 2025 realized ~537, normalization
+                # LME Alumina: formula = LME_Al × CP.alumina_lme_ratio (all scenarios)
                 "USD/RUB":        [85, 95, 99],         # CBR consensus
                 "USD/CNY":        [7.0, 6.7, 6.5],      # Exchange rates consensus
                 "Brent":          [70, 68, 65],          # EIA

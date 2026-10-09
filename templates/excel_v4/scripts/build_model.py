@@ -271,8 +271,16 @@ def build_macro(wb, cfg):
             label_row(ws, r, factor)
             if s_idx == 0:
                 # Base: input cells (fill_data writes web consensus)
-                for c in range(fc_start, fc_start + n_fc):
-                    input_cell(ws, r, c, 0, FMT_RATIO1)
+                # Alumina: formula = LME Al × ratio (even in Base)
+                if "Alumina" in factor and i > 0:
+                    cp_alumina_pct = f"'Control_Panel'!$C${REG.get('CP.alumina_lme_ratio', 99)}"
+                    al_r_base = scenario_starts.get(0, [r])[0] if 0 in scenario_starts else r - 1
+                    for c in range(fc_start, fc_start + n_fc):
+                        cl = get_column_letter(c)
+                        formula_cell(ws, r, c, f"={cl}{al_r_base}*{cp_alumina_pct}", FMT_RATIO1)
+                else:
+                    for c in range(fc_start, fc_start + n_fc):
+                        input_cell(ws, r, c, 0, FMT_RATIO1)
                 scenario_starts[i] = [r]
             else:
                 # Stress/Severe: formulas from Base
@@ -1717,16 +1725,16 @@ def build_pl(wb, cfg):
         cp_rev_cny = f"'Control_Panel'!$C${REG.get('CP.rev_cny_share', 80)}"
         cp_rev_rub = f"'Control_Panel'!$C${REG.get('CP.rev_rub_share', 81)}"
         cp_cost_rub = f"'Control_Panel'!$C${REG.get('CP.cost_rub_share', 82)}"
-        cp_fx_cny = f"'Control_Panel'!$C${REG.get('CP.fx_usdcny_chg', 75)}"
-        cp_fx_rub = f"'Control_Panel'!$C${REG.get('CP.fx_usdrub_chg', 76)}"
         rev_ref = f"'{NAME['PL']}'!{cl}${REG['PL.revenue']}"
         cogs_ref = f"ABS('{NAME['PL']}'!{cl}${REG['PL.cogs']})"
-        # Per-year FX from 05_Drivers (not CP scalar)
+        # Per-year FX from 05_Drivers (not CP scalars)
         dr_fx_r = REG.get("DR.fx_usdrub_chg")
-        fx_rub_yr = f"'{NAME['DR']}'!{cl}${dr_fx_r}" if dr_fx_r else cp_fx_rub
+        dr_fx_c = REG.get("DR.fx_usdcny_chg")
+        fx_rub_yr = f"'{NAME['DR']}'!{cl}${dr_fx_r}" if dr_fx_r else "0"
+        fx_cny_yr = f"'{NAME['DR']}'!{cl}${dr_fx_c}" if dr_fx_c else "0"
         # Revenue FX: apply same pass-through (contract lags apply to exports too)
         cp_fxpt = f"'Control_Panel'!$C${REG.get('CP.fx_pass_through', 99)}"
-        rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})*{cp_fxpt}"
+        rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{fx_cny_yr})*{cp_fxpt}"
                   f"+{rev_ref}*{cp_rev_rub}*(-{fx_rub_yr})*{cp_fxpt}")
         # Cost FX: now in 12_COGS (÷(1+ΔFXRUB)), not here (no double-count)
         # FX reval on debt → OCI (not PL) per IAS 21 — breaks 63-cell cycle
@@ -2119,6 +2127,27 @@ def build_checks(wb, cfg):
         hist_parts = [f"IF(ABS(IFERROR({cl}{r_hist_base+1+i},0))>1,1,0)"
                       for i in range(len(hist_checks))]
         formula_cell(ws, r_hist_err, c, "=" + "+".join(hist_parts), FMT_INT, bold=True)
+
+    # ── SANITY CHECK on inputs ──
+    r_san = r_hist_err + 2
+    label_row(ws, r_san, "ПРАВДОПОДОБИЕ ВХОДОВ", "", "0 = OK, >0 = подозрительно")
+    dr_energy = REG.get("DR.energy_idx")
+    dr_labour = REG.get("DR.labour_idx")
+    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+        cl = get_column_letter(c)
+        parts = []
+        # Indexes > 50% = suspicious (catches Brent-as-CPI bug)
+        for dr_r in [dr_energy, dr_labour]:
+            if dr_r:
+                parts.append(f"IF(ABS('{NAME['DR']}'!{cl}${dr_r})>0.5,1,0)")
+        # PL.other_opex empty = suspicious
+        parts.append(f"IF({cl}{REG['PL.other_opex']}=0,1,0)")
+        # FX rates = 0 in active scenario = suspicious
+        act_base_ma = REG.get("MA.act_base", 39)
+        for offset in [2, 3]:  # USD/RUB, USD/CNY
+            parts.append(f"IF('{NAME['MA']}'!{cl}${act_base_ma+offset}=0,1,0)")
+        if parts:
+            formula_cell(ws, r_san, c, "=" + "+".join(parts), FMT_INT)
 
     # ── ПРАВДОПОДОБИЕ ВХОДОВ (sanity check on driver indexes) ──
     r_sanity = r_hist_err + 2
