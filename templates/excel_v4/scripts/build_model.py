@@ -2193,7 +2193,8 @@ def build_cogs(wb, cfg):
                     dr_fx = REG.get("DR.fx_usdrub_chg")
                     idx_num = f"*(1+'{NAME['DR']}'!{cl}${dr_idx})" if dr_idx else ""
                     # Energy/labour are ~100% RUB, divide by FX change directly
-                    fx_div = f"/(1+'{NAME['DR']}'!{cl}${dr_fx})" if dr_fx else ""
+                    cp_fxpt = f"'Control_Panel'!$C${REG.get('CP.fx_pass_through', 99)}"
+                    fx_div = f"/(1+'{NAME['DR']}'!{cl}${dr_fx}*{cp_fxpt})" if dr_fx else ""
                     formula_cell(ws, r, c,
                                  f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_num}{fx_div},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
@@ -2205,7 +2206,8 @@ def build_cogs(wb, cfg):
                     dr_transport = REG.get("DR.transport_idx")
                     dr_fx = REG.get("DR.fx_usdrub_chg")
                     idx_t = f"*(1+'{NAME['DR']}'!{cl}${dr_transport})" if dr_transport else ""
-                    fx_d = f"/(1+'{NAME['DR']}'!{cl}${dr_fx})" if dr_fx else ""
+                    cp_fxpt = f"'Control_Panel'!$C${REG.get('CP.fx_pass_through', 99)}"
+                    fx_d = f"/(1+'{NAME['DR']}'!{cl}${dr_fx}*{cp_fxpt})" if dr_fx else ""
                     formula_cell(ws, r, c,
                                  f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_t}{fx_d},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
@@ -4137,6 +4139,11 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Alumina / LME ratio", "%", "Stress/Severe: Alumina = LME × ratio")
     input_cell(ws, r, 3, 0.16, FMT_PCT)
     REG["CP.alumina_lme_ratio"] = r; r += 1
+
+    label_row(ws, r, "FX pass-through (cost)", "%",
+              "Доля FX-эффекта в затратах: 0.7 = 70% (лаг контрактов, регулирование)")
+    input_cell(ws, r, 3, 0.70, FMT_PCT)
+    REG["CP.fx_pass_through"] = r; r += 1
 
     label_row(ws, r, "Доля выручки в CNY", "%", "Из МСФО Note 4: geography")
     input_cell(ws, r, 3, cfg.get("rev_cny_share", 0.0), FMT_PCT)
