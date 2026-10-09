@@ -119,7 +119,7 @@ COMPANY_CONFIGS = {
             {"name": "Alumina", "key": "seg2", "driver": "LME Alumina"},
             {"name": "Other (VAP, foil)", "key": "seg3", "driver": "EWA"},
         ],
-        "macro_factors": ["LME Aluminium", "LME Alumina", "USD/RUB", "Brent", "CPI RU", "PPI RU"],
+        "macro_factors": ["LME Aluminium", "LME Alumina", "USD/RUB", "USD/CNY", "Brent", "CPI RU", "PPI RU"],
         "cogs_mode": "component",
         "cogs_components": {"material": 0.37, "energy": 0.27, "labour": 0.12, "other": 0.24},
         "debt_target_nd_ebitda": 3.5,
@@ -256,17 +256,41 @@ def build_macro(wb, cfg):
     scenario_names = ["Базовый", "Стресс", "Severe"]
     scenario_starts = {}  # factor_idx → (s1_row, s2_row, s3_row)
 
+    # Shock multipliers: Stress = Base × (1+shock), Severe = Base × (1+severe_shock)
+    # Commodities: -20%/-40%, FX: +15%/+30%, Rates: +2pp/+4pp
+    commodity_factors = {"LME Aluminium", "LME Alumina", "LME Nickel", "LME Copper",
+                         "LME Palladium", "LME Platinum", "Brent"}
+    fx_factors = {"USD/RUB", "USD/CNY"}
+    rate_factors = {"CPI RU", "PPI RU"}
+
     for s_idx, s_name in enumerate(scenario_names):
         s_base = 6 + s_idx * (n_f + 3)
         section_header(ws, s_base, f"Сценарий {s_idx+1}: {s_name}")
         for i, factor in enumerate(factors):
             r = s_base + 2 + i
             label_row(ws, r, factor)
-            for c in range(fc_start, fc_start + n_fc):
-                input_cell(ws, r, c, 0, FMT_RATIO1)
             if s_idx == 0:
+                # Base: input cells (fill_data writes web consensus)
+                for c in range(fc_start, fc_start + n_fc):
+                    input_cell(ws, r, c, 0, FMT_RATIO1)
                 scenario_starts[i] = [r]
             else:
+                # Stress/Severe: formulas from Base
+                base_r = scenario_starts[i][0]
+                for c in range(fc_start, fc_start + n_fc):
+                    cl = get_column_letter(c)
+                    if factor in commodity_factors:
+                        shock = -0.20 if s_idx == 1 else -0.40
+                        formula_cell(ws, r, c, f"={cl}{base_r}*(1+{shock})", FMT_RATIO1)
+                    elif factor in fx_factors:
+                        shock = 0.15 if s_idx == 1 else 0.30
+                        formula_cell(ws, r, c, f"={cl}{base_r}*(1+{shock})", FMT_RATIO1)
+                    elif factor in rate_factors:
+                        shock = 0.02 if s_idx == 1 else 0.04
+                        formula_cell(ws, r, c, f"={cl}{base_r}+{shock}", FMT_RATIO1)
+                    else:
+                        # Default: carry Base
+                        formula_cell(ws, r, c, f"={cl}{base_r}", FMT_RATIO1)
                 scenario_starts[i].append(r)
 
     # ── Active scenario: CHOOSE based on CP.C5 ──
@@ -863,6 +887,30 @@ def build_drivers(wb, cfg):
             ref_cell(ws, r, c, f"='Control_Panel'!$C${cp_cost_rub}", FMT_PCT)
         else:
             input_cell(ws, r, c, 0.55, FMT_PCT)
+    r += 1
+
+    # Δ USD/CNY YoY
+    label_row(ws, r, "Δ USD/CNY, YoY", "%")
+    REG["DR.fx_usdcny_chg"] = r
+    # Find USD/CNY row in macro
+    usdcny_row = None
+    for fi, f in enumerate(cfg.get("macro_factors", [])):
+        if "cny" in f.lower():
+            usdcny_row = act_base + fi
+            break
+    if usdcny_row:
+        first_fc_col_c = 3 + n_hist
+        cl_fc1_c = get_column_letter(first_fc_col_c)
+        anchor_cny = f"IF('{NAME['MA']}'!{get_column_letter(first_fc_col_c-1)}${usdcny_row}>0," \
+                     f"'{NAME['MA']}'!{get_column_letter(first_fc_col_c-1)}${usdcny_row}," \
+                     f"'{NAME['MA']}'!{get_column_letter(first_fc_col_c-2)}${usdcny_row})"
+        formula_cell(ws, r, first_fc_col_c,
+                     f"=IFERROR('{NAME['MA']}'!{cl_fc1_c}${usdcny_row}/{anchor_cny}-1,0)", FMT_PCT)
+        for c in range(first_fc_col_c + 1, first_fc_col_c + len(cfg["fc_years"])):
+            cl = get_column_letter(c)
+            prev_cl = get_column_letter(c - 1)
+            formula_cell(ws, r, c,
+                         f"=IFERROR('{NAME['MA']}'!{cl}${usdcny_row}/'{NAME['MA']}'!{prev_cl}${usdcny_row}-1,0)", FMT_PCT)
     r += 2
 
     # ── C. COMMODITY CHAIN ──
@@ -1657,12 +1705,11 @@ def build_pl(wb, cfg):
         # Revenue FX gain: when local ccy strengthens, rev in USD goes up
         rev_fx = (f"{rev_ref}*{cp_rev_cny}*(-{cp_fx_cny})"
                   f"+{rev_ref}*{cp_rev_rub}*(-{fx_rub_yr})")
-        # Cost FX: RUB cost saving from devaluation
-        cost_fx = f"-{cogs_ref}*{cp_cost_rub}*(-{fx_rub_yr})"
+        # Cost FX: now in 12_COGS (÷(1+ΔFXRUB)), not here (no double-count)
         formula_cell(ws, REG["PL.other_fin"], c_idx,
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.fx_reval']}"
-                     f"+{rev_fx}+{cost_fx}",
+                     f"+{rev_fx}",
                      FMT_MLN)
         # Tax ← 19_Tax
         ref_cell(ws, REG["PL.tax"], c_idx,
@@ -2111,12 +2158,14 @@ def build_cogs(wb, cfg):
                     # Per tonne × volume × (1 + cost_indexation)
                     vol_t = vol_ref.format(cl=cl)
                     vol_prev = vol_ref.format(cl=prev_cl)
-                    # Indexation from 05_Drivers (energy → DR.energy_idx, labour → DR.labour_idx)
-                    # FX adjustment: via PL.other_fin (not COGS — keeps BS balanced)
+                    # Indexation + FX: (1+CPI/PPI) / (1+ΔUSD/RUB) for RUB costs
                     dr_idx = REG.get(f"DR.{'energy_idx' if comp == 'energy' else 'labour_idx'}")
-                    idx_factor = f"*(1+'{NAME['DR']}'!{cl}${dr_idx})" if dr_idx else ""
+                    dr_fx = REG.get("DR.fx_usdrub_chg")
+                    idx_num = f"*(1+'{NAME['DR']}'!{cl}${dr_idx})" if dr_idx else ""
+                    # Energy/labour are ~100% RUB, divide by FX change directly
+                    fx_div = f"/(1+'{NAME['DR']}'!{cl}${dr_fx})" if dr_fx else ""
                     formula_cell(ws, r, c,
-                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_factor},"
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_num}{fx_div},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 else:
@@ -2674,11 +2723,14 @@ def build_debt(wb, cfg):
                      f"/SUM('{NAME['RI']}'!D${ri_s}:D${ri_e}),0)")
         # FX effect = -close × (cny_share × cny_chg + rub_share × rub_chg)
         # Per-year FX from 05_Drivers
-        dr_fx_debt = REG.get("DR.fx_usdrub_chg")
-        fx_rub_debt = f"'{NAME['DR']}'!{cl}${dr_fx_debt}" if dr_fx_debt else cp_fx_rub_chg
+        # Per-year FX from 05_Drivers for both CNY and RUB
+        dr_fx_rub = REG.get("DR.fx_usdrub_chg")
+        dr_fx_cny = REG.get("DR.fx_usdcny_chg")
+        fx_rub_yr = f"'{NAME['DR']}'!{cl}${dr_fx_rub}" if dr_fx_rub else cp_fx_rub_chg
+        fx_cny_yr = f"'{NAME['DR']}'!{cl}${dr_fx_cny}" if dr_fx_cny else cp_fx_cny_chg
         formula_cell(ws, REG["DT.fx_reval"], c_idx,
-                     f"=-{cl}{REG['DT.term_close']}*({cny_share}*{cp_fx_cny_chg}"
-                     f"+{rub_share}*{fx_rub_debt})",
+                     f"=-{cl}{REG['DT.term_close']}*({cny_share}*{fx_cny_yr}"
+                     f"+{rub_share}*{fx_rub_yr})",
                      FMT_MLN)
 
         formula_cell(ws, REG["DT.close"], c_idx,

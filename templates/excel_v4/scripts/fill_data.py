@@ -627,7 +627,7 @@ def fill_macro(wb, data: dict, company: str):
     # This is the FX anchor — critical for cost FX adjustment
     actual_2025 = {
         "LME Aluminium": 2632, "LME Alumina": 353, "USD/RUB": 83.8,
-        "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017,
+        "USD/CNY": 7.19, "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017,
     }
     last_hist_col = 3 + len(src["hist_years"][-3:]) - 1  # col E
     # Also fill all 3 scenario blocks with same 2025 values
@@ -2414,32 +2414,96 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             ws.cell(row, c).number_format = '#,##0.00' if abs(forecast_val) < 1000 else '#,##0'
             filled += 1
 
-    # Also fill SCENARIO section (rows 8-13) with base scenario forecasts
-    # Map factor names to scenario rows
+    # Scenario section: only BASE rows (Stress/Severe are formulas)
+    # Base scenario rows: r8 to r8+n_factors-1
     factor_row_map = {}
+    for r in range(8, 8 + 10):  # scan first 10 rows in Base block
+        label = ws.cell(r, 1).value
+        if label and isinstance(label, str) and label.strip() not in ("", "Сценарий 1: Базовый"):
+            factor_row_map[label.strip()] = r
+        elif not label:
+            break  # end of Base block
+
+    # ── WEB-BASED MACRO SCENARIOS (Oct 2026) ──
+    # Sources: World Bank (Al), CBR (FX/Rate), FocusEconomics, Statista
+    web_scenarios = {
+        "rusal": {
+            # Base: consensus forecasts
+            "base": {
+                "LME Aluminium":  [3200, 3000, 2800],  # World Bank 2026, trend
+                "LME Alumina":    [350, 340, 330],      # FocusEconomics
+                "USD/RUB":        [85, 95, 99],         # CBR consensus
+                "USD/CNY":        [7.0, 6.7, 6.5],      # Exchange rates consensus
+                "Brent":          [70, 68, 65],          # EIA
+                "CPI RU":         [0.07, 0.05, 0.04],   # CBR target path
+                "PPI RU":         [0.03, 0.02, 0.02],   # FocusEconomics
+            },
+            # Stress: commodity -20%, FX +15%
+            "stress": {
+                "LME Aluminium":  [2560, 2400, 2240],
+                "LME Alumina":    [280, 272, 264],
+                "USD/RUB":        [98, 109, 114],
+                "USD/CNY":        [7.3, 7.0, 6.8],
+                "Brent":          [56, 54, 52],
+                "CPI RU":         [0.09, 0.07, 0.06],
+                "PPI RU":         [0.05, 0.04, 0.03],
+            },
+            # Severe: commodity -40%, FX +30%
+            "severe": {
+                "LME Aluminium":  [1920, 1800, 1680],
+                "LME Alumina":    [210, 204, 198],
+                "USD/RUB":        [110, 124, 129],
+                "USD/CNY":        [7.5, 7.3, 7.1],
+                "Brent":          [42, 41, 39],
+                "CPI RU":         [0.12, 0.10, 0.08],
+                "PPI RU":         [0.08, 0.06, 0.05],
+            },
+        },
+        "nornickel": {
+            "base": {
+                "LME Nickel":     [16000, 17000, 18000],
+                "LME Copper":     [9500, 10000, 10500],
+                "LME Palladium":  [1000, 1050, 1100],
+                "LME Platinum":   [1000, 1050, 1100],
+                "USD/RUB":        [85, 95, 99],
+                "Brent":          [70, 68, 65],
+                "GDP World":      [0.032, 0.033, 0.034],
+            },
+            "stress": {
+                "LME Nickel":     [12800, 13600, 14400],
+                "LME Copper":     [7600, 8000, 8400],
+                "LME Palladium":  [800, 840, 880],
+                "LME Platinum":   [800, 840, 880],
+                "USD/RUB":        [98, 109, 114],
+                "Brent":          [56, 54, 52],
+                "GDP World":      [0.020, 0.022, 0.025],
+            },
+            "severe": {
+                "LME Nickel":     [9600, 10200, 10800],
+                "LME Copper":     [5700, 6000, 6300],
+                "LME Palladium":  [600, 630, 660],
+                "LME Platinum":   [600, 630, 660],
+                "USD/RUB":        [110, 124, 129],
+                "Brent":          [42, 41, 39],
+                "GDP World":      [0.010, 0.015, 0.020],
+            },
+        },
+    }
+
+    # Write BASE scenario only (Stress/Severe are formulas in build_model)
+    scenario_filled = 0
+    scen_data = web_scenarios.get(company, {})
+    base_vals = scen_data.get("base", {})
+    # Base scenario rows start at r8
     for r in range(8, 20):
         label = ws.cell(r, 1).value
-        if label and isinstance(label, str):
-            factor_row_map[label.strip()] = r
-
-    scenario_filled = 0
-    for factor_name, row in factor_row_map.items():
-        series = factors.get(factor_name, {})
-        if not series:
-            continue
-        recent = sorted(series.items())[-5:]
-        if not recent:
-            continue
-        vals = [v for _, v in recent]
-        median_val = sorted(vals)[len(vals) // 2]
-        last_val = recent[-1][1]
-        reversion = 0.3
-        forecast_val = last_val
-        for i, yr in enumerate(fc_years):
-            c = fc_start_col + i
-            forecast_val = forecast_val + reversion * (median_val - forecast_val)
-            ws.cell(row, c, round(forecast_val, 2)).font = F_INPUT
-            ws.cell(row, c).number_format = '#,##0.00' if abs(forecast_val) < 1000 else '#,##0'
+        if label and isinstance(label, str) and label.strip() in base_vals:
+            vals = base_vals[label.strip()]
+            for i, v in enumerate(vals[:len(fc_years)]):
+                c = fc_start_col + i
+                ws.cell(r, c, round(v, 4)).font = F_INPUT
+                ws.cell(r, c).number_format = '#,##0.00' if abs(v) < 100 else '#,##0'
+                scenario_filled += 1
             scenario_filled += 1
 
     print(f"    Macro forecasts: {filled} historical + {scenario_filled} scenario cells")
