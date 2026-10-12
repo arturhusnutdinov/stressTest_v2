@@ -121,7 +121,8 @@ COMPANY_CONFIGS = {
         ],
         "macro_factors": ["LME Aluminium", "LME Alumina", "USD/RUB", "USD/CNY", "Brent", "CPI RU", "PPI RU"],
         "cogs_mode": "component",
-        "cogs_components": {"material": 0.37, "energy": 0.27, "labour": 0.12, "other": 0.24},
+        "cogs_ratio_default": 0.827,  # fact 2025: 12,254/14,812
+        "cogs_components": {"material": 0.428, "energy": 0.239, "labour": 0.077, "other": 0.121},  # from Note 6a 2025
         "debt_target_nd_ebitda": 3.5,
         "rc_limit": 2500,
         "rc_rate": 0.14,
@@ -278,10 +279,11 @@ def build_macro(wb, cfg):
                     for c in range(fc_start, fc_start + n_fc):
                         cl = get_column_letter(c)
                         formula_cell(ws, r, c, f"={cl}{al_r_base}*{cp_alumina_pct}", FMT_RATIO1)
+                    scenario_starts[i] = [r]
                 else:
                     for c in range(fc_start, fc_start + n_fc):
                         input_cell(ws, r, c, 0, FMT_RATIO1)
-                scenario_starts[i] = [r]
+                    scenario_starts[i] = [r]
             else:
                 # Stress/Severe: formulas from Base
                 base_r = scenario_starts[i][0]
@@ -2219,14 +2221,15 @@ def build_cogs(wb, cfg):
                 share_ref = f"'Control_Panel'!$C${cp_share_row}" if cp_share_row else str(share)
 
                 if comp == "material":
-                    # Material = Volume_Al(kt) × alumina_norm(t/t) × alumina_price($/t) / 1000
-                    # alumina_norm ≈ 1.93 t alumina per t aluminium (industry standard)
-                    # alumina_price from 10_Revenue seg2 price row
+                    # Material = alumina-linked + fixed per tonne
+                    # Alumina: Vol × 1.93 × alumina_price / 1000
+                    # Fixed (bauxite, other materials): Vol × fixed_$/t / 1000
                     vol_t = vol_ref.format(cl=cl)
                     alumina_price = f"'{NAME['RV']}'!{cl}${REG.get('RV.seg2_price', 13)}"
-                    alumina_norm = "1.93"  # t alumina / t Al
+                    cp_alumina_norm = f"'Control_Panel'!$C${REG.get('CP.alumina_norm', 99)}"
+                    cp_fixed_mat = f"'Control_Panel'!$C${REG.get('CP.fixed_material_per_t', 99)}"
                     formula_cell(ws, r, c,
-                                 f"=IFERROR({vol_t}*{alumina_norm}*{alumina_price}/1000,"
+                                 f"=IFERROR({vol_t}*({cp_alumina_norm}*{alumina_price}+{cp_fixed_mat})/1000,"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 elif comp in ("energy", "labour"):
@@ -4181,8 +4184,24 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.0, FMT_PCT)  # placeholder, PL uses per-year refs
     r += 1
 
-    label_row(ws, r, "Alumina / LME ratio", "%", "Stress/Severe: Alumina = LME × ratio")
-    input_cell(ws, r, 3, 0.16, FMT_PCT)
+    label_row(ws, r, "Alumina norm (t/t product)", "t/t",
+              "Alumina consumption per tonne Al: 1.93 (industry standard)")
+    input_cell(ws, r, 3, 1.93, FMT_RATIO)
+    REG["CP.alumina_norm"] = r; r += 1
+
+    label_row(ws, r, "Alumina / LME ratio", "%",
+              "Pure alumina: fact 2025 = 20.3% of LME (industry 16%)")
+    input_cell(ws, r, 3, 0.203, FMT_PCT)
+    # REG set below after Fixed material
+
+    r_alumina = r; r += 1
+
+    label_row(ws, r, "Fixed material cost $/t Al", "$/t",
+              "Bauxite+other materials per t Al: fact 2025 = 301 $/t")
+    input_cell(ws, r, 3, 301, FMT_INT)
+    REG["CP.fixed_material_per_t"] = r; r += 1
+
+    REG["CP.alumina_lme_ratio"] = r_alumina
     REG["CP.alumina_lme_ratio"] = r; r += 1
 
     label_row(ws, r, "FX pass-through (cost)", "%",

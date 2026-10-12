@@ -2564,7 +2564,8 @@ def fill_all(company: str, model_path: str):
 
     print("\n5. Filling 01_Macro (factors + scenarios)...")
     fill_macro(wb, data, company)
-    fill_macro_scenarios(wb, company)
+    # fill_macro_scenarios: DISABLED — scenarios from build_model formulas + web_scenarios in fill_macro_forecasts
+    # fill_macro_scenarios(wb, company)
 
     print("\n6. Filling 10_Revenue (volumes & prices)...")
     fill_revenue(wb, data, company)
