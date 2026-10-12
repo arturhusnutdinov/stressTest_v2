@@ -1769,14 +1769,12 @@ def build_pl(wb, cfg):
         # GP = Revenue + COGS (COGS is negative)
         formula_cell(ws, REG["PL.gp"], c_idx,
                      f"={cl}{REG['PL.revenue']}+{cl}{REG['PL.cogs']}", FMT_MLN, bold=True)
-        # EBITDA = GP + SGA + other_opex + DA_addback (DA is in COGS → GP deducts it)
-        # DA from 15_PPE (same as PL.da but added back because EBITDA = before D&A)
+        # EBITDA = GP + SGA + other_opex (DA NOT in COGS → consistent with 02_Hist)
         formula_cell(ws, REG["PL.ebitda"], c_idx,
-                     f"={cl}{REG['PL.gp']}+{cl}{REG['PL.sga']}+{cl}{REG['PL.other_opex']}"
-                     f"+ABS({cl}{REG['PL.da']})", FMT_MLN, bold=True)
-        # EBIT = EBITDA - DA - impairment (DA subtracted = cancels the addback above)
+                     f"={cl}{REG['PL.gp']}+{cl}{REG['PL.sga']}+{cl}{REG['PL.other_opex']}", FMT_MLN, bold=True)
+        # EBIT = EBITDA - DA - impairment
         formula_cell(ws, REG["PL.ebit"], c_idx,
-                     f"={cl}{REG['PL.ebitda']}-ABS({cl}{REG['PL.da']})-{cl}{REG['PL.impairment']}", FMT_MLN, bold=True)
+                     f"={cl}{REG['PL.ebitda']}-{cl}{REG['PL.da']}-{cl}{REG['PL.impairment']}", FMT_MLN, bold=True)
         # EBT = EBIT + interest(negative) + interest_income + other_fin + associates
         formula_cell(ws, REG["PL.ebt"], c_idx,
                      f"={cl}{REG['PL.ebit']}+{cl}{REG['PL.interest']}+{cl}{REG['PL.interest_income']}+"
@@ -2274,10 +2272,8 @@ def build_cogs(wb, cfg):
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
                 elif comp == "da_cogs":
-                    # D&A in production: from 15_PPE depreciation charge
-                    formula_cell(ws, r, c,
-                                 f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}",
-                                 FMT_MLN)
+                    # DA stays outside COGS (consistent with 02_Hist EBITDA definition)
+                    formula_cell(ws, r, c, "=0", FMT_MLN)
                 else:
                     # Other (transport, etc.): volume-driven with PPI index + FX
                     vol_t = vol_ref.format(cl=cl)
@@ -3193,21 +3189,22 @@ def build_cf(wb, cfg):
         # CFF_без_RC_и_NewTerm: deterministic financing flows only
         # Excludes RC draw/repay AND new_term (both determined by the plug)
         # = refi - mandatory - voluntary_term - lease - div + other
+        # CFF_no_rc: excludes RC AND voluntary (voluntary is step-function → circular)
         cff_no_rc = (f"='{NAME['DT']}'!{cl}${REG['DT.refi']}"
                      f"-ABS('{NAME['DT']}'!{cl}${REG['DT.mandatory']})"
-                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary_term']})"
                      f"-ABS({cl}{REG['CF.lease_pay']})"
                      f"-ABS({cl}{REG['CF.div_paid']})"
                      f"+{cl}{REG['CF.other_cff']}")
         label_row(ws, REG["CF.cff_no_rc"], "CFF без RC", "mln") if c_idx == 3 + n_hist else None
         formula_cell(ws, REG["CF.cff_no_rc"], c_idx, cff_no_rc, FMT_MLN)
 
-        # CFF = CFF_base + new_term + RC_draw - RC_repay
+        # CFF = CFF_no_rc + new_term + RC_draw - RC_repay - voluntary
         formula_cell(ws, r_cff, c_idx,
                      f"={cl}{REG['CF.cff_no_rc']}"
                      f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
                      f"+'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
-                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}",
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}"
+                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary_term']})",
                      FMT_MLN, bold=True)
 
         # FX effect: reverse non-cash FX from NI

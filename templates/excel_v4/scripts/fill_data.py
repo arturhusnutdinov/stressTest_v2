@@ -2147,8 +2147,8 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
             })
 
     if cogs_mode == "component" and cogs_components:
-        # Fill each component as FORMULA = ABS(PL.COGS) × share
-        # DA_cogs from 15_PPE, not from share
+        # Fill history: Material = residual, others = COGS × CP share
+        # This ensures total = COGS exactly (no rounding gap)
         for year in hist_years:
             col = COL_START + hist_years.index(year)
             cl = get_column_letter(col)
@@ -2156,10 +2156,21 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
                 r = REG.get(f"CG.{comp}")
                 if not r:
                     continue
-                if comp == "da_cogs":
-                    # DA in production from 15_PPE
+                cp_share = REG.get(f"CP.cogs_{comp}")
+                if comp == "material":
+                    # Material = residual: COGS - Σ(other components)
+                    other_rows = [REG.get(f"CG.{k}") for k in cogs_components if k != "material" and REG.get(f"CG.{k}")]
+                    other_sum = "+".join(f"{cl}{rr}" for rr in other_rows)
                     formula_cell(ws_cg, r, col,
-                                 f"='15_PPE'!{cl}${REG['PP.dep_charge']}",
+                                 f"=ABS('21_PL'!{cl}${REG['PL.cogs']})-({other_sum})",
+                                 FMT_MLN)
+                elif comp == "da_cogs":
+                    # DA = 0 in COGS (DA is separate in PL, consistent with 02_Hist)
+                    formula_cell(ws_cg, r, col, "=0", FMT_MLN)
+                elif cp_share:
+                    # Use CP share ref (not literal)
+                    formula_cell(ws_cg, r, col,
+                                 f"=ABS('21_PL'!{cl}${REG['PL.cogs']})*'Control_Panel'!$C${cp_share}",
                                  FMT_MLN)
                 else:
                     formula_cell(ws_cg, r, col,
