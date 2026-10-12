@@ -122,10 +122,15 @@ COMPANY_CONFIGS = {
         "macro_factors": ["LME Aluminium", "LME Alumina", "USD/RUB", "USD/CNY", "Brent", "CPI RU", "PPI RU"],
         "cogs_mode": "component",
         "cogs_ratio_default": 0.827,  # fact 2025: 12,254/14,812
-        # Shares calibrated from Note 6a 2025 (total 12,254M)
-        # material: alumina+bauxite (5,238 from formula), energy: 2,931, labour: 946
-        # other: 1,040 + primary_al_purchases(1,231) + DA_in_COGS(657) - FG_change(211) = 2,717
-        "cogs_components": {"material": 0.427, "energy": 0.239, "labour": 0.077, "other": 0.222},
+        # Note 6a 2025: material 5238, purchases 1231, energy 2931, labour 946, DA 657, FG -211, other 1040
+        "cogs_components": {
+            "material": 0.427,       # alumina+bauxite: formula from vol×norm×price+fixed
+            "purchases": 0.100,      # primary Al purchases: 1,231M → vol×price linked
+            "energy": 0.239,         # electricity+fuel: 2,931M
+            "labour": 0.077,         # personnel: 946M
+            "da_cogs": 0.054,        # D&A in production: 657M → from 15_PPE
+            "other": 0.085,          # transport+commissions: 1,040M
+        },
         "debt_target_nd_ebitda": 3.5,
         "rc_limit": 2500,
         "rc_rate": 0.14,
@@ -1764,12 +1769,14 @@ def build_pl(wb, cfg):
         # GP = Revenue + COGS (COGS is negative)
         formula_cell(ws, REG["PL.gp"], c_idx,
                      f"={cl}{REG['PL.revenue']}+{cl}{REG['PL.cogs']}", FMT_MLN, bold=True)
-        # EBITDA = GP + SGA + other_opex
+        # EBITDA = GP + SGA + other_opex + DA_addback (DA is in COGS → GP deducts it)
+        # DA from 15_PPE (same as PL.da but added back because EBITDA = before D&A)
         formula_cell(ws, REG["PL.ebitda"], c_idx,
-                     f"={cl}{REG['PL.gp']}+{cl}{REG['PL.sga']}+{cl}{REG['PL.other_opex']}", FMT_MLN, bold=True)
-        # EBIT = EBITDA - DA - impairment
+                     f"={cl}{REG['PL.gp']}+{cl}{REG['PL.sga']}+{cl}{REG['PL.other_opex']}"
+                     f"+ABS({cl}{REG['PL.da']})", FMT_MLN, bold=True)
+        # EBIT = EBITDA - DA - impairment (DA subtracted = cancels the addback above)
         formula_cell(ws, REG["PL.ebit"], c_idx,
-                     f"={cl}{REG['PL.ebitda']}-{cl}{REG['PL.da']}-{cl}{REG['PL.impairment']}", FMT_MLN, bold=True)
+                     f"={cl}{REG['PL.ebitda']}-ABS({cl}{REG['PL.da']})-{cl}{REG['PL.impairment']}", FMT_MLN, bold=True)
         # EBT = EBIT + interest(negative) + interest_income + other_fin + associates
         formula_cell(ws, REG["PL.ebt"], c_idx,
                      f"={cl}{REG['PL.ebit']}+{cl}{REG['PL.interest']}+{cl}{REG['PL.interest_income']}+"
@@ -2194,10 +2201,12 @@ def build_cogs(wb, cfg):
         # Component rows (history: input, forecast: calculated)
         section_header(ws, 6, "КОМПОНЕНТЫ СЕБЕСТОИМОСТИ")
         comp_info = {
-            "material": ("Material (alumina, raw)", "Driven by commodity factor"),
-            "energy": ("Energy (electricity)", "Driven by power price × FX"),
-            "labour": ("Labour", "Driven by CPI inflation × FX"),
-            "other": ("Other (transport, etc.)", "Driven by PPI"),
+            "material": ("Material (alumina, raw)", "Vol × (norm × alumina_price + fixed)"),
+            "purchases": ("Primary Al purchases", "Vol × LME price (resale)"),
+            "energy": ("Energy (electricity)", "Vol × PPI × FX pass-through"),
+            "labour": ("Labour (personnel)", "Vol × CPI × FX pass-through"),
+            "da_cogs": ("D&A in production", "From 15_PPE depreciation"),
+            "other": ("Other costs (transport)", "Vol × PPI × FX pass-through"),
         }
         for i, (comp, share) in enumerate(comps.items()):
             r = REG.get(f"CG.{comp}", 8 + i)
@@ -2249,6 +2258,24 @@ def build_cogs(wb, cfg):
                     formula_cell(ws, r, c,
                                  f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev}){idx_num}{fx_div},"
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
+                                 FMT_MLN)
+                elif comp == "purchases":
+                    # Primary Al purchases: Vol × price per tonne (scales with LME Al)
+                    # Per tonne = 1231/3918 = 314 $/t at 2025 LME 2652
+                    # Forecast: prev × vol_ratio × (Al_price_t / Al_price_prev)
+                    vol_t = vol_ref.format(cl=cl)
+                    vol_prev = vol_ref.format(cl=prev_cl)
+                    al_price = f"'{NAME['RV']}'!{cl}${REG.get('RV.seg1_price', 9)}"
+                    al_price_prev = f"'{NAME['RV']}'!{prev_cl}${REG.get('RV.seg1_price', 9)}"
+                    formula_cell(ws, r, c,
+                                 f"=IFERROR({prev_cl}{r}*{vol_t}/MAX(1,{vol_prev})"
+                                 f"*{al_price}/MAX(1,{al_price_prev}),"
+                                 f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
+                                 FMT_MLN)
+                elif comp == "da_cogs":
+                    # D&A in production: from 15_PPE depreciation charge
+                    formula_cell(ws, r, c,
+                                 f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}",
                                  FMT_MLN)
                 else:
                     # Other (transport, etc.): volume-driven with PPI index + FX

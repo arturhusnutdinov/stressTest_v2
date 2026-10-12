@@ -1792,9 +1792,16 @@ def fill_statement_history(wb, data: dict, company: str):
 
     # Fill PL history (last 3 years)
     ws_pl = wb["21_PL"]
+    # Combine SGA + Distribution into one "sga" line
+    dist_hist = is_d.get("distribution_expenses", {})
+    sga_raw = is_d.get("sga", {})
+    for yr in list(sga_raw.keys()):
+        sga_raw[yr] = (sga_raw.get(yr, 0) or 0) + (dist_hist.get(yr, 0) or 0)
+    is_d["sga_combined"] = sga_raw
+
     pl_map = {
         "revenue": "revenue", "cogs": "cogs", "gross_profit": "gp",
-        "sga": "sga", "ebitda": "ebitda", "ebit": "ebit",
+        "sga_combined": "sga", "ebitda": "ebitda", "ebit": "ebit",
         "interest_expense": "interest", "other_financial": "other_fin",
         "ebt": "ebt", "tax_expense": "tax", "net_income": "ni",
         "total_da": "da",
