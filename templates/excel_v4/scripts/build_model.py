@@ -122,14 +122,15 @@ COMPANY_CONFIGS = {
         "macro_factors": ["LME Aluminium", "LME Alumina", "USD/RUB", "USD/CNY", "Brent", "CPI RU", "PPI RU"],
         "cogs_mode": "component",
         "cogs_ratio_default": 0.827,  # fact 2025: 12,254/14,812
-        # Note 6a 2025: material 5238, purchases 1231, energy 2931, labour 946, DA 657, FG -211, other 1040
+        # Note 6a 2025 ex-DA: material 5238, purchases 1231, energy 2931, labour 946, other 1251
+        # Shares sum to 1.0 exactly (DA=0 in model COGS)
         "cogs_components": {
-            "material": 0.427,       # alumina+bauxite: formula from vol×norm×price+fixed
-            "purchases": 0.100,      # primary Al purchases: 1,231M → vol×price linked
-            "energy": 0.239,         # electricity+fuel: 2,931M
-            "labour": 0.077,         # personnel: 946M
-            "da_cogs": 0.054,        # D&A in production: 657M → from 15_PPE
-            "other": 0.085,          # transport+commissions: 1,040M
+            "material": 0.4517,      # alumina+bauxite+materials: 5,238M
+            "purchases": 0.1061,     # primary Al purchases: 1,231M
+            "energy": 0.2527,        # electricity+fuel: 2,931M
+            "labour": 0.0816,        # personnel: 946M
+            "da_cogs": 0.0000,       # DA outside COGS (in PL.da)
+            "other": 0.1079,         # other+FG change: 1,251M
         },
         "debt_target_nd_ebitda": 3.5,
         "rc_limit": 2500,
@@ -2159,9 +2160,13 @@ def build_checks(wb, cfg):
         if parts:
             formula_cell(ws, r_san, c, "=" + "+".join(parts), FMT_INT)
 
-    # ── ПРАВДОПОДОБИЕ ВХОДОВ (sanity check on driver indexes) ──
-    r_sanity = r_hist_err + 2
-    label_row(ws, r_sanity, "ПРАВДОПОДОБИЕ (индекс > 50% = подозр.)", "", "0 = OK")
+    # Sum of COGS shares = 1.0 check
+    r_shares = r_san + 2
+    label_row(ws, r_shares, "Сумма долей COGS = 1.0", "", "Должно быть 0")
+    cp_shares = [REG.get(f"CP.cogs_{k}") for k in ["material","purchases","energy","labour","da_cogs","other"] if REG.get(f"CP.cogs_{k}")]
+    if cp_shares:
+        share_sum = "+".join(f"'Control_Panel'!$C${r}" for r in cp_shares)
+        formula_cell(ws, r_shares, 3, f"=ROUND({share_sum}-1,4)", FMT_RATIO)
     dr_energy = REG.get("DR.energy_idx")
     dr_labour = REG.get("DR.labour_idx")
     dr_transport = REG.get("DR.transport_idx")
@@ -4214,7 +4219,7 @@ def build_control_panel(wb, cfg):
     REG["CP.alumina_norm"] = r; r += 1
 
     label_row(ws, r, "Alumina / LME ratio", "%",
-              "Pure alumina: fact 2025 = 20.3% of LME (industry 16%)")
+              "Rusal effective cost: 20.3% (LME index 13.4%, premium for captive supply)")
     input_cell(ws, r, 3, 0.203, FMT_PCT)
     # REG set below after Fixed material
 

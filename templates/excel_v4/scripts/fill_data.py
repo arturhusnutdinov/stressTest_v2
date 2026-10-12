@@ -2157,14 +2157,7 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
                 if not r:
                     continue
                 cp_share = REG.get(f"CP.cogs_{comp}")
-                if comp == "material":
-                    # Material = residual: COGS - Σ(other components)
-                    other_rows = [REG.get(f"CG.{k}") for k in cogs_components if k != "material" and REG.get(f"CG.{k}")]
-                    other_sum = "+".join(f"{cl}{rr}" for rr in other_rows)
-                    formula_cell(ws_cg, r, col,
-                                 f"=ABS('21_PL'!{cl}${REG['PL.cogs']})-({other_sum})",
-                                 FMT_MLN)
-                elif comp == "da_cogs":
+                if comp == "da_cogs":
                     # DA = 0 in COGS (DA is separate in PL, consistent with 02_Hist)
                     formula_cell(ws_cg, r, col, "=0", FMT_MLN)
                 elif cp_share:
