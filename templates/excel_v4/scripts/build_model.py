@@ -122,7 +122,10 @@ COMPANY_CONFIGS = {
         "macro_factors": ["LME Aluminium", "LME Alumina", "USD/RUB", "USD/CNY", "Brent", "CPI RU", "PPI RU"],
         "cogs_mode": "component",
         "cogs_ratio_default": 0.827,  # fact 2025: 12,254/14,812
-        "cogs_components": {"material": 0.428, "energy": 0.239, "labour": 0.077, "other": 0.121},  # from Note 6a 2025
+        # Shares calibrated from Note 6a 2025 (total 12,254M)
+        # material: alumina+bauxite (5,238 from formula), energy: 2,931, labour: 946
+        # other: 1,040 + primary_al_purchases(1,231) + DA_in_COGS(657) - FG_change(211) = 2,717
+        "cogs_components": {"material": 0.427, "energy": 0.239, "labour": 0.077, "other": 0.222},
         "debt_target_nd_ebitda": 3.5,
         "rc_limit": 2500,
         "rc_rate": 0.14,
