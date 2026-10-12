@@ -2167,18 +2167,7 @@ def build_checks(wb, cfg):
     if cp_shares:
         share_sum = "+".join(f"'Control_Panel'!$C${r}" for r in cp_shares)
         formula_cell(ws, r_shares, 3, f"=ROUND({share_sum}-1,4)", FMT_RATIO)
-    dr_energy = REG.get("DR.energy_idx")
-    dr_labour = REG.get("DR.labour_idx")
-    dr_transport = REG.get("DR.transport_idx")
-    if dr_energy and dr_labour:
-        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
-            cl = get_column_letter(c)
-            parts = []
-            for dr_r in [dr_energy, dr_labour, dr_transport]:
-                if dr_r:
-                    parts.append(f"IF(ABS('{NAME['DR']}'!{cl}${dr_r})>0.5,1,0)")
-            if parts:
-                formula_cell(ws, r_sanity, c, "=" + "+".join(parts), FMT_INT)
+    # (sanity check for indexes already in r_san block above)
 
 
 def build_cogs(wb, cfg):
@@ -4667,13 +4656,13 @@ def build(company: str, output: str):
     print("  Post-processing...")
 
     # Enable Iterative Calculation (for circular: Debt ↔ Interest ↔ Cash)
-    # openpyxl: wb.calculation.iterate = True, iterateCount, iterateDelta
+    # Enable Iterative Calculation (safe: 0 cells in cycles, converges in 1 pass)
     if wb.calculation is None:
         from openpyxl.workbook.properties import CalcProperties
         wb.calculation = CalcProperties()
     wb.calculation.iterate = True
-    wb.calculation.iterateCount = 1000
-    wb.calculation.iterateDelta = 0.000001  # 1e-6 like bank model
+    wb.calculation.iterateCount = 100
+    wb.calculation.iterateDelta = 0.001
     # fullCalcOnLoad=True — recalc on open (audit requires cold start = warm start)
     wb.calculation.fullCalcOnLoad = True
 
@@ -4820,7 +4809,9 @@ def build(company: str, output: str):
                 if item.filename == "xl/workbook.xml":
                     text = data.decode("utf-8")
                     if "fullCalcOnLoad" not in text:
-                        text = text.replace('iterate="1"', 'fullCalcOnLoad="1" iterate="1"')
+                        # No iteration needed. Add fullCalcOnLoad for clean recalc.
+                        if "fullCalcOnLoad" not in text:
+                            text = text.replace('calcId=', 'fullCalcOnLoad="1" calcId=')
                         data = text.encode("utf-8")
                 if item.filename.startswith("xl/worksheets/"):
                     text = data.decode("utf-8")

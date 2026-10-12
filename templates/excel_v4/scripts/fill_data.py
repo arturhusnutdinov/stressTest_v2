@@ -1929,9 +1929,16 @@ def fill_bs_history(wb, data: dict, company: str):
                       ["tca", "tnca", "ta", "tcl", "tncl", "tl", "te", "check"]}
         for r, val in row_accum.items():
             if r in total_rows:
-                # Skip both BS and 02_Hist for totals (build_model sets formulas)
-                # 02_Hist TCA/TNCA/TA are SUM formulas, not source literals
-                continue
+                # BS totals: skip (build_model sets formulas)
+                # BUT write to 02_Hist (source totals for history check)
+                for bk, hk in bs_to_hi.items():
+                    if REG.get(f"BS.{bk}") == r:
+                        hi_row = REG.get(f"HI.{hk}")
+                        if hi_row and ws_hi:
+                            ws_hi.cell(hi_row, col, round(val, 1)).font = F_INPUT
+                            ws_hi.cell(hi_row, col).number_format = FMT_MLN
+                        break
+                continue  # skip 20_BS cell
             # Try to create reference to 02_Hist instead of literal
             # Find corresponding HI row
             bs_key_name = None
