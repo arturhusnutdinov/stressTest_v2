@@ -2137,24 +2137,34 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
         custom_cogs = proj.get("model", {}).get("custom", {}).get("cogs", {})
         if custom_cogs.get("mode") == "component":
             cogs_mode = "component"
-            cogs_components = {
-                "material": custom_cogs.get("alumina_share", 0.37),
-                "energy": custom_cogs.get("energy_share", 0.27),
-                "labour": custom_cogs.get("labour_share", 0.12),
-                "other": custom_cogs.get("other_share", 0.24),
-            }
+            # Read from build_model config (includes all components)
+            from build_model import COMPANY_CONFIGS
+            bm_cfg = COMPANY_CONFIGS.get(company, {})
+            cogs_components = bm_cfg.get("cogs_components", {
+                "material": 0.427, "purchases": 0.100,
+                "energy": 0.239, "labour": 0.077,
+                "da_cogs": 0.054, "other": 0.085,
+            })
 
     if cogs_mode == "component" and cogs_components:
-        # Fill each component as FORMULA = ABS(PL.COGS) × share (not literal)
+        # Fill each component as FORMULA = ABS(PL.COGS) × share
+        # DA_cogs from 15_PPE, not from share
         for year in hist_years:
             col = COL_START + hist_years.index(year)
             cl = get_column_letter(col)
             for comp, share in cogs_components.items():
-                r = REG.get(f"CG.{comp}", 8)
-                pl_title = "21_PL"
-                formula_cell(ws_cg, r, col,
-                             f"=ABS('{pl_title}'!{cl}${REG['PL.cogs']})*{share}",
-                             FMT_MLN)
+                r = REG.get(f"CG.{comp}")
+                if not r:
+                    continue
+                if comp == "da_cogs":
+                    # DA in production from 15_PPE
+                    formula_cell(ws_cg, r, col,
+                                 f"='15_PPE'!{cl}${REG['PP.dep_charge']}",
+                                 FMT_MLN)
+                else:
+                    formula_cell(ws_cg, r, col,
+                                 f"=ABS('21_PL'!{cl}${REG['PL.cogs']})*{share}",
+                                 FMT_MLN)
         print(f"    COGS: component mode, {len(cogs_components)} components as formulas")
     else:
         # Ratio mode: fill total COGS

@@ -2209,7 +2209,8 @@ def build_cogs(wb, cfg):
             "other": ("Other costs (transport)", "Vol × PPI × FX pass-through"),
         }
         for i, (comp, share) in enumerate(comps.items()):
-            r = REG.get(f"CG.{comp}", 8 + i)
+            r = 8 + i  # sequential rows starting from 8
+            REG[f"CG.{comp}"] = r  # register immediately
             info = comp_info.get(comp, (comp.title(), ""))
             label_row(ws, r, f"{info[0]} ({share*100:.0f}%)", "mln", info[1])
             # History: input cells
@@ -2291,11 +2292,7 @@ def build_cogs(wb, cfg):
                                  f"{rev_ref}*{cp_cogs_ratio}*{share_ref})",
                                  FMT_MLN)
 
-        # D&A in COGS (if applicable)
-        r_da = REG.get("CG.da_in_cogs", 13)
-        label_row(ws, r_da, "D&A в себестоимости (если да)", "mln", "da_in_cogs=false для Rusal IFRS")
-        for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
-            formula_cell(ws, r_da, c, "=0", FMT_MLN)  # Rusal: DA separate line (not in COGS)
+        # (old DA=0 row removed — DA now a proper component 'da_cogs' above)
 
     else:
         # Ratio mode — COGS = Revenue × calibrated ratio from preprocessing
@@ -4232,7 +4229,6 @@ def build_control_panel(wb, cfg):
     REG["CP.fixed_material_per_t"] = r; r += 1
 
     REG["CP.alumina_lme_ratio"] = r_alumina
-    REG["CP.alumina_lme_ratio"] = r; r += 1
 
     label_row(ws, r, "FX pass-through (cost)", "%",
               "Доля FX-эффекта в затратах: 0.7 = 70% (лаг контрактов, регулирование)")
