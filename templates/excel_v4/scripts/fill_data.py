@@ -611,6 +611,31 @@ def fill_macro(wb, data: dict, company: str):
     year_headers(ws, r, hist_years, [])
     r += 1
 
+    # Source/unit documentation for macro series (audit defect 3)
+    macro_docs = {
+        "brent": ("USD/bbl", "годовой средний", "EIA / ICE Brent", "[ДАННЫЕ]"),
+        "brent_usd": ("USD/bbl", "годовой средний", "EIA / ICE Brent", "[ДАННЫЕ]"),
+        "cpi_ru": ("% г/г", "дек/дек", "Росстат — ИПЦ", "[ДАННЫЕ]"),
+        "cpi_us": ("% г/г", "дек/дек", "BLS — CPI-U", "[ДАННЫЕ]"),
+        "dxy": ("индекс", "годовой средний", "FRED DXY", "[ДАННЫЕ]"),
+        "fx_usdrub": ("RUB/USD", "годовой средний", "ЦБ РФ", "[ДАННЫЕ]"),
+        "gdp_us": ("% г/г, реальный", "годовой", "BEA / FRED", "[ДАННЫЕ]"),
+        "gdp_us_nominal": ("трлн USD", "годовой", "BEA / FRED", "[ДАННЫЕ]"),
+        "gdp_world": ("% г/г, реальный", "годовой", "IMF WEO", "[ДАННЫЕ]"),
+        "industrial_production_us": ("% г/г", "годовой", "FRED INDPRO", "[ДАННЫЕ]"),
+        "iron_ore_price": ("USD/t, CFR China", "годовой средний", "Platts / SGX", "[ДАННЫЕ]"),
+        "lme_al": ("USD/t", "годовой средний", "LME Official", "[ДАННЫЕ]"),
+        "lme_alumina": ("USD/t", "годовой средний", "Platts / LME", "[ДАННЫЕ]"),
+        "ppi_ru": ("% г/г", "дек/дек", "Росстат — ИЦП", "[ДАННЫЕ]"),
+        "ppi_us": ("% г/г", "дек/дек", "BLS — PPI", "[ДАННЫЕ]"),
+        "rub_usd": ("RUB/USD", "годовой средний", "ЦБ РФ", "[ДАННЫЕ]"),
+        "russian_power_price": ("RUB/МВт·ч", "годовой средний", "АТС / ЕЭС", "[ДАННЫЕ]"),
+        "steel_hrc_price": ("USD/t", "годовой средний", "Platts / CRU", "[ДАННЫЕ]"),
+        "steel_plate_price": ("USD/t", "годовой средний", "Platts / CRU", "[ДАННЫЕ]"),
+        "steel_scrap_price": ("USD/t", "годовой средний", "Platts / CRU", "[ДАННЫЕ]"),
+        "usd_rub": ("RUB/USD", "годовой средний", "ЦБ РФ", "[ДАННЫЕ]"),
+        "usd_cny": ("CNY/USD", "годовой средний", "PBOC", "[ДАННЫЕ]"),
+    }
     print(f"    Macro: {len(factors)} factors")
     for factor_name, years_data in sorted(factors.items()):
         label_row(ws, r, factor_name)
@@ -620,28 +645,41 @@ def fill_macro(wb, data: dict, company: str):
                 cell = ws.cell(r, col, round(val, 4))
                 cell.font = F_INPUT
                 cell.number_format = FMT_RATIO if abs(val) < 100 else FMT_MLN0
+        # Add documentation columns (I=Method, J=Source, K=Role)
+        doc = macro_docs.get(factor_name.lower().replace(" ", "_").replace("/", ""))
+        if doc:
+            unit, method, source, role = doc
+            ws.cell(r, 2, unit).font = F_NOTE  # col B = unit
+            ws.cell(r, 9, method).font = F_NOTE  # col I = Method
+            ws.cell(r, 10, source).font = F_NOTE  # col J = Source
+            ws.cell(r, 11, role).font = F_NOTE  # col K = Role
         r += 1
 
 
-    # Fill actual 2025 values into SCENARIO rows (history col E)
-    # This is the FX anchor — critical for cost FX adjustment
-    actual_2025 = {
-        "LME Aluminium": 2632, "LME Alumina": 353, "USD/RUB": 83.8,
-        "USD/CNY": 7.19, "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017,
+    # Fill actual values into SCENARIO rows (history cols C:E = 2023:2025)
+    # These are FX anchors — critical for cost FX adjustment
+    hist3 = src["hist_years"][-3:]  # [2023, 2024, 2025]
+    actuals_by_year = {
+        2023: {"LME Aluminium": 2251, "LME Alumina": 349, "USD/RUB": 85.5,
+               "USD/CNY": 7.08, "Brent": 82.2, "CPI RU": 0.073, "PPI RU": 0.040},
+        2024: {"LME Aluminium": 2398, "LME Alumina": 459, "USD/RUB": 92.3,
+               "USD/CNY": 7.25, "Brent": 80.6, "CPI RU": 0.095, "PPI RU": 0.043},
+        2025: {"LME Aluminium": 2632, "LME Alumina": 353, "USD/RUB": 83.8,
+               "USD/CNY": 7.19, "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017},
     }
-    last_hist_col = 3 + len(src["hist_years"][-3:]) - 1  # col E
-    # Also fill all 3 scenario blocks with same 2025 values
-    # Write 2025 actuals by matching row labels in all scenario blocks + active
-    filled_2025 = 0
-    for r in range(6, 45):
-        lbl = ws.cell(r, 1).value
-        if lbl and isinstance(lbl, str):
-            val = actual_2025.get(lbl.strip())
-            if val is not None:
-                ws.cell(r, last_hist_col, round(val, 4)).font = F_INPUT
-                ws.cell(r, last_hist_col).number_format = FMT_RATIO if abs(val) < 100 else FMT_MLN0
-                filled_2025 += 1
-    print(f"    Macro 2025 actuals: {filled_2025} cells filled (col E)")
+    filled_hist = 0
+    for yr_idx, yr in enumerate(hist3):
+        col = 3 + yr_idx
+        actuals = actuals_by_year.get(yr, {})
+        for r in range(6, 50):
+            lbl = ws.cell(r, 1).value
+            if lbl and isinstance(lbl, str):
+                val = actuals.get(lbl.strip())
+                if val is not None:
+                    ws.cell(r, col, round(val, 4)).font = F_INPUT
+                    ws.cell(r, col).number_format = FMT_RATIO if abs(val) < 100 else FMT_MLN0
+                    filled_hist += 1
+    print(f"    Macro actuals: {filled_hist} cells filled (cols C:E, 2023-2025)")
 
 
 def fill_revenue(wb, data: dict, company: str):
@@ -806,13 +844,9 @@ def fill_revenue(wb, data: dict, company: str):
                                   f"({len(dx)} obs, factor={factor_name})")
 
         # Forecast: DON'T override — build_model creates formulas in 11_Segments
-        # Write OLS results to CP + 01_Macro econ block
+        # Write OLS results to 01_Macro econ block (CP.rev_elasticity is formula → 01_Macro)
         if factor_name and beta_price != 1.0:
-            cp_elast_row = REG.get("CP.rev_elasticity")
-            if cp_elast_row:
-                ws_cp = wb["Control_Panel"]
-                ws_cp.cell(cp_elast_row, 3, round(beta_price, 3)).font = F_INPUT
-                ws_cp.cell(cp_elast_row, 3).number_format = FMT_RATIO
+            # CP.rev_elasticity is now ='01_Macro'!$C$beta — don't overwrite
             # Write to 01_Macro econ block
             ws_ma = wb["01_Macro"]
             ma_beta = REG.get("MA.econ_beta")
@@ -833,6 +867,21 @@ def fill_revenue(wb, data: dict, company: str):
                     ws_ma.cell(ma_r2, 3).number_format = FMT_PCT2
             if ma_alpha:
                 ws_ma.cell(ma_alpha, 3, round(alpha_price, 4)).font = F_INPUT
+            # Additional econometric attributes (audit defect 4)
+            ma_nobs = REG.get("MA.econ_nobs")
+            ma_se = REG.get("MA.econ_se")
+            ma_period = REG.get("MA.econ_period")
+            if ma_nobs and dx:
+                ws_ma.cell(ma_nobs, 3, len(dx)).font = F_INPUT
+            if ma_se and dx and len(dx) > 2:
+                n = len(dx)
+                ss_res = sum((dy[j] - (alpha_price + beta_price*dx[j]))**2 for j in range(n))
+                se_beta = (ss_res / (n-2) / sum((dx[j]-sum(dx)/n)**2 for j in range(n)))**0.5
+                ws_ma.cell(ma_se, 3, round(se_beta, 4)).font = F_INPUT
+            if ma_period:
+                src_cfg = data.get("source", {})
+                hist_yrs = src_cfg.get("hist_years", [2021,2022,2023,2024,2025])
+                ws_ma.cell(ma_period, 3, f"{min(hist_yrs)}-{max(hist_yrs)}").font = F_INPUT
             print(f"    {seg_label} OLS β={beta_price:.3f} R²={r2:.3f} → CP + 01_Macro")
 
 
@@ -2064,17 +2113,12 @@ def fill_wc_days(wb, data: dict, company: str):
     assump_rows = {"dso": 13, "dio": 14, "dpo": 15}
     cp_keys = {"dso": REG.get("CP.wc_dso"), "dio": REG.get("CP.wc_dio"),
                "dpo": REG.get("CP.wc_dpo")}
-    # Compute EWA average from Python data for CP calibration
-    for metric_key, assump_row in assump_rows.items():
+    # CP WC days are now formulas → ='03_Assump'!$F$13 etc. (don't overwrite)
+    for metric_key in ["dso", "dio", "dpo"]:
         vals = computed_days.get(metric_key, [])
         if vals:
-            ewa_avg = sum(vals) / len(vals)  # simple average
-            cp_row = cp_keys.get(metric_key)
-            if cp_row:
-                ws_cp.cell(cp_row, 3, round(ewa_avg, 0)).font = F_INPUT
-                ws_cp.cell(cp_row, 3).number_format = FMT_DAYS
-                print(f"    CP.wc_{metric_key} = {ewa_avg:.0f} (EWA from {len(vals)} years)")
-    # Note: build_model already set forecast WC days = CP ref, no override needed
+            ewa_avg = sum(vals) / len(vals)
+            print(f"    WC {metric_key}: EWA = {ewa_avg:.0f} (from {len(vals)} years, via 03_Assump formula)")
 
     # Fill WC balances (AR, INV, AP) for history years
     bs_d = data.get("bs", {})
@@ -2190,17 +2234,8 @@ def fill_cogs_sga_from_history(wb, data: dict, company: str):
     last_rev = abs(rev_hist.get(hist_years[-1], 1))
     cogs_ratio = last_cogs / last_rev if last_rev else 0.80
 
-    # Write calibrated COGS ratio to Control_Panel row 20
-    ws_cp = wb["Control_Panel"]
-    ws_cp.cell(20, 3, round(cogs_ratio, 4)).font = F_INPUT
-    ws_cp.cell(20, 3).number_format = FMT_PCT
-    ws_cp.cell(20, 1, "COGS ratio (калиброванный)").font = F_LABEL
-
-    # Ensure min_cash is set (row 55)
-    # Min cash already set by build_control_panel via REG["CP.min_cash"]
-    # No hardcoded fallback needed
-
-    print(f"    COGS: ratio={cogs_ratio:.1%} → CP!C20")
+    # CP.cogs_ratio is now formula ='03_Assump'!$F$7 — don't overwrite
+    print(f"    COGS: ratio={cogs_ratio:.1%} → CP!C{REG.get('CP.cogs_ratio', '?')} (via 03_Assump formula)")
 
     # Fill SGA
     ws_sa = wb["13_SGA"]
@@ -2627,6 +2662,7 @@ def fill_all(company: str, model_path: str):
 
     # Save
     wb.save(str(model_file))
+    postprocess_xlsx(model_file)
     print(f"\n✓ Saved: {model_file}")
 
     # Count filled cells

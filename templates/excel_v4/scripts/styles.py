@@ -165,3 +165,41 @@ def ref_cell(ws, row, col, ref_formula, fmt=FMT_MLN, bold=False):
     cell.font = F_REF_BOLD if bold else F_REF
     cell.number_format = fmt
     return cell
+
+
+def postprocess_xlsx(path):
+    """Strip empty <v></v> nodes and inject fullCalcOnLoad into saved xlsx.
+    Must be called AFTER wb.save() — rewrites the ZIP in-place."""
+    import zipfile, shutil, tempfile
+    from pathlib import Path
+    path = str(path)
+    tmp = tempfile.mktemp(suffix=".xlsx")
+    empty_v_count = 0
+    with zipfile.ZipFile(path, 'r') as zin:
+        with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                if item.filename == "xl/workbook.xml":
+                    text = data.decode("utf-8")
+                    # Remove iterate settings (0 cycles → not needed)
+                    import re
+                    text = re.sub(
+                        r'\s*iterate="[^"]*"', '', text)
+                    text = re.sub(
+                        r'\s*iterateCount="[^"]*"', '', text)
+                    text = re.sub(
+                        r'\s*iterateDelta="[^"]*"', '', text)
+                    if "fullCalcOnLoad" not in text:
+                        text = text.replace('calcId=', 'fullCalcOnLoad="1" calcId=')
+                    data = text.encode("utf-8")
+                if item.filename.startswith("xl/worksheets/"):
+                    text = data.decode("utf-8")
+                    cleaned = text.replace("<v></v>", "")
+                    removed = (len(text) - len(cleaned)) // len("<v></v>") if "<v></v>" in text else 0
+                    empty_v_count += removed
+                    data = cleaned.encode("utf-8")
+                zout.writestr(item, data)
+    shutil.move(tmp, path)
+    if empty_v_count:
+        print(f"  Stripped {empty_v_count} empty <v></v> nodes")
+    print(f"  Post-process: fullCalcOnLoad=1, iterate removed")

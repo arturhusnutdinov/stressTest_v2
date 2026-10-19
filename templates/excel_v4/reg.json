@@ -504,5 +504,18 @@
   "CP.cogs_purchases": 32,
   "CP.cogs_da_cogs": 35,
   "CG.purchases": 9,
-  "CG.da_cogs": 12
+  "CG.da_cogs": 12,
+  "MA.econ_nobs": 53,
+  "MA.econ_se": 54,
+  "MA.econ_period": 55,
+  "AS.cogs_ratio": 7,
+  "AS.sga_ratio": 8,
+  "AS.ebitda_margin": 9,
+  "AS.net_margin": 10,
+  "AS.dso": 13,
+  "AS.dih": 14,
+  "AS.dpo": 15,
+  "AS.capex_rev": 18,
+  "AS.da_rate": 19,
+  "AS.capex_da": 20
 }

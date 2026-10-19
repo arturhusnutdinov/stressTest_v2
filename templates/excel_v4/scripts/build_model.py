@@ -253,6 +253,8 @@ def build_macro(wb, cfg):
 
     ws.cell(1, 1, f"01_Macro — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Макросценарии (3) + Active row + Эконометрика OLS").font = F_SUBTITLE
+    for c, hdr in [(9, "Метод"), (10, "Источник"), (11, "Роль")]:
+        ws.cell(3, c, hdr).font = F_LABEL_B
 
     n_hist = len(cfg["hist_years"][-3:])
     n_fc = len(cfg["fc_years"])
@@ -354,15 +356,38 @@ def build_macro(wb, cfg):
     r_beta = econ_base + 2
     r_r2 = econ_base + 3
     r_alpha = econ_base + 4
+    r_nobs = econ_base + 5
+    r_se = econ_base + 6
+    r_period = econ_base + 7
     label_row(ws, r_beta, "β (эластичность)", "x", "fill_data computes from history")
     input_cell(ws, r_beta, 3, 1.0, FMT_RATIO)
+    ws.cell(r_beta, 9, "OLS: LINEST(Δln Rev, Δln Factor)").font = F_NOTE
+    ws.cell(r_beta, 10, "02_Hist: revenue + 01_Macro: factor").font = F_NOTE
+    ws.cell(r_beta, 11, "[ОЦЕНКА]").font = F_NOTE
     label_row(ws, r_r2, "R² (коэфф. детерминации)", "%")
     input_cell(ws, r_r2, 3, 0, FMT_PCT2)
+    ws.cell(r_r2, 9, "OLS: R² = 1 − SSres/SStot").font = F_NOTE
+    ws.cell(r_r2, 11, "[ОЦЕНКА]").font = F_NOTE
     label_row(ws, r_alpha, "α (константа)", "x")
     input_cell(ws, r_alpha, 3, 0, FMT_RATIO)
+    ws.cell(r_alpha, 11, "[ОЦЕНКА]").font = F_NOTE
+    # Additional econometric attributes (audit defect 4)
+    label_row(ws, r_nobs, "N (число наблюдений)", "шт")
+    input_cell(ws, r_nobs, 3, 0, FMT_INT)
+    ws.cell(r_nobs, 11, "[ОЦЕНКА]").font = F_NOTE
+    label_row(ws, r_se, "SE (стандартная ошибка β)", "x")
+    input_cell(ws, r_se, 3, 0, FMT_RATIO)
+    ws.cell(r_se, 11, "[ОЦЕНКА]").font = F_NOTE
+    label_row(ws, r_period, "Период оценки", "")
+    input_cell(ws, r_period, 3, 0, FMT_INT)  # fill_data writes "2021-2025"
+    ws.cell(r_period, 9, "Годовые данные, Δln-трансформация").font = F_NOTE
+    ws.cell(r_period, 11, "[ОЦЕНКА]").font = F_NOTE
     REG["MA.econ_beta"] = r_beta
     REG["MA.econ_r2"] = r_r2
     REG["MA.econ_alpha"] = r_alpha
+    REG["MA.econ_nobs"] = r_nobs
+    REG["MA.econ_se"] = r_se
+    REG["MA.econ_period"] = r_period
 
 
 def build_assump(wb, cfg):
@@ -378,6 +403,8 @@ def build_assump(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"03_Assump — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Препроцессинг: калибровка параметров из истории (EWA + AR(1))").font = F_SUBTITLE
+    for c, hdr in [(9, "Метод"), (10, "Источник"), (11, "Роль")]:
+        ws.cell(3, c, hdr).font = F_LABEL_B
 
     hist = cfg["hist_years"][-3:]
     fc = cfg["fc_years"]
@@ -396,6 +423,13 @@ def build_assump(wb, cfg):
         ("Net margin", "PL", "ni", "PL", "revenue", True, "Net margin"),
     ]
 
+    # REG key mapping for calibrated ratios
+    ratio_reg_keys = {
+        "COGS / Revenue": "AS.cogs_ratio",
+        "SGA / Revenue": "AS.sga_ratio",
+        "EBITDA margin": "AS.ebitda_margin",
+        "Net margin": "AS.net_margin",
+    }
     for label, num_code, num_key, den_code, den_key, signed, note in ratio_defs:
         label_row(ws, r, label, "%", note)
         num_r = REG.get(f"{num_code}.{num_key}")
@@ -411,11 +445,14 @@ def build_assump(wb, cfg):
                 else:
                     formula_cell(ws, r, c, f"=IFERROR(ABS({num_ref})/ABS({den_ref}),0)", FMT_PCT)
             # Forecast = EWA (simplified: average of last 3 history years as proxy for EWA)
-            # Python: ewa with halflife=3 → approximately weighted average of recent years
             hist_cols = [get_column_letter(3 + i) for i in range(n_hist)]
             avg_formula = f"=AVERAGE({','.join(f'{c}{r}' for c in hist_cols)})"
             for i in range(len(fc)):
                 formula_cell(ws, r, 3 + n_hist + i, avg_formula, FMT_PCT)
+        # Register calibrated row for CP linkage
+        reg_key = ratio_reg_keys.get(label)
+        if reg_key:
+            REG[reg_key] = r
         r += 1
 
     r += 1
@@ -423,11 +460,11 @@ def build_assump(wb, cfg):
     section_header(ws, r, "2. ОБОРОТНЫЙ КАПИТАЛ (DSO / DIH / DPO)"); r += 1
     # DSO = AR / Rev × 365, DIH = INV / COGS × 365, DPO = AP / COGS × 365
     wc_defs = [
-        ("DSO (дни)", "BS", "ar", "PL", "revenue"),
-        ("DIH (дни)", "BS", "inv", "PL", "cogs"),
-        ("DPO (дни)", "BS", "ap", "PL", "cogs"),
+        ("DSO (дни)", "BS", "ar", "PL", "revenue", "AS.dso"),
+        ("DIH (дни)", "BS", "inv", "PL", "cogs", "AS.dih"),
+        ("DPO (дни)", "BS", "ap", "PL", "cogs", "AS.dpo"),
     ]
-    for label, bs_code, bs_key, is_code, is_key in wc_defs:
+    for label, bs_code, bs_key, is_code, is_key, reg_key in wc_defs:
         label_row(ws, r, label, "дни")
         bs_r = REG.get(f"{bs_code}.{bs_key}")
         is_r = REG.get(f"{is_code}.{is_key}")
@@ -439,22 +476,22 @@ def build_assump(wb, cfg):
                              f"=IFERROR(ABS('{NAME[bs_code]}'!{cl}${bs_r})"
                              f"/ABS('{NAME[is_code]}'!{cl}${is_r})*365,0)",
                              FMT_DAYS)
-            # Forecast: carry forward EWA (average of 3 hist)
             hist_cols = [get_column_letter(3 + i) for i in range(n_hist)]
             avg_f = f"=ROUND(AVERAGE({','.join(f'{c}{r}' for c in hist_cols)}),0)"
             for i in range(len(fc)):
                 formula_cell(ws, r, 3 + n_hist + i, avg_f, FMT_DAYS)
+        REG[reg_key] = r
         r += 1
 
     r += 1
     # ── SECTION 3: CAPEX / DA ──
     section_header(ws, r, "3. КАПИТАЛЬНЫЕ ЗАТРАТЫ И АМОРТИЗАЦИЯ"); r += 1
     capex_defs = [
-        ("CapEx / Revenue", "CF", "capex", "PL", "revenue"),
-        ("DA / PPE_net (dep rate)", "PL", "da", "BS", "ppe"),
-        ("CapEx / DA (sustaining)", "CF", "capex", "PL", "da"),
+        ("CapEx / Revenue", "CF", "capex", "PL", "revenue", "AS.capex_rev"),
+        ("DA / PPE_net (dep rate)", "PL", "da", "BS", "ppe", "AS.da_rate"),
+        ("CapEx / DA (sustaining)", "CF", "capex", "PL", "da", "AS.capex_da"),
     ]
-    for label, num_code, num_key, den_code, den_key in capex_defs:
+    for label, num_code, num_key, den_code, den_key, reg_key in capex_defs:
         label_row(ws, r, label, "%")
         num_r = REG.get(f"{num_code}.{num_key}")
         den_r = REG.get(f"{den_code}.{den_key}")
@@ -470,6 +507,7 @@ def build_assump(wb, cfg):
             avg_f = f"=AVERAGE({','.join(f'{c}{r}' for c in hist_cols)})"
             for i in range(len(fc)):
                 formula_cell(ws, r, 3 + n_hist + i, avg_f, FMT_PCT)
+        REG[reg_key] = r
         r += 1
 
     r += 1
@@ -819,6 +857,8 @@ def build_drivers(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, f"05_Drivers — {cfg['name']}").font = F_TITLE
     ws.cell(2, 1, "Операционные драйверы модели (volume, cost, FX)").font = F_SUBTITLE
+    for c, hdr in [(9, "Метод"), (10, "Источник"), (11, "Роль")]:
+        ws.cell(3, c, hdr).font = F_LABEL_B
 
     n_hist = len(cfg["hist_years"][-3:])
     year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
@@ -2167,7 +2207,37 @@ def build_checks(wb, cfg):
     if cp_shares:
         share_sum = "+".join(f"'Control_Panel'!$C${r}" for r in cp_shares)
         formula_cell(ws, r_shares, 3, f"=ROUND({share_sum}-1,4)", FMT_RATIO)
-    # (sanity check for indexes already in r_san block above)
+
+    # ── Calibration vs Panel check (03_Assump EWA → CP should match) ──
+    r_cal = r_shares + 2
+    section_header(ws, r_cal, "КАЛИБРОВКА vs ПАНЕЛЬ (= 0 если связаны)")
+    r_cal += 1
+    calib_pairs = [
+        ("COGS ratio", "CP.cogs_ratio", "AS.cogs_ratio"),
+        ("SGA ratio", "CP.sga_ratio", "AS.sga_ratio"),
+        ("DA rate", "CP.da_rate", "AS.da_rate"),
+        ("CapEx / DA", "CP.sustaining_ratio", "AS.capex_da"),
+        ("DSO", "CP.wc_dso", "AS.dso"),
+        ("DIH", "CP.wc_dio", "AS.dih"),
+        ("DPO", "CP.wc_dpo", "AS.dpo"),
+    ]
+    calib_check_rows = []
+    for lbl, cp_key, as_key in calib_pairs:
+        cp_r = REG.get(cp_key)
+        as_r = REG.get(as_key)
+        if cp_r and as_r:
+            label_row(ws, r_cal, f"|{lbl}: CP − 03_Assump|", "", "0 = связаны")
+            formula_cell(ws, r_cal, 3,
+                         f"=ROUND('Control_Panel'!$C${cp_r}-'{NAME['AS']}'!$F${as_r},4)",
+                         FMT_RATIO)
+            calib_check_rows.append(r_cal)
+            r_cal += 1
+    # Summary: count of mismatches
+    if calib_check_rows:
+        label_row(ws, r_cal, "РАСХОЖДЕНИЯ КАЛИБРОВКИ", "", "Должно быть 0")
+        ws.cell(r_cal, 1).font = F_LABEL_B
+        parts = [f"IF(ABS(C{r})>0.001,1,0)" for r in calib_check_rows]
+        formula_cell(ws, r_cal, 3, "=" + "+".join(parts), FMT_INT, bold=True)
 
 
 def build_cogs(wb, cfg):
@@ -4001,6 +4071,9 @@ def build_control_panel(wb, cfg):
     apply_col_widths(ws)
     ws.cell(1, 1, "ПАНЕЛЬ УПРАВЛЕНИЯ МОДЕЛЬЮ").font = F_TITLE
     ws.cell(2, 1, "Единственное место ввода. Синие = ввод. Зелёные = формулы (не редактировать).").font = F_SUBTITLE
+    # Method / Source / Role column headers
+    for c, hdr in [(9, "Метод"), (10, "Источник"), (11, "Роль")]:
+        ws.cell(3, c, hdr).font = F_LABEL_B
 
     r = 4
     # ── A. МАКРОСЦЕНАРИЙ ──
@@ -4034,7 +4107,13 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 1, FMT_INT)
     REG["CP.rev_method"] = r; r += 1
     label_row(ws, r, "Эластичность Revenue к macro-фактору", "", "β × Δln(factor)")
-    input_cell(ws, r, 3, 1.0, FMT_RATIO)
+    ma_beta = REG.get("MA.econ_beta")
+    if ma_beta:
+        formula_cell(ws, r, 3, f"='{NAME['MA']}'!$C${ma_beta}", FMT_RATIO)
+        ws.cell(r, 9, "OLS β из 01_Macro").font = F_NOTE
+        ws.cell(r, 10, "01_Macro — расчёт LINEST").font = F_NOTE
+    else:
+        input_cell(ws, r, 3, 1.0, FMT_RATIO)
     REG["CP.rev_elasticity"] = r; r += 1
     label_row(ws, r, "R² (коэфф. детерминации)")
     ref_cell(ws, r, 3, f"='{NAME['MA']}'!$C${REG.get('MA.econ_r2', 53)}", FMT_PCT2); r += 2
@@ -4045,9 +4124,16 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "COGS method (1=ratio, 2=component, 3=ppi_uplift)")
     input_cell(ws, r, 3, cogs_method, FMT_INT)
     REG["CP.cogs_method"] = r; r += 1
-    # COGS ratio (used by both modes — main sensitivity lever)
+    # COGS ratio — linked to 03_Assump calibration
     label_row(ws, r, "COGS ratio (калиброванный)", "%", "→ 12_COGS formula")
-    input_cell(ws, r, 3, cfg.get("cogs_ratio_default", 0.83), FMT_PCT)
+    as_cr = REG.get("AS.cogs_ratio")
+    if as_cr:
+        # F column = first forecast year = EWA average of 3 hist years
+        formula_cell(ws, r, 3, f"='{NAME['AS']}'!$F${as_cr}", FMT_PCT)
+        ws.cell(r, 9, "Калибровка: EWA среднее за 3 года").font = F_NOTE  # col I = Method
+        ws.cell(r, 10, "03_Assump — МСФО ОПУ").font = F_NOTE  # col J = Source
+    else:
+        input_cell(ws, r, 3, cfg.get("cogs_ratio_default", 0.83), FMT_PCT)
     REG["CP.cogs_ratio"] = r; r += 1
     if cfg.get("cogs_mode") == "component":
         for comp, share in cfg.get("cogs_components", {}).items():
@@ -4066,7 +4152,13 @@ def build_control_panel(wb, cfg):
     # ── E. SGA / ОПЕКС ──
     section_header(ws, r, "E. SGA / ОПЕРАЦИОННЫЕ РАСХОДЫ"); r += 1
     label_row(ws, r, "SGA ratio (EWA)", "%", "→ 13_SGA forecast = Revenue × ratio")
-    input_cell(ws, r, 3, 0.08, FMT_PCT)
+    as_sga = REG.get("AS.sga_ratio")
+    if as_sga:
+        formula_cell(ws, r, 3, f"='{NAME['AS']}'!$F${as_sga}", FMT_PCT)
+        ws.cell(r, 9, "Калибровка: EWA среднее за 3 года").font = F_NOTE
+        ws.cell(r, 10, "03_Assump — МСФО ОПУ").font = F_NOTE
+    else:
+        input_cell(ws, r, 3, 0.08, FMT_PCT)
     REG["CP.sga_ratio"] = r; r += 1
     label_row(ws, r, "EWA halflife (лет)", "yr", "Информационно (preprocessing)")
     input_cell(ws, r, 3, 5, FMT_INT)
@@ -4076,12 +4168,23 @@ def build_control_panel(wb, cfg):
     cp_da_rate_row = r + 1  # save for ref from PPE sheet
     section_header(ws, r, "F. КАПИТАЛЬНЫЕ ЗАТРАТЫ / PP&E"); r += 1
     label_row(ws, r, "DA rate (амортизация / ОС нетто)", "%")
-    input_cell(ws, r, 3, 0.07, FMT_PCT)
-    # Store this row for cross-ref — we'll update reg.json
+    as_da = REG.get("AS.da_rate")
+    if as_da:
+        formula_cell(ws, r, 3, f"='{NAME['AS']}'!$F${as_da}", FMT_PCT)
+        ws.cell(r, 9, "Калибровка: EWA среднее за 3 года").font = F_NOTE
+        ws.cell(r, 10, "03_Assump — МСФО прим. 11").font = F_NOTE
+    else:
+        input_cell(ws, r, 3, 0.07, FMT_PCT)
     REG["CP.da_rate"] = r
     r += 1
     label_row(ws, r, "Sustaining CapEx / DA ratio")
-    input_cell(ws, r, 3, 1.8, FMT_RATIO)
+    as_cd = REG.get("AS.capex_da")
+    if as_cd:
+        formula_cell(ws, r, 3, f"='{NAME['AS']}'!$F${as_cd}", FMT_PCT)
+        ws.cell(r, 9, "Калибровка: EWA среднее за 3 года").font = F_NOTE
+        ws.cell(r, 10, "03_Assump — МСФО ОДДС").font = F_NOTE
+    else:
+        input_cell(ws, r, 3, 1.8, FMT_RATIO)
     REG["CP.sustaining_ratio"] = r; r += 1
     label_row(ws, r, "Expansion CapEx (% rev growth)")
     input_cell(ws, r, 3, 0.05, FMT_PCT)
@@ -4098,11 +4201,18 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "WC method (1=days, 2=ratio)")
     input_cell(ws, r, 3, 1, FMT_INT)
     REG["CP.wc_method"] = r; r += 1
-    for d, default, key in [("DSO (дни)", 30, "CP.wc_dso"),
-                             ("DIH (дни)", 80, "CP.wc_dio"),
-                             ("DPO (дни)", 40, "CP.wc_dpo")]:
+    wc_as_keys = [("DSO (дни)", 30, "CP.wc_dso", "AS.dso"),
+                   ("DIH (дни)", 80, "CP.wc_dio", "AS.dih"),
+                   ("DPO (дни)", 40, "CP.wc_dpo", "AS.dpo")]
+    for d, default, key, as_key in wc_as_keys:
         label_row(ws, r, d, "дни", "→ 16_WC forecast")
-        input_cell(ws, r, 3, default, FMT_DAYS)
+        as_r = REG.get(as_key)
+        if as_r:
+            formula_cell(ws, r, 3, f"='{NAME['AS']}'!$F${as_r}", FMT_DAYS)
+            ws.cell(r, 9, "Калибровка: среднее за 3 года").font = F_NOTE
+            ws.cell(r, 10, "03_Assump — МСФО ОФП/ОПУ").font = F_NOTE
+        else:
+            input_cell(ws, r, 3, default, FMT_DAYS)
         REG[key] = r; r += 1
     r += 1
 
@@ -4609,6 +4719,20 @@ def build(company: str, output: str):
         ws = wb.create_sheet(name)
         ws.sheet_properties.tabColor = tab_color
 
+    # Pre-register 03_Assump calibration rows (needed by CP before AS is built)
+    # Row layout is deterministic from section structure:
+    # r=6 section hdr, r=7..10 ratios, r=12 section hdr, r=13..15 WC, r=17 hdr, r=18..20 capex
+    REG["AS.cogs_ratio"] = 7
+    REG["AS.sga_ratio"] = 8
+    REG["AS.ebitda_margin"] = 9
+    REG["AS.net_margin"] = 10
+    REG["AS.dso"] = 13
+    REG["AS.dih"] = 14
+    REG["AS.dpo"] = 15
+    REG["AS.capex_rev"] = 18
+    REG["AS.da_rate"] = 19
+    REG["AS.capex_da"] = 20
+
     # Build each sheet
     builders = [
         ("00_Guide",        build_guide),
@@ -4660,9 +4784,8 @@ def build(company: str, output: str):
     if wb.calculation is None:
         from openpyxl.workbook.properties import CalcProperties
         wb.calculation = CalcProperties()
-    wb.calculation.iterate = True
-    wb.calculation.iterateCount = 100
-    wb.calculation.iterateDelta = 0.001
+    # No iteration needed (0 cells in cycles — pure DAG)
+    wb.calculation.iterate = False
     # fullCalcOnLoad=True — recalc on open (audit requires cold start = warm start)
     wb.calculation.fullCalcOnLoad = True
 
@@ -4797,38 +4920,14 @@ def build(company: str, output: str):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(str(output_path))
 
-    # Post-process: strip empty <v></v> nodes (causes Excel repair dialog)
-    import zipfile, re, shutil, tempfile
-    tmp = tempfile.mktemp(suffix=".xlsx")
-    with zipfile.ZipFile(str(output_path), 'r') as zin:
-        with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
-            empty_v_count = 0
-            for item in zin.infolist():
-                data = zin.read(item.filename)
-                # Fix calcPr: add fullCalcOnLoad if missing
-                if item.filename == "xl/workbook.xml":
-                    text = data.decode("utf-8")
-                    if "fullCalcOnLoad" not in text:
-                        # No iteration needed. Add fullCalcOnLoad for clean recalc.
-                        if "fullCalcOnLoad" not in text:
-                            text = text.replace('calcId=', 'fullCalcOnLoad="1" calcId=')
-                        data = text.encode("utf-8")
-                if item.filename.startswith("xl/worksheets/"):
-                    text = data.decode("utf-8")
-                    cleaned = text.replace("<v></v>", "")
-                    removed = (len(text) - len(cleaned)) // len("<v></v>") if "<v></v>" in text else 0
-                    empty_v_count += removed
-                    data = cleaned.encode("utf-8")
-                zout.writestr(item, data)
-    shutil.move(tmp, str(output_path))
-    if empty_v_count:
-        print(f"  Stripped {empty_v_count} empty <v></v> nodes")
+    # Post-process: strip <v></v>, remove iterate, add fullCalcOnLoad
+    postprocess_xlsx(output_path)
 
     print(f"\n✓ Saved: {output_path}")
     print(f"  Sheets: {len(wb.sheetnames)}")
     print(f"  Formulas: {total_f}")
     print(f"  Company: {cfg['name']}")
-    print(f"  Iterative Calc: ON (100 iter, 0.001 delta)")
+    print(f"  Iterative Calc: OFF (0 cycles, pure DAG)")
     print(f"  Freeze panes: 12 sheets")
 
 
