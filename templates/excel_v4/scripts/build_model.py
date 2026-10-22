@@ -342,9 +342,19 @@ def build_macro(wb, cfg):
             formula_cell(ws, r_act, c,
                          f"=IF({cp_scen}=1,{cl}{s1},IF({cp_scen}=2,{cl}{s2},{cl}{s3}))",
                          FMT_RATIO1)
-        # Store active row for REG
-        reg_key = REG.get(f"MA.act_{['kr','brent','lme1','lme2','fx','gdp','cpi','ppi'][i]}"
-                          if i < 8 else None)
+        # Register active and scenario rows with proper factor-based keys
+        _factor_suffix = {
+            "LME Aluminium": "lme_al", "LME Alumina": "lme_alumina",
+            "LME Nickel": "lme_ni", "LME Copper": "lme_cu",
+            "LME Palladium": "lme_pd", "LME Platinum": "lme_pt",
+            "USD/RUB": "fx", "USD/CNY": "fx_cny",
+            "Brent": "brent", "CPI RU": "cpi", "PPI RU": "ppi",
+            "GDP World": "gdp",
+        }
+        suffix = _factor_suffix.get(factor, f"f{i}")
+        REG[f"MA.act_{suffix}"] = r_act
+        for s_reg in range(len(scenario_starts[i])):
+            REG[f"MA.s{s_reg+1}_{suffix}"] = scenario_starts[i][s_reg]
 
     # Store active scenario base row for other sheets
     REG["MA.act_base"] = act_base + 2
@@ -2198,6 +2208,10 @@ def build_checks(wb, cfg):
         ("PPE: 15_PPE = 02_Hist (col E only)", f"'{NAME['PP']}'", REG['PP.net_close'], "HI.ppe_net"),
         ("BS: 20_BS TA = 02_Hist", f"'{NAME['BS']}'", REG['BS.ta'], "HI.ta"),
     ]
+    # HI has ALL hist years (C:G for 5 years), model sheets show LAST 3 (C:E).
+    # Need to offset HI column: model col C (2023) → HI col E (2023).
+    n_hist_all = len(cfg["hist_years"])
+    hi_col_offset = n_hist_all - n_hist  # e.g. 5 - 3 = 2
     for i, (label, sheet_ref, calc_row, hi_key) in enumerate(hist_checks):
         r_hc = r_hist_base + 1 + i
         label_row(ws, r_hc, label, "mln", "Должно быть ~0")
@@ -2207,9 +2221,10 @@ def build_checks(wb, cfg):
             cols_range = [3 + n_hist - 1] if "PPE" in label else range(3, 3 + n_hist)
             for c in cols_range:
                 cl = get_column_letter(c)
+                hi_cl = get_column_letter(c + hi_col_offset)
                 formula_cell(ws, r_hc, c,
                              f"=ROUND({sheet_ref}!{cl}${calc_row}"
-                             f"-'{NAME['HI']}'!{cl}${hi_row},1)",
+                             f"-'{NAME['HI']}'!{hi_cl}${hi_row},1)",
                              FMT_RATIO)
 
     r_hist_err = r_hist_base + len(hist_checks) + 1
@@ -2260,8 +2275,8 @@ def build_checks(wb, cfg):
         for dr_r in [dr_energy, dr_labour]:
             if dr_r:
                 parts.append(f"IF(ABS('{NAME['DR']}'!{cl}${dr_r})>0.5,1,0)")
-        # PL.other_opex empty = suspicious
-        parts.append(f"IF({cl}{REG['PL.other_opex']}=0,1,0)")
+        # PL.other_opex empty = suspicious (must reference PL sheet, not self!)
+        parts.append(f"IF('{NAME['PL']}'!{cl}${REG['PL.other_opex']}=0,1,0)")
         # FX rates = 0 in active scenario = suspicious
         act_base_ma = REG.get("MA.act_base", 39)
         for offset in [2, 3]:  # USD/RUB, USD/CNY
@@ -2307,6 +2322,20 @@ def build_checks(wb, cfg):
         ws.cell(r_cal, 1).font = F_LABEL_B
         parts = [f"IF(ABS(C{r})>0.001,1,0)" for r in calib_check_rows]
         formula_cell(ws, r_cal, 3, "=" + "+".join(parts), FMT_INT, bold=True)
+        r_cal += 1
+
+    # ── Weak calibration flag: t-stat < 2 ──
+    r_cal += 1
+    econ_beta = REG.get("MA.econ_beta")
+    econ_se = REG.get("MA.econ_se")
+    if econ_beta and econ_se:
+        label_row(ws, r_cal, "СЛАБАЯ КАЛИБРОВКА (t < 2)", "", "β статистически незначим при 5%")
+        ws.cell(r_cal, 1).font = F_LABEL_B
+        formula_cell(ws, r_cal, 3,
+                     f"=IF(IFERROR(ABS('{NAME['MA']}'!$C${econ_beta})"
+                     f"/'{NAME['MA']}'!$C${econ_se},0)<2,1,0)",
+                     FMT_INT, bold=True)
+        ws.cell(r_cal, 9, "t = β/SE; критическое ~2.57 при df=5").font = F_NOTE
 
 
 def build_cogs(wb, cfg):
@@ -4046,23 +4075,30 @@ def build_scenarios(wb, cfg):
     for s_idx, s_name in enumerate(scen_names):
         ws.cell(6, 3 + s_idx, s_name).font = F_YEAR
 
-    # Show key macro assumptions per scenario
-    macro_keys = [
-        ("Ключевая ставка, %", "kr", FMT_PCT),
-        ("LME Aluminium, $/t", "lme1", FMT_MLN0),
-        ("USD/RUB", "fx", FMT_RATIO1),
-        ("Brent, $/bbl", "brent", FMT_MLN0),
-        ("CPI RU, %", "cpi", FMT_PCT),
-    ]
+    # Show key macro assumptions per scenario — dynamic from cfg
+    _factor_labels = {
+        "LME Aluminium": ("LME Aluminium, $/t", FMT_MLN0),
+        "LME Alumina": ("LME Alumina, $/t", FMT_MLN0),
+        "LME Nickel": ("LME Nickel, $/t", FMT_MLN0),
+        "LME Copper": ("LME Copper, $/t", FMT_MLN0),
+        "LME Palladium": ("LME Palladium, $/oz", FMT_MLN0),
+        "LME Platinum": ("LME Platinum, $/oz", FMT_MLN0),
+        "USD/RUB": ("USD/RUB", FMT_RATIO1),
+        "USD/CNY": ("USD/CNY", FMT_RATIO1),
+        "Brent": ("Brent, $/bbl", FMT_MLN0),
+        "CPI RU": ("CPI RU, %", FMT_PCT),
+        "PPI RU": ("PPI RU, %", FMT_PCT),
+        "GDP World": ("GDP World, %", FMT_PCT),
+    }
+    n_f = len(cfg["macro_factors"])
     r = 7
-    for label, suffix, fmt in macro_keys:
-        label_row(ws, r, label)
+    for fi, factor in enumerate(cfg["macro_factors"]):
+        disp_label, fmt = _factor_labels.get(factor, (factor, FMT_RATIO1))
+        label_row(ws, r, disp_label)
         for s_idx in range(3):
-            s_key = f"MA.s{s_idx+1}_{suffix}"
-            s_row = REG.get(s_key)
-            if s_row:
-                # First forecast year value from each scenario block
-                ref_cell(ws, r, 3 + s_idx, f"='{NAME['MA']}'!{fc_cols[0]}${s_row}", fmt)
+            # Compute row directly from scenario block structure
+            s_row = 6 + s_idx * (n_f + 3) + 2 + fi
+            ref_cell(ws, r, 3 + s_idx, f"='{NAME['MA']}'!{fc_cols[0]}${s_row}", fmt)
         r += 1
     r += 1
 
