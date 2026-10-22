@@ -1838,7 +1838,7 @@ def build_pl(wb, cfg):
                  f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
         # Interest ← 17_Debt (always negative in PL — expense)
         formula_cell(ws, REG["PL.interest"], c_idx,
-                     f"=-ABS('{NAME['DT']}'!{cl}${REG['DT.interest']})", FMT_MLN)
+                     f"=-'{NAME['DT']}'!{cl}${REG['DT.interest']}", FMT_MLN)
         # Interest income ← 14_OtherIS
         ref_cell(ws, REG["PL.interest_income"], c_idx,
                  f"='{NAME['OI']}'!{cl}${REG['OI.interest_income']}", FMT_MLN)
@@ -2788,14 +2788,14 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.su_oper_flow"], c_idx,
                      f"={ebitda_ref}-{tax_current}", FMT_MLN)
         formula_cell(ws, REG["DT.su_maint_capex"], c_idx,
-                     f"=ABS({capex_ref})*{cp_maint_share}", FMT_MLN)
+                     f"={capex_ref}*{cp_maint_share}", FMT_MLN)
         formula_cell(ws, REG["DT.su_growth_capex"], c_idx,
-                     f"=ABS({capex_ref})*(1-{cp_maint_share})", FMT_MLN)
+                     f"={capex_ref}*(1-{cp_maint_share})", FMT_MLN)
         formula_cell(ws, REG["DT.su_delta_nwc"], c_idx,
                      f"=MAX(0,{wc_ref})", FMT_MLN)
         # su_mandatory ← term mandatory
         ref_cell(ws, REG["DT.su_mandatory"], c_idx,
-                 f"=ABS({cl}{REG['DT.mandatory']})", FMT_MLN)
+                 f"={cl}{REG['DT.mandatory']}", FMT_MLN)
         # su_interest ← term interest estimate (no RC — pre-RC view)
         formula_cell(ws, REG["DT.su_interest"], c_idx,
                      f"={cl}{REG['DT.interest_term']}", FMT_MLN)
@@ -2938,10 +2938,10 @@ def build_debt(wb, cfg):
         # term_close = open - mandatory + refi + new_term - voluntary
         formula_cell(ws, REG["DT.term_close"], c_idx,
                      f"={cl}{REG['DT.term_open']}"
-                     f"-ABS({cl}{REG['DT.mandatory']})"
+                     f"-{cl}{REG['DT.mandatory']}"
                      f"+{cl}{REG['DT.refi']}"
                      f"+{cl}{REG['DT.new_term']}"
-                     f"-ABS({cl}{REG['DT.voluntary_term']})",
+                     f"-{cl}{REG['DT.voluntary_term']}",
                      FMT_MLN, bold=True)
 
         # ── C. REVOLVING CREDIT ──
@@ -3347,7 +3347,7 @@ def build_cf(wb, cfg):
                      FMT_MLN)
         # CFI = -capex + disp + other
         formula_cell(ws, r_cfi, c_idx,
-                     f"=-ABS({cl}{REG['CF.capex']})+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
+                     f"=-{cl}{REG['CF.capex']}+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
                      FMT_MLN, bold=True)
 
         # CFF_без_RC_и_NewTerm: deterministic financing flows only
@@ -3355,9 +3355,9 @@ def build_cf(wb, cfg):
         # = refi - mandatory - voluntary_term - lease - div + other
         # CFF_no_rc: excludes RC AND voluntary (voluntary is step-function → circular)
         cff_no_rc = (f"='{NAME['DT']}'!{cl}${REG['DT.refi']}"
-                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.mandatory']})"
-                     f"-ABS({cl}{REG['CF.lease_pay']})"
-                     f"-ABS({cl}{REG['CF.div_paid']})"
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.mandatory']}"
+                     f"-{cl}{REG['CF.lease_pay']}"
+                     f"-{cl}{REG['CF.div_paid']}"
                      f"+{cl}{REG['CF.other_cff']}")
         label_row(ws, REG["CF.cff_no_rc"], "CFF без RC", "mln") if c_idx == 3 + n_hist else None
         formula_cell(ws, REG["CF.cff_no_rc"], c_idx, cff_no_rc, FMT_MLN)
@@ -3368,7 +3368,7 @@ def build_cf(wb, cfg):
                      f"+'{NAME['DT']}'!{cl}${REG['DT.new_term']}"
                      f"+'{NAME['DT']}'!{cl}${REG['DT.rc_draw']}"
                      f"-'{NAME['DT']}'!{cl}${REG['DT.rc_repay']}"
-                     f"-ABS('{NAME['DT']}'!{cl}${REG['DT.voluntary_term']})",
+                     f"-'{NAME['DT']}'!{cl}${REG['DT.voluntary_term']}",
                      FMT_MLN, bold=True)
 
         # FX effect: reverse non-cash FX from NI
@@ -3455,11 +3455,11 @@ def build_equity(wb, cfg):
         # RE close = open + NI - div - buyback + other
         formula_cell(ws, REG["EQ.re_close"], c_idx,
                      f"={cl}{REG['EQ.re_open']}+{cl}{REG['EQ.ni']}"
-                     f"-ABS({cl}{REG['EQ.div']})-ABS({cl}{REG['EQ.buyback']})+{cl}{REG['EQ.other']}",
+                     f"-{cl}{REG['EQ.div']}-{cl}{REG['EQ.buyback']}+{cl}{REG['EQ.other']}",
                      FMT_MLN, bold=True)
         # Payout
         formula_cell(ws, REG["EQ.payout"], c_idx,
-                     f"=IFERROR(ABS({cl}{REG['EQ.div']})/{cl}{REG['EQ.ni']},0)", FMT_PCT)
+                     f"=IFERROR({cl}{REG['EQ.div']}/{cl}{REG['EQ.ni']},0)", FMT_PCT)
 
 
 def build_tax(wb, cfg):
@@ -3663,7 +3663,7 @@ def build_valuation(wb, cfg):
         ref_cell(ws, tax_r, c, f"={cp_tax_vl}", FMT_PCT)
         formula_cell(ws, nopat_r, c, f"={cl}{ebit_r}*(1-{cl}{tax_r})", FMT_MLN, bold=True)
         ref_cell(ws, da_r, c, f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
-        ref_cell(ws, capex_r, c, f"=ABS('{NAME['PP']}'!{cl}${REG['PP.capex']})", FMT_MLN)
+        ref_cell(ws, capex_r, c, f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
         ref_cell(ws, dwc_r, c, f"='{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}", FMT_MLN)
         formula_cell(ws, fcff_r, c,
                      f"={cl}{nopat_r}+{cl}{da_r}-{cl}{capex_r}-{cl}{dwc_r}", FMT_MLN, bold=True)
@@ -3871,13 +3871,14 @@ def build_score(wb, cfg):
     label_row(ws, r_rating, "Рейтинг (S&P эквивалент)", "")
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
-        # Score → Rating lookup
-        # Д9: recalibrated thresholds — Rusal B/CCC should score 15-30
+        # Score → Rating lookup (thresholds from CP — no hardcoded constants)
+        cp_th = {g: f"'Control_Panel'!$C${REG.get(f'CP.sc_th_{g}', 120)}"
+                 for g in ["aaa", "aa", "a", "bbb", "bb", "b", "ccc"]}
         formula_cell(ws, r_rating, c,
-                     f'=IF({cl}{r_final}>=85,"AAA",IF({cl}{r_final}>=75,"AA",'
-                     f'IF({cl}{r_final}>=65,"A",IF({cl}{r_final}>=55,"BBB",'
-                     f'IF({cl}{r_final}>=40,"BB",IF({cl}{r_final}>=25,"B",'
-                     f'IF({cl}{r_final}>=12,"CCC","D")))))))',
+                     f'=IF({cl}{r_final}>={cp_th["aaa"]},"AAA",IF({cl}{r_final}>={cp_th["aa"]},"AA",'
+                     f'IF({cl}{r_final}>={cp_th["a"]},"A",IF({cl}{r_final}>={cp_th["bbb"]},"BBB",'
+                     f'IF({cl}{r_final}>={cp_th["bb"]},"BB",IF({cl}{r_final}>={cp_th["b"]},"B",'
+                     f'IF({cl}{r_final}>={cp_th["ccc"]},"CCC","D")))))))',
                      FMT_TEXT)
 
 
@@ -4522,6 +4523,21 @@ def build_control_panel(wb, cfg):
         label_row(ws, r, param)
         fmt = FMT_PCT if "weight" in param or "margin" in param else FMT_RATIO1
         input_cell(ws, r, 3, val, fmt)
+        REG[key] = r; r += 1
+    r += 1
+    # Rating thresholds (score → letter grade)
+    section_header(ws, r, "РЕЙТИНГОВАЯ ШКАЛА (Score → Grade)"); r += 1
+    for grade, threshold, key in [
+        ("AAA ≥", 85, "CP.sc_th_aaa"),
+        ("AA ≥", 75, "CP.sc_th_aa"),
+        ("A ≥", 65, "CP.sc_th_a"),
+        ("BBB ≥", 55, "CP.sc_th_bbb"),
+        ("BB ≥", 40, "CP.sc_th_bb"),
+        ("B ≥", 25, "CP.sc_th_b"),
+        ("CCC ≥", 12, "CP.sc_th_ccc"),
+    ]:
+        label_row(ws, r, grade)
+        input_cell(ws, r, 3, threshold, FMT_INT)
         REG[key] = r; r += 1
 
     # ── РЕЗУЛЬТАТ: СВОДКА ──

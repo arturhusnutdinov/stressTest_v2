@@ -557,5 +557,12 @@
   "MA.act_lme_pt": 42,
   "MA.s1_lme_pt": 11,
   "MA.s2_lme_pt": 21,
-  "MA.s3_lme_pt": 31
+  "MA.s3_lme_pt": 31,
+  "CP.sc_th_aaa": 123,
+  "CP.sc_th_aa": 124,
+  "CP.sc_th_a": 125,
+  "CP.sc_th_bbb": 126,
+  "CP.sc_th_bb": 127,
+  "CP.sc_th_b": 128,
+  "CP.sc_th_ccc": 129
 }
