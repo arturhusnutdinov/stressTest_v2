@@ -3079,15 +3079,17 @@ def build_debt(wb, cfg):
     hi_int = REG.get("HI.interest")
     for hc in range(3, 3 + n_hist):
         cl_h = get_column_letter(hc)
+        # D1 audit: debt in 02_Hist is positive → no ABS needed
         if hi_st and hi_lt:
-            td = f"ABS('{NAME['HI']}'!{cl_h}${hi_st})+ABS('{NAME['HI']}'!{cl_h}${hi_lt})"
+            td = f"'{NAME['HI']}'!{cl_h}${hi_st}+'{NAME['HI']}'!{cl_h}${hi_lt}"
             for k in ["term_open", "term_close", "open", "close"]:
                 ref_cell(ws, REG[f"DT.{k}"], hc, f"={td}", FMT_MLN)
-            ref_cell(ws, REG["DT.st"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_st})", FMT_MLN)
-            ref_cell(ws, REG["DT.lt"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_lt})", FMT_MLN)
+            ref_cell(ws, REG["DT.st"], hc, f"='{NAME['HI']}'!{cl_h}${hi_st}", FMT_MLN)
+            ref_cell(ws, REG["DT.lt"], hc, f"='{NAME['HI']}'!{cl_h}${hi_lt}", FMT_MLN)
             if hi_cash:
-                ref_cell(ws, REG["DT.nd"], hc, f"={td}-ABS('{NAME['HI']}'!{cl_h}${hi_cash})", FMT_MLN)
+                ref_cell(ws, REG["DT.nd"], hc, f"={td}-'{NAME['HI']}'!{cl_h}${hi_cash}", FMT_MLN)
         if hi_int:
+            # Interest is negative in PL → ABS to get positive value for debt module
             ref_cell(ws, REG["DT.interest_term"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
             ref_cell(ws, REG["DT.interest"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
         if hi_int and hi_st and hi_lt:
@@ -4566,7 +4568,30 @@ def build_control_panel(wb, cfg):
         "nol": ("[ДАННЫЕ]", "НК РФ, перенос убытков", "[ДАННЫЕ]"),
         "buyback": ("[ОЦЕНКА]", "Программа обратного выкупа", "[ПАР]"),
         "r²": ("[РАСЧЁТ]", "01_Macro — OLS RSQ", "[РАСЧЁТ]"),
+        # Russian-label params that don't match English prefixes
+        "Активный сценарий": ("[ПАР]", "Переключатель (1=Base, 2=Stress, 3=Severe)", "[ПАР]"),
+        "R²": ("[РАСЧЁТ]", "01_Macro — OLS RSQ формула", "[РАСЧЁТ]"),
+        "RC ставка": ("[ДОГОВОР]", "Кредитное соглашение + КС ЦБ", "[ДОГОВОР]"),
+        "Commitment fee": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
+        "Target ND": ("[ОЦЕНКА]", "Целевой leverage (суждение аналитика)", "[ПАР]"),
+        "Доступность": ("[ОЦЕНКА]", "Оценка доступности рынка долга", "[ПАР]"),
+        "Премия за досрочное": ("[ДОГОВОР]", "Условия облигационных выпусков", "[ДОГОВОР]"),
+        "Доля выручки": ("[ДАННЫЕ]", "МСФО прим. географические сегменты", "[ДАННЫЕ]"),
+        "Доля затрат": ("[ДАННЫЕ]", "МСФО прим. географические сегменты", "[ДАННЫЕ]"),
     }
+    # Also match by exact label (for Russian labels)
+    for reg_key, row_num in list(REG.items()):
+        if not reg_key.startswith("CP."):
+            continue
+        if ws.cell(row_num, 9).value:
+            continue
+        cell_label = str(ws.cell(row_num, 1).value or "")
+        for prefix, (method, source, role) in i1_labels.items():
+            if prefix in cell_label:
+                ws.cell(row_num, 9, method).font = F_NOTE
+                ws.cell(row_num, 10, source).font = F_NOTE
+                ws.cell(row_num, 11, role).font = F_NOTE
+                break
     for reg_key, row_num in list(REG.items()):
         if not reg_key.startswith("CP."):
             continue
