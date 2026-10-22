@@ -3750,13 +3750,12 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         nd_ebitda = f"'{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}"
-        # Audit v7: linear scale 0-16x turnovers, monotonically decreasing
-        # 0x→80, 4x→61, 8x→42, 12x→24, 16x→5
-        # score = MAX(5, 80 - ND/EBITDA × 4.7)
-        # IF EBITDA ≤ 0: floor score 5 (negative EBITDA = worst leverage, not best)
+        # F3 audit: scorecard coefficients from CP (not hardcoded)
+        cp_lev_slope = f"'Control_Panel'!$C${REG.get('CP.sc_lev_slope', 110)}"
+        cp_lev_max = f"'Control_Panel'!$C${REG.get('CP.sc_lev_max', 111)}"
         formula_cell(ws, r_lev, c,
                      f"=IF('{NAME['PL']}'!{cl}${REG['PL.ebitda']}<=0,5,"
-                     f"MAX(5,MIN(80,80-{nd_ebitda}*4.7)))", FMT_RATIO1)
+                     f"MAX(5,MIN({cp_lev_max},{cp_lev_max}-{nd_ebitda}*{cp_lev_slope})))", FMT_RATIO1)
 
     # Coverage: ICR → score
     r_cov = REG["SC.coverage"]
@@ -3767,8 +3766,10 @@ def build_score(wb, cfg):
         icr = f"'{NAME['RA']}'!{cl}${REG['RA.icr']}"
         # Д9: recalibrated — more resolution at low ICR
         # 1x→12, 1.5x→20, 2x→30, 3x→42, 5x→60, 10x→80
+        cp_cov_scale = f"'Control_Panel'!$C${REG.get('CP.sc_cov_scale', 112)}"
+        cp_cov_max = f"'Control_Panel'!$C${REG.get('CP.sc_cov_max', 113)}"
         formula_cell(ws, r_cov, c,
-                     f"=MAX(5,MIN(88,{icr}*12))", FMT_RATIO1)
+                     f"=MAX(5,MIN({cp_cov_max},{icr}*{cp_cov_scale}))", FMT_RATIO1)
 
     # Profitability: EBITDA margin → score (TTC-adjusted)
     r_prof = REG["SC.profit"]
@@ -3778,8 +3779,11 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         margin = f"'{NAME['RA']}'!{cl}${REG['RA.ebitda_margin']}"
+        cp_prof_cap = f"'Control_Panel'!$C${REG.get('CP.sc_prof_cap', 114)}"
+        cp_prof_scale = f"'Control_Panel'!$C${REG.get('CP.sc_prof_scale', 115)}"
+        cp_prof_max = f"'Control_Panel'!$C${REG.get('CP.sc_prof_max', 116)}"
         formula_cell(ws, r_prof, c,
-                     f"=MAX(5,MIN(82,MIN({margin},{cp_cycle}*1.5)*400))", FMT_RATIO1)
+                     f"=MAX(5,MIN({cp_prof_max},MIN({margin},{cp_cycle}*{cp_prof_cap})*{cp_prof_scale}))", FMT_RATIO1)
 
     # Liquidity: Current ratio + Cash/Debt
     r_liq = REG["SC.liquidity"]
@@ -3787,8 +3791,10 @@ def build_score(wb, cfg):
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         cr = f"'{NAME['RA']}'!{cl}${REG['RA.current']}"
+        cp_liq_scale = f"'Control_Panel'!$C${REG.get('CP.sc_liq_scale', 117)}"
+        cp_liq_max = f"'Control_Panel'!$C${REG.get('CP.sc_liq_max', 118)}"
         formula_cell(ws, r_liq, c,
-                     f"=MAX(5,MIN(80,{cr}*40))", FMT_RATIO1)
+                     f"=MAX(5,MIN({cp_liq_max},{cr}*{cp_liq_scale}))", FMT_RATIO1)
 
     # Weighted score
     section_header(ws, REG["SC.base"] - 1, "ИТОГОВЫЙ РЕЙТИНГ")
@@ -4463,6 +4469,16 @@ def build_control_panel(wb, cfg):
         ("Industry adjustment", cfg.get("rating_ind_adj", -6), "CP.sc_ind_adj"),
         ("Size adjustment", cfg.get("rating_size_adj", 2), "CP.sc_size_adj"),
         ("Cycle avg EBITDA margin", cfg.get("rating_cycle_margin", 0.20), "CP.sc_cycle_margin"),
+        # F3 audit: scorecard methodology constants (was hardcoded in formulas)
+        ("Leverage slope (ND/EBITDA → балл)", 4.7, "CP.sc_lev_slope"),
+        ("Leverage max score", 80.0, "CP.sc_lev_max"),
+        ("Coverage scale (ICR → балл)", 12.0, "CP.sc_cov_scale"),
+        ("Coverage max score", 88.0, "CP.sc_cov_max"),
+        ("Profitability margin cap", 1.5, "CP.sc_prof_cap"),
+        ("Profitability scale (margin → балл)", 400.0, "CP.sc_prof_scale"),
+        ("Profitability max score", 82.0, "CP.sc_prof_max"),
+        ("Liquidity scale (CR → балл)", 40.0, "CP.sc_liq_scale"),
+        ("Liquidity max score", 80.0, "CP.sc_liq_max"),
     ]:
         label_row(ws, r, param)
         fmt = FMT_PCT if "weight" in param or "margin" in param else FMT_RATIO1
@@ -4489,6 +4505,58 @@ def build_control_panel(wb, cfg):
             if row_src:
                 ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
         r += 1
+
+
+    # ── I1 audit: source labels for all CP parameters ──
+    # Bulk apply Method/Source/Role to any CP row that doesn't already have col I
+    i1_labels = {
+        # Key: CP reg key prefix → (Method, Source, Role)
+        "cogs_": ("[РАСЧЁТ]", "03_Assump — МСФО ОПУ", "[РАСЧЁТ]"),
+        "sga_": ("[РАСЧЁТ]", "03_Assump — МСФО ОПУ", "[РАСЧЁТ]"),
+        "da_rate": ("[РАСЧЁТ]", "03_Assump — МСФО прим. 11", "[РАСЧЁТ]"),
+        "sustaining": ("[РАСЧЁТ]", "03_Assump — МСФО ОДДС", "[РАСЧЁТ]"),
+        "expansion": ("[ОЦЕНКА]", "Суждение аналитика", "[ПАР]"),
+        "useful_life": ("[ДАННЫЕ]", "МСФО прим. 11", "[ДАННЫЕ]"),
+        "disposal": ("[ОЦЕНКА]", "Исторический средний", "[ПАР]"),
+        "wc_": ("[РАСЧЁТ]", "03_Assump — МСФО ОФП/ОПУ", "[РАСЧЁТ]"),
+        "min_cash": ("[ОЦЕНКА]", "Мин. остаток по соглашению", "[ПАР]"),
+        "max_cash": ("[ОЦЕНКА]", "4× min_cash", "[ПАР]"),
+        "rc_limit": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
+        "rc_spread": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
+        "penalty": ("[ДОГОВОР]", "Методология: штраф за недостаточность", "[НОРМ]"),
+        "tax_rate": ("[ДАННЫЕ]", "НК РФ, ставка 20%", "[ДАННЫЕ]"),
+        "payout": ("[ДАННЫЕ]", "Дивидендная политика эмитента", "[ДАННЫЕ]"),
+        "wacc_": ("[ОЦЕНКА]", "Рыночный консенсус / CAPM", "[ПАР]"),
+        "terminal": ("[ОЦЕНКА]", "Рыночные мультипликаторы", "[ПАР]"),
+        "sc_w_": ("[НОРМ]", "S&P 4-factor скоркарта", "[НОРМ]"),
+        "sc_ind": ("[ОЦЕНКА]", "Отраслевой поправочный коэфф.", "[ПАР]"),
+        "sc_size": ("[ОЦЕНКА]", "Размерный поправочный коэфф.", "[ПАР]"),
+        "sc_cycle": ("[ДАННЫЕ]", "Средний за цикл (5 лет)", "[ДАННЫЕ]"),
+        "sc_lev_": ("[НОРМ]", "Методология скоркарты", "[НОРМ]"),
+        "sc_cov_": ("[НОРМ]", "Методология скоркарты", "[НОРМ]"),
+        "sc_prof_": ("[НОРМ]", "Методология скоркарты", "[НОРМ]"),
+        "sc_liq_": ("[НОРМ]", "Методология скоркарты", "[НОРМ]"),
+        "cov_": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
+        "alumina": ("[ДАННЫЕ]", "Отношение цен LME", "[ДАННЫЕ]"),
+        "pass_through": ("[ОЦЕНКА]", "Контрактная жёсткость", "[ПАР]"),
+        "rev_method": ("[ОЦЕНКА]", "Метод прогноза выручки", "[ПАР]"),
+        "rev_elast": ("[РАСЧЁТ]", "01_Macro — OLS SLOPE", "[РАСЧЁТ]"),
+        "ppi_beta": ("[ОЦЕНКА]", "Чувствительность COGS к PPI", "[ПАР]"),
+        "mr_damp": ("[ОЦЕНКА]", "Dampening mean-reversion", "[ПАР]"),
+        "term_tenor": ("[ДАННЫЕ]", "Raw_IFRS — средневзвешенный тенор", "[ДАННЫЕ]"),
+    }
+    for reg_key, row_num in list(REG.items()):
+        if not reg_key.startswith("CP."):
+            continue
+        param_name = reg_key[3:]  # strip "CP."
+        if ws.cell(row_num, 9).value:  # already has Method
+            continue
+        for prefix, (method, source, role) in i1_labels.items():
+            if prefix in param_name:
+                ws.cell(row_num, 9, method).font = F_NOTE
+                ws.cell(row_num, 10, source).font = F_NOTE
+                ws.cell(row_num, 11, role).font = F_NOTE
+                break
 
 
 def build_guide(wb, cfg):
