@@ -349,92 +349,106 @@ def build_macro(wb, cfg):
     # Store active scenario base row for other sheets
     REG["MA.act_base"] = act_base + 2
 
-    # ── Econometric display: OLS Revenue ~ β × Δln(Factor) ──
+    # ── Econometric block: OLS Revenue ~ β × Δln(Factor) ──
+    # Uses FULL history (2018-2025, 8 years → 7 Δln points) from historical macro block
+    # NOT the 3-year display. This gives stable OLS (R² meaningful, β robust).
     econ_base = act_base + n_f + 4
     section_header(ws, econ_base, "ЭКОНОМЕТРИКА: Revenue ~ β × Δln(Factor)")
-    ws.cell(econ_base + 1, 1, "OLS регрессия считается формулами Excel (SLOPE/RSQ/INTERCEPT)").font = F_NOTE
-    # Δln helper rows + OLS results
-    r_beta = econ_base + 5   # +2 for Δln rows, +1 blank
-    r_r2 = econ_base + 6
-    r_alpha = econ_base + 7
-    r_nobs = econ_base + 8
-    r_se = econ_base + 9
-    r_period = econ_base + 10
-    # Econometric block: ALL computed by Excel formulas (audit G1)
-    # Δln series for OLS: rows for LN(Rev_t/Rev_t-1) and LN(Factor_t/Factor_t-1)
-    hist = cfg["hist_years"][-3:]
-    n_h = len(hist)
-    rev_row = REG.get("HI.revenue", 7)  # 02_Hist revenue row
+    ws.cell(econ_base + 1, 1, "OLS на полной истории (SLOPE/RSQ/INTERCEPT — формулы Excel)").font = F_NOTE
 
-    # Find main macro factor row (first segment's driver)
+    # Historical macro data lives in rows 56+ (year headers in r56, data in r57+)
+    # We need: Revenue row aligned to same years, and the main factor row
+    # Revenue: fill_data writes to a dedicated row here (fill_data populates)
+    # Factor: find the right row in historical block by name
+
     seg0 = cfg["segments"][0] if cfg["segments"] else {}
     factor_key = seg0.get("driver", "lme_al")
-    # Factor is in the historical macro block — use act_base row
-    act_base_row = REG.get("MA.act_base", act_base + 2)
 
-    # Helper rows: Δln(Revenue), Δln(Factor) — for SLOPE/RSQ
-    r_dln_rev = r_beta - 3
-    r_dln_fac = r_beta - 2
+    # Layout: years header, revenue, factor, Δln_rev, Δln_fac, blank, OLS results
+    r_years = econ_base + 2
+    r_rev_hist = econ_base + 3
+    r_fac_hist = econ_base + 4
+    r_dln_rev = econ_base + 5
+    r_dln_fac = econ_base + 6
+    r_beta = econ_base + 8
+    r_r2 = econ_base + 9
+    r_alpha = econ_base + 10
+    r_nobs = econ_base + 11
+    r_se = econ_base + 12
+    r_period = econ_base + 13
+    REG["MA.econ_years"] = r_years
+    REG["MA.econ_rev_hist"] = r_rev_hist
+    REG["MA.econ_fac_hist"] = r_fac_hist
+
+    # Full history years (fill_data populates C:J = 2018-2025)
+    full_hist = list(range(2018, 2026))  # 8 years
+    n_full = len(full_hist)
+    label_row(ws, r_years, "Год")
+    for i, yr in enumerate(full_hist):
+        ws.cell(r_years, 3 + i, yr).font = F_NOTE
+
+    label_row(ws, r_rev_hist, "Revenue (mln)", "mln", "Заполняется из 02_Hist")
+    ws.cell(r_rev_hist, 9, "[ДАННЫЕ] МСФО ОПУ").font = F_NOTE
+    # fill_data will populate these cells
+
+    label_row(ws, r_fac_hist, f"Factor: {factor_key}", "", "Заполняется из исторических данных")
+    ws.cell(r_fac_hist, 9, "[ДАННЫЕ] MOEX / LME").font = F_NOTE
+    # fill_data will populate these cells
+
+    # Δln formulas (cols D:J = 2nd through 8th year)
     label_row(ws, r_dln_rev, "Δln(Revenue)", "", "LN(Rev_t / Rev_{t-1})")
-    label_row(ws, r_dln_fac, f"Δln(Factor: {factor_key})", "", f"LN(F_t / F_{{t-1}})")
     ws.cell(r_dln_rev, 9, "[РАСЧЁТ] в книге").font = F_NOTE
+    label_row(ws, r_dln_fac, f"Δln({factor_key})", "", "LN(F_t / F_{t-1})")
     ws.cell(r_dln_fac, 9, "[РАСЧЁТ] в книге").font = F_NOTE
 
-    # Δln formulas for cols D:E (need t-1, so start from 2nd hist year)
-    for i in range(1, n_h):
-        c = 3 + i  # D=4, E=5
+    for i in range(1, n_full):
+        c = 3 + i
         prev = get_column_letter(c - 1)
         cl = get_column_letter(c)
-        # Δln(Rev) = LN(Rev_t / Rev_{t-1})
+        # Δln = LN(t/t-1); skip if either value is 0 or missing
         formula_cell(ws, r_dln_rev, c,
-                     f"=IFERROR(LN(ABS('{NAME['HI']}'!{cl}${rev_row})/ABS('{NAME['HI']}'!{prev}${rev_row})),0)",
+                     f"=IF(AND({cl}${r_rev_hist}>0,{prev}${r_rev_hist}>0),LN({cl}${r_rev_hist}/{prev}${r_rev_hist}),\"\")",
                      FMT_RATIO)
-        # Δln(Factor) = LN(Factor_t / Factor_{t-1})
         formula_cell(ws, r_dln_fac, c,
-                     f"=IFERROR(LN({cl}${act_base_row}/{prev}${act_base_row}),0)",
+                     f"=IF(AND({cl}${r_fac_hist}>0,{prev}${r_fac_hist}>0),LN({cl}${r_fac_hist}/{prev}${r_fac_hist}),\"\")",
                      FMT_RATIO)
 
-    # OLS formulas: SLOPE, RSQ, INTERCEPT — Excel native functions
-    # Range for OLS: D:E (2 points for 3 hist years; more if hist longer)
-    ols_y_range = f"D{r_dln_rev}:{get_column_letter(2 + n_h)}{r_dln_rev}"
-    ols_x_range = f"D{r_dln_fac}:{get_column_letter(2 + n_h)}{r_dln_fac}"
+    # OLS range: D:J (7 Δln points from 8 years)
+    last_col = get_column_letter(2 + n_full)
+    ols_y = f"D{r_dln_rev}:{last_col}{r_dln_rev}"
+    ols_x = f"D{r_dln_fac}:{last_col}{r_dln_fac}"
 
     label_row(ws, r_beta, "β (эластичность)", "x", "SLOPE(Δln Rev, Δln Factor)")
-    formula_cell(ws, r_beta, 3, f"=IFERROR(SLOPE({ols_y_range},{ols_x_range}),1)", FMT_RATIO)
+    formula_cell(ws, r_beta, 3, f"=IFERROR(SLOPE({ols_y},{ols_x}),1)", FMT_RATIO)
     ws.cell(r_beta, 9, "[РАСЧЁТ] SLOPE() в книге").font = F_NOTE
-    ws.cell(r_beta, 10, f"02_Hist revenue + 01_Macro factor").font = F_NOTE
+    ws.cell(r_beta, 10, f"Revenue + {factor_key}").font = F_NOTE
     ws.cell(r_beta, 11, "[РАСЧЁТ]").font = F_NOTE
 
     label_row(ws, r_r2, "R² (коэфф. детерминации)", "%")
-    formula_cell(ws, r_r2, 3, f"=IFERROR(RSQ({ols_y_range},{ols_x_range}),0)", FMT_PCT2)
+    formula_cell(ws, r_r2, 3, f"=IFERROR(RSQ({ols_y},{ols_x}),0)", FMT_PCT2)
     ws.cell(r_r2, 9, "[РАСЧЁТ] RSQ() в книге").font = F_NOTE
     ws.cell(r_r2, 11, "[РАСЧЁТ]").font = F_NOTE
 
     label_row(ws, r_alpha, "α (константа)", "x")
-    formula_cell(ws, r_alpha, 3, f"=IFERROR(INTERCEPT({ols_y_range},{ols_x_range}),0)", FMT_RATIO)
+    formula_cell(ws, r_alpha, 3, f"=IFERROR(INTERCEPT({ols_y},{ols_x}),0)", FMT_RATIO)
     ws.cell(r_alpha, 9, "[РАСЧЁТ] INTERCEPT() в книге").font = F_NOTE
     ws.cell(r_alpha, 11, "[РАСЧЁТ]").font = F_NOTE
 
-    # N, SE, Period — also formulas
     label_row(ws, r_nobs, "N (число наблюдений)", "шт")
-    formula_cell(ws, r_nobs, 3, f"=COUNT({ols_y_range})", FMT_INT)
-    ws.cell(r_nobs, 9, "[РАСЧЁТ] COUNT() в книге").font = F_NOTE
+    formula_cell(ws, r_nobs, 3, f"=COUNT({ols_y})", FMT_INT)
+    ws.cell(r_nobs, 9, "[РАСЧЁТ] COUNT()").font = F_NOTE
     ws.cell(r_nobs, 11, "[РАСЧЁТ]").font = F_NOTE
 
     label_row(ws, r_se, "SE (стандартная ошибка β)", "x")
-    # SE = STEYX / (STDEV_X × √N)
     formula_cell(ws, r_se, 3,
-                 f"=IFERROR(STEYX({ols_y_range},{ols_x_range})/(STDEV({ols_x_range})*SQRT(COUNT({ols_x_range}))),0)",
+                 f"=IFERROR(STEYX({ols_y},{ols_x})/(STDEV({ols_x})*SQRT(COUNT({ols_x}))),0)",
                  FMT_RATIO)
-    ws.cell(r_se, 9, "[РАСЧЁТ] STEYX/STDEV/SQRT в книге").font = F_NOTE
+    ws.cell(r_se, 9, "[РАСЧЁТ] STEYX/STDEV/SQRT").font = F_NOTE
     ws.cell(r_se, 11, "[РАСЧЁТ]").font = F_NOTE
 
     label_row(ws, r_period, "Период оценки", "")
-    # Period: first_year & "-" & last_year
-    first_yr_col = get_column_letter(4)  # D = 2nd hist year (first with Δln)
-    last_yr_col = get_column_letter(2 + n_h)
-    ws.cell(r_period, 3, f"{hist[0]}-{hist[-1]}").font = F_INPUT
-    ws.cell(r_period, 9, "Годовые данные, Δln-трансформация").font = F_NOTE
+    ws.cell(r_period, 3, f"{full_hist[0]}-{full_hist[-1]}").font = F_INPUT
+    ws.cell(r_period, 9, "Годовые, Δln-трансформация").font = F_NOTE
     ws.cell(r_period, 11, "[ДАННЫЕ]").font = F_NOTE
     REG["MA.econ_beta"] = r_beta
     REG["MA.econ_r2"] = r_r2

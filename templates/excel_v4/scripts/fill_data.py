@@ -605,7 +605,8 @@ def fill_macro(wb, data: dict, company: str):
         factors.setdefault(item["factor"], {})[item["year"]] = item["value"]
 
     # Find empty rows after existing content to add historical macro
-    r = 55  # After scenario sections
+    # Start after OLS block (econ_period row + 2 blank)
+    r = REG.get("MA.econ_period", 61) + 2
     section_header(ws, r, "ИСТОРИЧЕСКИЕ МАКРО-ФАКТОРЫ")
     r += 1
     year_headers(ws, r, hist_years, [])
@@ -846,11 +847,47 @@ def fill_revenue(wb, data: dict, company: str):
         # Forecast: DON'T override — build_model creates formulas in 11_Segments
         # Write OLS results to 01_Macro econ block (CP.rev_elasticity is formula → 01_Macro)
         if factor_name and beta_price != 1.0:
-            # G1 audit: Econometrics are now Excel formulas (SLOPE/RSQ/INTERCEPT)
-            # in 01_Macro. Do NOT overwrite with Python-computed values.
-            # CP.rev_elasticity reads from 01_Macro formula.
-            # Data (revenue + factor history) already in 02_Hist + 01_Macro → formulas will compute.
-            print(f"    {seg_label} OLS β={beta_price:.3f} (Excel SLOPE will compute from data)")
+            # G1 audit: Econometrics in Excel (SLOPE/RSQ/INTERCEPT formulas).
+            # Fill the OLS data block (revenue + factor for 2018-2025) so formulas compute.
+            ws_ma = wb["01_Macro"]
+            r_rev_hist = REG.get("MA.econ_rev_hist")
+            r_fac_hist = REG.get("MA.econ_fac_hist")
+            r_years = REG.get("MA.econ_years")
+
+            if r_rev_hist and r_fac_hist:
+                # Revenue history from source data (full range)
+                rev_hist = data.get("is", {}).get("revenue", {})
+                # Factor history from macro data
+                fac_name_map = {
+                    "lme_aluminium": "lme_al", "lme_al": "lme_al",
+                    "lme_nickel": "lme_nickel", "lme_copper": "lme_copper",
+                    "brent": "brent",
+                }
+                fac_key = fac_name_map.get(factor_name.lower().replace(" ", "_"), factor_name.lower())
+                macro_data = data.get("macro", [])
+                fac_hist = {}
+                for item in macro_data:
+                    if item.get("factor", "").lower().replace(" ", "_") == factor_name.lower().replace(" ", "_"):
+                        fac_hist[item["year"]] = item["value"]
+
+                full_years = list(range(2018, 2026))
+                filled = 0
+                for i, yr in enumerate(full_years):
+                    c = 3 + i
+                    # Revenue
+                    rev_val = rev_hist.get(yr)
+                    if rev_val is not None:
+                        ws_ma.cell(r_rev_hist, c, round(abs(rev_val), 1)).font = F_INPUT
+                        ws_ma.cell(r_rev_hist, c).number_format = FMT_MLN
+                        filled += 1
+                    # Factor
+                    fac_val = fac_hist.get(yr)
+                    if fac_val is not None:
+                        ws_ma.cell(r_fac_hist, c, round(fac_val, 2)).font = F_INPUT
+                        ws_ma.cell(r_fac_hist, c).number_format = FMT_RATIO
+
+                print(f"    OLS data block: {filled} revenue + {len(fac_hist)} factor values for 2018-2025")
+            print(f"    {seg_label} OLS β computed by Excel SLOPE from data block")
 
 
 def fill_debt_schedule(wb, data: dict, company: str):
