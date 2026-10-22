@@ -894,8 +894,9 @@ def build_hist(wb, cfg):
         nca_keys = ["ppe_net", "rou", "goodwill", "intang", "dta", "other_nca"]
         for c in range(3, 3 + n_hist_full):
             cl = get_column_letter(c)
-            ca_sum = "+".join(f"ABS({cl}{REG.get(f'HI.{k}', 99)})" for k in ca_keys if REG.get(f"HI.{k}"))
-            nca_sum = "+".join(f"ABS({cl}{REG.get(f'HI.{k}', 99)})" for k in nca_keys if REG.get(f"HI.{k}"))
+            # D1 audit: signed sums (assets positive by convention)
+            ca_sum = "+".join(f"{cl}{REG.get(f'HI.{k}', 99)}" for k in ca_keys if REG.get(f"HI.{k}"))
+            nca_sum = "+".join(f"{cl}{REG.get(f'HI.{k}', 99)}" for k in nca_keys if REG.get(f"HI.{k}"))
             if ca_sum:
                 formula_cell(ws, hi_tca, c, f"={ca_sum}", FMT_MLN)
             if nca_sum:
@@ -1651,16 +1652,16 @@ def build_bs(wb, cfg):
         formula_cell(ws, r_ta, c_idx,
                      f"={cl}{r_tca}+{cl}{r_tnca}", FMT_MLN, bold=True)
 
-        # TCL = sum of ABS(CL items) — handles negative tax_pay
+        # D1 audit: TCL = signed sum (no ABS — sign convention: liabilities positive)
         cl_keys = ["ap", "st_debt", "lease_cl", "tax_pay", "other_cl"]
         formula_cell(ws, r_tcl, c_idx,
-                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in cl_keys),
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in cl_keys),
                      FMT_MLN, bold=True)
 
-        # TNCL = sum of ABS(NCL items)
+        # D1 audit: TNCL = signed sum (no ABS)
         ncl_keys = ["lt_debt", "lease_ncl", "prov", "dtl", "other_ncl"]
         formula_cell(ws, r_tncl, c_idx,
-                     "=" + "+".join(f"ABS({cl}{REG[f'BS.{k}']})" for k in ncl_keys),
+                     "=" + "+".join(f"{cl}{REG[f'BS.{k}']}" for k in ncl_keys),
                      FMT_MLN, bold=True)
 
         # TL = TCL + TNCL
@@ -4544,6 +4545,27 @@ def build_control_panel(wb, cfg):
         "ppi_beta": ("[ОЦЕНКА]", "Чувствительность COGS к PPI", "[ПАР]"),
         "mr_damp": ("[ОЦЕНКА]", "Dampening mean-reversion", "[ПАР]"),
         "term_tenor": ("[ДАННЫЕ]", "Raw_IFRS — средневзвешенный тенор", "[ДАННЫЕ]"),
+        "active": ("[ПАР]", "Переключатель сценария (1/2/3)", "[ПАР]"),
+        "ewa_half": ("[ОЦЕНКА]", "Период полураспада EWA", "[ПАР]"),
+        "rc_ставка": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
+        "commitment": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
+        "maint_share": ("[ОЦЕНКА]", "Доля поддерж. CapEx от DA", "[ПАР]"),
+        "sweep": ("[ОЦЕНКА]", "Политика добровольного погашения", "[ПАР]"),
+        "target_nd": ("[ОЦЕНКА]", "Целевой leverage аналитика", "[ПАР]"),
+        "buffer": ("[ОЦЕНКА]", "Буфер сверх min_cash", "[ПАР]"),
+        "refi": ("[ОЦЕНКА]", "Предпосылка рефинансирования", "[ПАР]"),
+        "rc_trigger": ("[ОЦЕНКА]", "Порог использования RC", "[ПАР]"),
+        "spread_base": ("[ДАННЫЕ]", "Текущий рыночный spread", "[ДАННЫЕ]"),
+        "spread_step": ("[ОЦЕНКА]", "Чувствительность к leverage", "[ПАР]"),
+        "доступность": ("[ОЦЕНКА]", "Доступность рынка долга", "[ПАР]"),
+        "досрочн": ("[ДОГОВОР]", "Условия досрочного погашения", "[ДОГОВОР]"),
+        "fx_usd": ("[ДАННЫЕ]", "Макросценарий ΔFX", "[ДАННЫЕ]"),
+        "fixed_mat": ("[ДАННЫЕ]", "Себестоимость: постоянная $/т", "[ДАННЫЕ]"),
+        "доля_выручки": ("[ДАННЫЕ]", "Валютная структура выручки", "[ДАННЫЕ]"),
+        "доля_затрат": ("[ДАННЫЕ]", "Валютная структура затрат", "[ДАННЫЕ]"),
+        "nol": ("[ДАННЫЕ]", "НК РФ, перенос убытков", "[ДАННЫЕ]"),
+        "buyback": ("[ОЦЕНКА]", "Программа обратного выкупа", "[ПАР]"),
+        "r²": ("[РАСЧЁТ]", "01_Macro — OLS RSQ", "[РАСЧЁТ]"),
     }
     for reg_key, row_num in list(REG.items()):
         if not reg_key.startswith("CP."):
