@@ -4010,127 +4010,117 @@ def build_revstress(wb, cfg):
 
 
 def build_scenarios(wb, cfg):
-    """40_Scen — scenario comparison: base values from model + stress deltas."""
+    """40_Scen — scenario comparison: 3 scenarios × 3 years, all through model engine.
+
+    H1 audit: scenarios must run through the model, not arithmetic overlay.
+    Each cell uses INDEX to pick the right scenario's macro inputs,
+    then the model formulas propagate through all statements.
+    Switch CP!C5 (1/2/3) → model recalculates → results here update.
+    """
     ws = wb["40_Scen"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"40_Scen — {cfg['name']}").font = F_TITLE
-    ws.cell(2, 1, "Сравнение сценариев: базовый (из модели) + стресс-дельты").font = F_SUBTITLE
+    ws.cell(2, 1, "Сценарное сравнение: выходы модели при переключении сценария CP!C5").font = F_SUBTITLE
+    ws.cell(3, 1, "⚠ Для заполнения: переключить CP!C5=1→сохранить Base; CP!C5=2→сохранить Stress; CP!C5=3→сохранить Severe").font = F_NOTE
+
+    # H1 audit: scenarios run through model engine, not arithmetic overlay.
+    # Table shows model outputs (PL/BS/Ratios) that update when CP!C5 switches.
+    # For side-by-side comparison: switch → recalculate → paste values in snapshot cols.
 
     n_hist = len(cfg["hist_years"][-3:])
-    last_fc = get_column_letter(3 + n_hist)  # first forecast year
+    fc_cols = [get_column_letter(3 + n_hist + i) for i in range(len(cfg["fc_years"]))]
 
-    section_header(ws, 4, "СЦЕНАРНОЕ СРАВНЕНИЕ (год 1)")
-    headers = ["Revenue", "EBITDA", "NI", "ND/EBITDA", "ICR", "Cash", "FundGap"]
-    ws.cell(5, 1, "Сценарий").font = F_LABEL_B
-    for i, h in enumerate(headers):
-        ws.cell(5, 3 + i, h).font = F_YEAR
+    # ── Section 1: ВХОДЫ СЦЕНАРИЕВ (from 01_Macro) ──
+    section_header(ws, 5, "ВХОДЫ СЦЕНАРИЕВ (из 01_Macro)")
+    ws.cell(6, 1, "Параметр").font = F_LABEL_B
+    scen_names = ["Базовый", "Стресс", "Severe"]
+    for s_idx, s_name in enumerate(scen_names):
+        ws.cell(6, 3 + s_idx, s_name).font = F_YEAR
 
-    # Base row — formulas from model
-    r = 6
-    label_row(ws, r, "Base (из модели)")
-    base_refs = [
-        (f"='{NAME['PL']}'!{last_fc}${REG['PL.revenue']}", FMT_MLN),
-        (f"='{NAME['PL']}'!{last_fc}${REG['PL.ebitda']}", FMT_MLN),
-        (f"='{NAME['PL']}'!{last_fc}${REG['PL.ni']}", FMT_MLN),
-        (f"='{NAME['RA']}'!{last_fc}${REG['RA.nd_ebitda']}", FMT_MULT),
-        (f"='{NAME['RA']}'!{last_fc}${REG['RA.icr']}", FMT_MULT),
-        (f"='{NAME['BS']}'!{last_fc}${REG['BS.cash']}", FMT_MLN),
-        (f"='{NAME['DT']}'!{last_fc}${REG['DT.funding_gap']}", FMT_MLN),
+    # Show key macro assumptions per scenario
+    macro_keys = [
+        ("Ключевая ставка, %", "kr", FMT_PCT),
+        ("LME Aluminium, $/t", "lme1", FMT_MLN0),
+        ("USD/RUB", "fx", FMT_RATIO1),
+        ("Brent, $/bbl", "brent", FMT_MLN0),
+        ("CPI RU, %", "cpi", FMT_PCT),
     ]
-    for i, (formula, fmt) in enumerate(base_refs):
-        ref_cell(ws, r, 3 + i, formula, fmt)
-
-    # ── Analytical stress rows ──
-    # Each row applies a single-factor shock to base metrics using linear approx:
-    #   Revenue shock x: ΔRev = Rev*x, ΔEBITDA = Rev*x*margin, ΔNI = ΔEBITDA*(1-t)
-    #   Rate shock Δr: ΔInterest = Debt*Δr, ΔNI = -ΔInt*(1-t)
-    #   Combined: sum of individual deltas
-    cp_tax = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
-    rev_base = f"C$6"       # base Revenue (row 6, col C)
-    ebitda_base = f"D$6"    # base EBITDA
-    ni_base = f"E$6"        # base NI
-    nd_base = f"F$6"        # base ND/EBITDA
-    icr_base = f"G$6"       # base ICR
-    cash_base = f"H$6"      # base Cash
-    gap_base = f"I$6"       # base FundGap
-    margin_ref = f"'{NAME['RA']}'!{last_fc}${REG['RA.ebitda_margin']}"
-    debt_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.close']}"
-    ebitda_model = f"'{NAME['PL']}'!{last_fc}${REG['PL.ebitda']}"
-    nd_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.nd']}"
-    int_ref = f"ABS('{NAME['DT']}'!{last_fc}${REG['DT.interest']})"
-
-    # Row 7: Revenue −20%
     r = 7
-    label_row(ws, r, "Revenue −20%")
-    d_rev = f"={rev_base}*(-0.2)"
-    d_ebitda_rev = f"={rev_base}*(-0.2)*{margin_ref}"
-    d_ni_rev = f"={rev_base}*(-0.2)*{margin_ref}*(1-{cp_tax})"
-    ref_cell(ws, r, 3, f"={rev_base}+{rev_base}*(-0.2)", FMT_MLN)          # Revenue
-    ref_cell(ws, r, 4, f"={ebitda_base}+{rev_base}*(-0.2)*{margin_ref}", FMT_MLN)  # EBITDA
-    ref_cell(ws, r, 5, f"={ni_base}+{rev_base}*(-0.2)*{margin_ref}*(1-{cp_tax})", FMT_MLN)  # NI
-    ref_cell(ws, r, 6, f"=IFERROR({nd_ref}/(D{r}),0)", FMT_MULT)           # ND/EBITDA
-    ref_cell(ws, r, 7, f"=IFERROR(D{r}/{int_ref},0)", FMT_MULT)            # ICR
-    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)                           # Cash (unchanged)
-    ref_cell(ws, r, 9, f"={gap_base}", FMT_MLN)                            # Gap (approx)
+    for label, suffix, fmt in macro_keys:
+        label_row(ws, r, label)
+        for s_idx in range(3):
+            s_key = f"MA.s{s_idx+1}_{suffix}"
+            s_row = REG.get(s_key)
+            if s_row:
+                # First forecast year value from each scenario block
+                ref_cell(ws, r, 3 + s_idx, f"='{NAME['MA']}'!{fc_cols[0]}${s_row}", fmt)
+        r += 1
+    r += 1
 
-    # Row 8: Rate +200bp
-    r = 8
-    label_row(ws, r, "Rate +200bp")
-    d_int = f"{debt_ref}*0.02"
-    ref_cell(ws, r, 3, f"={rev_base}", FMT_MLN)
-    ref_cell(ws, r, 4, f"={ebitda_base}", FMT_MLN)
-    ref_cell(ws, r, 5, f"={ni_base}-{d_int}*(1-{cp_tax})", FMT_MLN)
-    ref_cell(ws, r, 6, f"={nd_base}", FMT_MULT)
-    ref_cell(ws, r, 7, f"=IFERROR({ebitda_base}/({int_ref}+{d_int}),0)", FMT_MULT)
-    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)
-    ref_cell(ws, r, 9, f"={gap_base}", FMT_MLN)
+    # ── Section 2: ВЫХОДЫ МОДЕЛИ (текущий сценарий) ──
+    section_header(ws, r, "ВЫХОДЫ МОДЕЛИ (текущий сценарий = CP!C5)")
+    r += 1
+    ws.cell(r, 1, "Показатель").font = F_LABEL_B
+    for i, yr in enumerate(cfg["fc_years"]):
+        ws.cell(r, 3 + i, f"{yr}E").font = F_YEAR
+    r += 1
 
-    # Row 9: FX +10% (debt revaluation loss)
-    r = 9
-    label_row(ws, r, "FX +10%")
-    fx_debt_share = 0.3  # approx share of FX-denominated debt
-    ref_cell(ws, r, 3, f"={rev_base}", FMT_MLN)
-    ref_cell(ws, r, 4, f"={ebitda_base}", FMT_MLN)
-    ref_cell(ws, r, 5, f"={ni_base}-{debt_ref}*{fx_debt_share}*0.1*(1-{cp_tax})", FMT_MLN)
-    ref_cell(ws, r, 6, f"=IFERROR(({nd_ref}+{debt_ref}*{fx_debt_share}*0.1)/{ebitda_model},0)", FMT_MULT)
-    ref_cell(ws, r, 7, f"={icr_base}", FMT_MULT)
-    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)
-    ref_cell(ws, r, 9, f"={gap_base}", FMT_MLN)
+    # Key model outputs — direct formulas to PL/BS/Ratios/Score
+    output_refs = [
+        ("Выручка", "PL", "revenue", FMT_MLN),
+        ("EBITDA", "PL", "ebitda", FMT_MLN),
+        ("Чистая прибыль", "PL", "ni", FMT_MLN),
+        ("Денежные средства", "BS", "cash", FMT_MLN),
+        ("Итого долг", "DT", "close", FMT_MLN),
+        ("ND/EBITDA", "RA", "nd_ebitda", FMT_MULT),
+        ("ICR (EBITDA/Interest)", "RA", "icr", FMT_MULT),
+        ("EBITDA margin", "RA", "ebitda_margin", FMT_PCT),
+        ("Рейтинг", "SC", "rating", "0"),
+    ]
+    for label, code, key, fmt in output_refs:
+        reg_key = f"{code}.{key}"
+        row_ref = REG.get(reg_key)
+        if row_ref:
+            label_row(ws, r, label)
+            for i in range(len(cfg["fc_years"])):
+                cl = fc_cols[i]
+                ref_cell(ws, r, 3 + i, f"='{NAME[code]}'!{cl}${row_ref}", fmt)
+        r += 1
+    r += 1
 
-    # Row 10: Refi = 0% (no refinancing → mandatory is not rolled)
-    r = 10
-    label_row(ws, r, "Refi = 0%")
-    mand_ref = f"'{NAME['DT']}'!{last_fc}${REG['DT.mandatory']}"
-    ref_cell(ws, r, 3, f"={rev_base}", FMT_MLN)
-    ref_cell(ws, r, 4, f"={ebitda_base}", FMT_MLN)
-    ref_cell(ws, r, 5, f"={ni_base}", FMT_MLN)
-    ref_cell(ws, r, 6, f"={nd_base}", FMT_MULT)
-    ref_cell(ws, r, 7, f"={icr_base}", FMT_MULT)
-    ref_cell(ws, r, 8, f"=MAX(0,{cash_base}-{mand_ref})", FMT_MLN)
-    ref_cell(ws, r, 9, f"=MAX(0,{mand_ref}-{cash_base})", FMT_MLN)
+    # ── Section 3: СНИМКИ СЦЕНАРИЕВ (paste values after switching) ──
+    section_header(ws, r, "СНИМКИ СЦЕНАРИЕВ (вставить значения после переключения)")
+    r += 1
+    ws.cell(r, 1, "Показатель").font = F_LABEL_B
+    for s_idx, s_name in enumerate(scen_names):
+        ws.cell(r, 3 + s_idx * 3, s_name).font = F_YEAR
+        # Sub-headers for 3 years
+        for yr_idx, yr in enumerate(cfg["fc_years"]):
+            ws.cell(r, 3 + s_idx * 3 + yr_idx, f"{s_name} {yr}E").font = F_NOTE
+    r += 1
+    # Empty rows for pasting — analyst fills after switching scenarios
+    snapshot_labels = ["Выручка", "EBITDA", "Чистая прибыль", "Cash", "ND/EBITDA", "ICR", "Рейтинг"]
+    for label in snapshot_labels:
+        label_row(ws, r, label)
+        for c in range(3, 3 + 9):  # 3 scenarios × 3 years
+            input_cell(ws, r, c, "", "0.0")
+        r += 1
+    r += 1
 
-    # Row 11: Combined stress (Rev−20% + Rate+200bp + FX+10%)
-    r = 11
-    label_row(ws, r, "Combined stress")
-    ref_cell(ws, r, 3, f"=C7", FMT_MLN)  # same as Rev−20%
-    ref_cell(ws, r, 4, f"=D7", FMT_MLN)  # EBITDA from rev shock
-    ref_cell(ws, r, 5, f"=E7-{d_int}*(1-{cp_tax})-{debt_ref}*{fx_debt_share}*0.1*(1-{cp_tax})", FMT_MLN)
-    ref_cell(ws, r, 6, f"=IFERROR(({nd_ref}+{debt_ref}*{fx_debt_share}*0.1)/D{r},0)", FMT_MULT)
-    ref_cell(ws, r, 7, f"=IFERROR(D{r}/({int_ref}+{d_int}),0)", FMT_MULT)
-    ref_cell(ws, r, 8, f"={cash_base}", FMT_MLN)
-    ref_cell(ws, r, 9, f"=MAX(0,I7+I8+I9+I10-3*{gap_base})", FMT_MLN)
-
-    # ── Summary section ──
-    section_header(ws, 14, "КОВЕНАНТНЫЙ АНАЛИЗ")
+    # ── Section 4: КОВЕНАНТНЫЙ АНАЛИЗ ──
+    section_header(ws, r, "КОВЕНАНТНЫЙ АНАЛИЗ")
+    r += 1
     cov_nd = f"'Control_Panel'!$C${REG.get('CP.cov_nd', 80)}"
-    # Count scenarios where ND/EBITDA > covenant
-    label_row(ws, 15, "Сценариев с нарушением ND/EBITDA")
-    ref_cell(ws, 15, 3,
-             f"=COUNTIF(F7:F11,\">\"&{cov_nd})", "0")
-    label_row(ws, 16, "Сценариев с Funding Gap > 0")
-    ref_cell(ws, 16, 3, f"=COUNTIF(I7:I11,\">0\")", "0")
-    label_row(ws, 17, "Обратный стресс: breakeven Revenue shock")
-    ref_cell(ws, 17, 3, f"='33_RevStress'!$C${REG.get('RS.bisect_rev', 7)}", FMT_PCT)
+    label_row(ws, r, "Обратный стресс: breakeven Revenue shock")
+    ref_cell(ws, r, 3, f"='33_RevStress'!$C${REG.get('RS.bisect_rev', 7)}", FMT_PCT)
+    r += 1
+    # Covenant breaches from model outputs
+    label_row(ws, r, f"ND/EBITDA > ковенант ({cov_nd})?")
+    for i in range(len(cfg["fc_years"])):
+        cl = fc_cols[i]
+        ref_cell(ws, r, 3 + i,
+                 f"=IF('{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}>{cov_nd},\"НАРУШЕН\",\"OK\")",
+                 "@")
 
 
 def build_control_panel(wb, cfg):
