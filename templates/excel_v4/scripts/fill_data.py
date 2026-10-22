@@ -846,43 +846,11 @@ def fill_revenue(wb, data: dict, company: str):
         # Forecast: DON'T override — build_model creates formulas in 11_Segments
         # Write OLS results to 01_Macro econ block (CP.rev_elasticity is formula → 01_Macro)
         if factor_name and beta_price != 1.0:
-            # CP.rev_elasticity is now ='01_Macro'!$C$beta — don't overwrite
-            # Write to 01_Macro econ block
-            ws_ma = wb["01_Macro"]
-            ma_beta = REG.get("MA.econ_beta")
-            ma_r2 = REG.get("MA.econ_r2")
-            ma_alpha = REG.get("MA.econ_alpha")
-            if ma_beta:
-                ws_ma.cell(ma_beta, 3, round(beta_price, 3)).font = F_INPUT
-            if ma_r2:
-                # Compute R² from the regression
-                if dx and dy:
-                    n = len(dx)
-                    mx = sum(dx) / n
-                    my = sum(dy) / n
-                    ss_tot = sum((dy[j]-my)**2 for j in range(n))
-                    ss_res = sum((dy[j] - (alpha_price + beta_price*dx[j]))**2 for j in range(n))
-                    r2 = 1 - ss_res/ss_tot if ss_tot > 0 else 0
-                    ws_ma.cell(ma_r2, 3, round(r2, 4)).font = F_INPUT
-                    ws_ma.cell(ma_r2, 3).number_format = FMT_PCT2
-            if ma_alpha:
-                ws_ma.cell(ma_alpha, 3, round(alpha_price, 4)).font = F_INPUT
-            # Additional econometric attributes (audit defect 4)
-            ma_nobs = REG.get("MA.econ_nobs")
-            ma_se = REG.get("MA.econ_se")
-            ma_period = REG.get("MA.econ_period")
-            if ma_nobs and dx:
-                ws_ma.cell(ma_nobs, 3, len(dx)).font = F_INPUT
-            if ma_se and dx and len(dx) > 2:
-                n = len(dx)
-                ss_res = sum((dy[j] - (alpha_price + beta_price*dx[j]))**2 for j in range(n))
-                se_beta = (ss_res / (n-2) / sum((dx[j]-sum(dx)/n)**2 for j in range(n)))**0.5
-                ws_ma.cell(ma_se, 3, round(se_beta, 4)).font = F_INPUT
-            if ma_period:
-                src_cfg = data.get("source", {})
-                hist_yrs = src_cfg.get("hist_years", [2021,2022,2023,2024,2025])
-                ws_ma.cell(ma_period, 3, f"{min(hist_yrs)}-{max(hist_yrs)}").font = F_INPUT
-            print(f"    {seg_label} OLS β={beta_price:.3f} R²={r2:.3f} → CP + 01_Macro")
+            # G1 audit: Econometrics are now Excel formulas (SLOPE/RSQ/INTERCEPT)
+            # in 01_Macro. Do NOT overwrite with Python-computed values.
+            # CP.rev_elasticity reads from 01_Macro formula.
+            # Data (revenue + factor history) already in 02_Hist + 01_Macro → formulas will compute.
+            print(f"    {seg_label} OLS β={beta_price:.3f} (Excel SLOPE will compute from data)")
 
 
 def fill_debt_schedule(wb, data: dict, company: str):
