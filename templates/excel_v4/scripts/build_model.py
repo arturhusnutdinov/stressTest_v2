@@ -717,10 +717,11 @@ def build_assump(wb, cfg):
         r += 1
     r += 1
 
-    # Forecast schedule summary (years as columns)
+    # Forecast schedule summary (years as columns — use model forecast cols)
     section_header(ws, r, "ПРОГНОЗНЫЕ ПРЕДПОЛОЖЕНИЯ ПО ГОДАМ"); r += 1
+    fc_start_as = 3 + n_hist  # same as model sheets (F=6)
     year_headers(ws, r, [], fc); r += 1
-    summary_items = [
+    summary_items2 = [
         ("Revenue growth", "RV", "rev_growth", FMT_PCT),
         ("COGS ratio", "CG", "ratio", FMT_PCT),
         ("SGA ratio", "SA", "sga_ratio", FMT_PCT),
@@ -732,14 +733,14 @@ def build_assump(wb, cfg):
         ("Tax rate (effective)", "TX", "eff_rate", FMT_PCT),
         ("Payout ratio", "EQ", "payout", FMT_PCT),
     ]
-    for label, code, key, fmt in summary_items:
+    for label, code, key, fmt in summary_items2:
         label_row(ws, r, label)
         row_src = REG.get(f"{code}.{key}")
         if row_src:
-            for i, yr in enumerate(fc):
-                c = 7 + i
+            for i in range(len(fc)):
+                c = fc_start_as + i  # F/G/H on model sheets
                 cl = get_column_letter(c)
-                ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+                ref_cell(ws, r, 3 + i, f"='{NAME[code]}'!{cl}${row_src}", fmt)
         r += 1
 
 
@@ -1458,6 +1459,16 @@ def build_ppe(wb, cfg):
     r_da_rate = REG.get("PP.da_rate", 21)
     label_row(ws, r_capex_rev, "CapEx / Revenue", "%")
     label_row(ws, r_da_rate, "DA / ОС нетто (rate)", "%")
+    # Fill CapEx/Rev and DA rate for ALL columns (history + forecast)
+    n_hist_ppe = len(cfg["hist_years"][-3:])
+    for c_idx in range(3, 3 + n_hist_ppe + len(cfg["fc_years"])):
+        cl = get_column_letter(c_idx)
+        formula_cell(ws, r_capex_rev, c_idx,
+                     f"=IFERROR({cl}{REG['PP.capex']}/'{NAME['RV']}'!{cl}${REG['RV.total_rev']},0)",
+                     FMT_PCT)
+        formula_cell(ws, r_da_rate, c_idx,
+                     f"=IFERROR({cl}{REG['PP.dep_charge']}/{cl}{REG['PP.net_close']},0)",
+                     FMT_PCT)
 
     # CP references for CapEx parameters
     # CP references (dynamic rows from REG, set in build_control_panel)
@@ -1981,9 +1992,9 @@ def build_ratios(wb, cfg):
     for key, label in [("dso", "DSO"), ("dio", "DIH"), ("dpo", "DPO"), ("ccc", "CCC")]:
         label_row(ws, REG[f"RA.{key}"], label, "дни")
 
-    # Key ratio formulas for forecast columns
+    # Key ratio formulas for ALL columns (history + forecast)
     n_hist = len(cfg["hist_years"][-3:])
-    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    for c_idx in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
 
         # ND/EBITDA
@@ -3737,10 +3748,15 @@ def build_tax(wb, cfg):
                      f"=IF({cl}{tx_rows['ebt']}<0,"
                      f"{cl}{tx_rows['dta_gross']}*MIN(1,1/{cp_dta_val_yrs}),0)",
                      FMT_MLN)
-        # DTA open/close
+        # DTA open/close (incremental: historical DTA carries forward, only new NOL changes it)
         formula_cell(ws, tx_rows["dta_open"], c_idx, f"={prev}{tx_rows['dta_close']}", FMT_MLN)
+        # DTA_close = DTA_open + ΔDTA_from_NOL - valuation_allowance
+        # Historical DTA persists (represents prov/lease/other timing diffs not modeled).
+        # Only NOL changes create new DTA. No arbitrary amortization.
+        dta_nol_delta = f"({cl}{tx_rows['dta_nol']}-{prev}{tx_rows['dta_nol']})"
         formula_cell(ws, tx_rows["dta_close"], c_idx,
-                     f"=MAX(0,{cl}{tx_rows['dta_gross']}-{cl}{tx_rows['dta_val_allow']})",
+                     f"=MAX(0,{cl}{tx_rows['dta_open']}+{dta_nol_delta}"
+                     f"-{cl}{tx_rows['dta_val_allow']})",
                      FMT_MLN)
         # Deferred tax = ΔDTL - ΔDTA (positive = expense)
         formula_cell(ws, tx_rows["deferred"], c_idx,
@@ -4704,7 +4720,7 @@ def build_control_panel(wb, cfg):
         ("NOL opening balance", 0, "CP.nol_open", FMT_MLN0),
         ("NOL max utilization (%)", 0.80, "CP.nol_cap", FMT_PCT),
         ("NOL expiry (лет, 0=бессрочно)", 10, "CP.nol_expiry", FMT_INT),
-        ("Tax useful life (лет)", 20, "CP.tax_useful_life", FMT_INT),
+        ("Tax useful life (лет)", 0, "CP.tax_useful_life", FMT_INT),  # filled by fill_data from calibrated UL
         ("Tax accel. factor (1=SL, 2=ускоренная)", 1.0, "CP.tax_accel", FMT_RATIO),
         ("DTA valuation: макс. лет убытков", 3, "CP.dta_val_years", FMT_INT),
         ("Minimum tax rate (альтернативный)", 0.0, "CP.min_tax_rate", FMT_PCT),

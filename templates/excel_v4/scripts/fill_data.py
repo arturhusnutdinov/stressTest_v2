@@ -1750,7 +1750,12 @@ def fill_debt_hist(wb, data: dict, company: str):
                     ws_cp = wb["Control_Panel"]
                     ws_cp.cell(cp_ul_row, 3, int(cal_ul)).font = F_INPUT
                     ws_cp.cell(cp_ul_row, 3).number_format = FMT_INT
-                    print(f"    PPE: Gross={ppe_gross:.0f} Net={ppe_net:.0f} DA={da_last:.0f} → UL={cal_ul:.0f}yr (calibrated)")
+                    # Also set tax UL = book UL (no timing diff by default)
+                    cp_tul = REG.get("CP.tax_useful_life")
+                    if cp_tul:
+                        ws_cp.cell(cp_tul, 3, int(cal_ul)).font = F_INPUT
+                        ws_cp.cell(cp_tul, 3).number_format = FMT_INT
+                    print(f"    PPE: Gross={ppe_gross:.0f} Net={ppe_net:.0f} DA={da_last:.0f} → UL={cal_ul:.0f}yr (calibrated, tax=book)")
                 else:
                     print(f"    PPE: Gross={ppe_gross:.0f} Net={ppe_net:.0f} (CP.useful_life not found)")
             else:
