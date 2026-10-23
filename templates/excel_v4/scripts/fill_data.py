@@ -1798,7 +1798,7 @@ def fill_statement_history(wb, data: dict, company: str):
     is_d = data.get("is", {})
     cf_d = data.get("cf", {})
 
-    # Fill CF history (last year) → 02_Hist refs
+    # Fill CF history (ALL 3 years, not just last) → 02_Hist refs
     ws_cf = wb["23_CF"]
     ws_hi = wb["02_Hist"] if "02_Hist" in wb.sheetnames else None
     cf_map = {
@@ -1809,21 +1809,26 @@ def fill_statement_history(wb, data: dict, company: str):
         "net_change": ("net_change", "net_change"),
     }
     filled = 0
-    cl_h = get_column_letter(hc)  # model col letter (E)
-    for src_key, (reg_suffix, hi_key) in cf_map.items():
-        val = cf_d.get(src_key, {}).get(last_yr)
-        if val is not None:
-            r = REG.get(f"CF.{reg_suffix}")
-            hi_row = REG.get(f"HI.{hi_key}")
-            if r:
-                if hi_row and ws_hi:
-                    ws_hi.cell(hi_row, hi_hc, round(val, 1)).font = F_INPUT
-                    ws_cf.cell(r, hc).value = f"='02_Hist'!{cl_hi_last}${hi_row}"
-                    ws_cf.cell(r, hc).font = F_REF
-                else:
-                    ws_cf.cell(r, hc, round(val, 1)).font = F_INPUT
-                ws_cf.cell(r, hc).number_format = FMT_MLN
-                filled += 1
+    all_hist_cf = src["hist_years"]
+    hist_3_cf = src["hist_years"][-N_HIST_DISPLAY:]
+    for yr in hist_3_cf:
+        model_col_cf = COL_START + hist_3_cf.index(yr)
+        hi_col_cf = COL_START + all_hist_cf.index(yr)
+        cl_hi_cf = get_column_letter(hi_col_cf)
+        for src_key, (reg_suffix, hi_key) in cf_map.items():
+            val = cf_d.get(src_key, {}).get(yr)
+            if val is not None:
+                r = REG.get(f"CF.{reg_suffix}")
+                hi_row = REG.get(f"HI.{hi_key}")
+                if r:
+                    if hi_row and ws_hi:
+                        ws_hi.cell(hi_row, hi_col_cf, round(val, 1)).font = F_INPUT
+                        ws_cf.cell(r, model_col_cf).value = f"='02_Hist'!{cl_hi_cf}${hi_row}"
+                        ws_cf.cell(r, model_col_cf).font = F_REF
+                    else:
+                        ws_cf.cell(r, model_col_cf, round(val, 1)).font = F_INPUT
+                    ws_cf.cell(r, model_col_cf).number_format = FMT_MLN
+                    filled += 1
 
     # Cash opening/closing → 02_Hist refs
     bs_d = data.get("bs", {})

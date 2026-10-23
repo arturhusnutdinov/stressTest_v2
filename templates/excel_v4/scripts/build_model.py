@@ -3935,32 +3935,36 @@ def build_valuation(wb, cfg):
     sens_r = REG["VL.sens_matrix"]
     section_header(ws, sens_r - 2, "F. SENSITIVITY: Equity Value = f(WACC, Terminal Growth)")
     label_row(ws, sens_r - 1, "WACC ↓ \\ g →", "")
-    # 5×5 matrix: WACC from -4pp to +4pp, g from -2pp to +2pp
+    # 5×5 matrix: offsets written to headers, body reads from headers (no literals)
     wacc_offsets = [-0.04, -0.02, 0.0, 0.02, 0.04]
     g_offsets = [-0.02, -0.01, 0.0, 0.01, 0.02]
 
-    # Header row (g values)
+    # Header row (g values) — absolute g values
     for j, dg in enumerate(g_offsets):
         c = 3 + j
         formula_cell(ws, sens_r - 1, c, f"=$C${REG['VL.tg']}+{dg}", FMT_PCT)
         ws.cell(sens_r - 1, c).font = F_YEAR
 
-    # Matrix body
+    # WACC labels in col B — absolute WACC values
     for i, dw in enumerate(wacc_offsets):
         rr = sens_r + i
-        formula_cell(ws, rr, 2, f"=$C${r_wacc}+{dw}", FMT_PCT)  # WACC label in col B
+        formula_cell(ws, rr, 2, f"=$C${r_wacc}+{dw}", FMT_PCT)
         ws.cell(rr, 2).font = F_YEAR
-        for j, dg in enumerate(g_offsets):
+
+    # Matrix body — reads WACC from col B, g from header row (NO literals in formulas)
+    for i in range(len(wacc_offsets)):
+        rr = sens_r + i
+        for j in range(len(g_offsets)):
             c = 3 + j
-            # EV = NPV_FCFF + FCFF_last*(1+g_adj)/(WACC_adj - g_adj) / (1+WACC_adj)^n - ND
-            wacc_ref = f"($C${r_wacc}+{dw})"
-            g_ref = f"($C${REG['VL.tg']}+{dg})"
+            cl_g = get_column_letter(c)
+            # WACC from $B${rr}, g from ${cl_g}${sens_r-1}
+            wacc_ref = f"$B${rr}"
+            g_ref = f"{cl_g}${sens_r - 1}"
             formula_cell(ws, rr, c,
                          f"=IFERROR($C${npv_r}+{last_fc_col}{fcff_start_r + 6}*(1+{g_ref})"
                          f"/({wacc_ref}-{g_ref})/(1+{wacc_ref})^{n_fc}-$C${r_nd},0)",
                          FMT_MLN0)
-            # Highlight center cell
-            if dw == 0 and dg == 0:
+            if wacc_offsets[i] == 0 and g_offsets[j] == 0:
                 ws.cell(rr, c).fill = FILL_RESULT
 
 
@@ -4410,12 +4414,22 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Revenue method (1=segment, 2=macro_ols, 3=ewa)")
     input_cell(ws, r, 3, 1, FMT_INT)
     REG["CP.rev_method"] = r; r += 1
-    label_row(ws, r, "Эластичность Revenue к macro-фактору", "", "β × Δln(factor)")
+    label_row(ws, r, "Эластичность Revenue к macro-фактору", "", "β (если t<2 → сужение к 1.0)")
     ma_beta = REG.get("MA.econ_beta")
-    if ma_beta:
-        formula_cell(ws, r, 3, f"='{NAME['MA']}'!$C${ma_beta}", FMT_RATIO)
-        ws.cell(r, 9, "OLS β из 01_Macro").font = F_NOTE
-        ws.cell(r, 10, "01_Macro — расчёт LINEST").font = F_NOTE
+    ma_se = REG.get("MA.econ_se")
+    if ma_beta and ma_se:
+        # If t-stat < 2, blend β toward 1.0: weight = MIN(1, t/2)
+        # adjusted_β = β × w + 1.0 × (1-w) where w = MIN(1, |β/SE| / 2)
+        beta_ref = f"'{NAME['MA']}'!$C${ma_beta}"
+        se_ref = f"'{NAME['MA']}'!$C${ma_se}"
+        formula_cell(ws, r, 3,
+                     f"=IF(IFERROR(ABS({beta_ref}/{se_ref}),0)>=2,"
+                     f"{beta_ref},"
+                     f"{beta_ref}*MIN(1,ABS({beta_ref}/{se_ref})/2)"
+                     f"+1*(1-MIN(1,ABS({beta_ref}/{se_ref})/2)))",
+                     FMT_RATIO)
+        ws.cell(r, 9, "[РАСЧЁТ] OLS β, сужение к 1 при t<2").font = F_NOTE
+        ws.cell(r, 10, "01_Macro — SLOPE/STEYX").font = F_NOTE
     else:
         input_cell(ws, r, 3, 1.0, FMT_RATIO)
     REG["CP.rev_elasticity"] = r; r += 1
@@ -4775,14 +4789,24 @@ def build_control_panel(wb, cfg):
     # Bulk apply Method/Source/Role to any CP row that doesn't already have col I
     i1_labels = {
         # Key: CP reg key prefix → (Method, Source, Role)
-        "cogs_": ("[РАСЧЁТ]", "03_Assump — МСФО ОПУ", "[РАСЧЁТ]"),
+        "cogs_ratio": ("[РАСЧЁТ]", "03_Assump — EWA калибровка", "[РАСЧЁТ]"),
+        "cogs_method": ("[ОЦЕНКА]", "Метод расчёта COGS (1=ratio,2=comp)", "[ПАР]"),
+        "cogs_material": ("[ДАННЫЕ]", "МСФО прим. 6a — доля компонентов", "[ДАННЫЕ]"),
+        "cogs_purchases": ("[ДАННЫЕ]", "МСФО прим. 6a — закупки Al", "[ДАННЫЕ]"),
+        "cogs_energy": ("[ДАННЫЕ]", "МСФО прим. 6a — электроэнергия", "[ДАННЫЕ]"),
+        "cogs_labour": ("[ДАННЫЕ]", "МСФО прим. 6a — персонал", "[ДАННЫЕ]"),
+        "cogs_da_cogs": ("[ДАННЫЕ]", "МСФО прим. 6a — DA в с/с (0 если вне)", "[ДАННЫЕ]"),
+        "cogs_other": ("[ДАННЫЕ]", "МСФО прим. 6a — прочие затраты", "[ДАННЫЕ]"),
         "sga_": ("[РАСЧЁТ]", "03_Assump — МСФО ОПУ", "[РАСЧЁТ]"),
         "da_rate": ("[РАСЧЁТ]", "03_Assump — МСФО прим. 11", "[РАСЧЁТ]"),
         "sustaining": ("[РАСЧЁТ]", "03_Assump — МСФО ОДДС", "[РАСЧЁТ]"),
         "expansion": ("[ОЦЕНКА]", "Суждение аналитика", "[ПАР]"),
         "useful_life": ("[ДАННЫЕ]", "МСФО прим. 11", "[ДАННЫЕ]"),
         "disposal": ("[ОЦЕНКА]", "Исторический средний", "[ПАР]"),
-        "wc_": ("[РАСЧЁТ]", "03_Assump — МСФО ОФП/ОПУ", "[РАСЧЁТ]"),
+        "wc_method": ("[ОЦЕНКА]", "Метод расчёта WC (1=days,2=ratio)", "[ПАР]"),
+        "wc_dso": ("[РАСЧЁТ]", "03_Assump — EWA DSO", "[РАСЧЁТ]"),
+        "wc_dio": ("[РАСЧЁТ]", "03_Assump — EWA DIH", "[РАСЧЁТ]"),
+        "wc_dpo": ("[РАСЧЁТ]", "03_Assump — EWA DPO", "[РАСЧЁТ]"),
         "min_cash": ("[ОЦЕНКА]", "Мин. остаток по соглашению", "[ПАР]"),
         "max_cash": ("[ОЦЕНКА]", "4× min_cash", "[ПАР]"),
         "rc_limit": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
@@ -4826,7 +4850,18 @@ def build_control_panel(wb, cfg):
         "fixed_mat": ("[ДАННЫЕ]", "Себестоимость: постоянная $/т", "[ДАННЫЕ]"),
         "доля_выручки": ("[ДАННЫЕ]", "Валютная структура выручки", "[ДАННЫЕ]"),
         "доля_затрат": ("[ДАННЫЕ]", "Валютная структура затрат", "[ДАННЫЕ]"),
-        "nol": ("[ДАННЫЕ]", "НК РФ, перенос убытков", "[ДАННЫЕ]"),
+        "nol_open": ("[ДАННЫЕ]", "НК РФ, перенос убытков", "[ДАННЫЕ]"),
+        "nol_cap": ("[ДАННЫЕ]", "НК РФ ст. 283 — лимит 50%/80%", "[ДАННЫЕ]"),
+        "nol_expiry": ("[ДАННЫЕ]", "НК РФ ст. 283 — срок (10 лет)", "[ДАННЫЕ]"),
+        "tax_useful": ("[ДАННЫЕ]", "НК РФ, амортизационные группы", "[ДАННЫЕ]"),
+        "tax_accel": ("[ДАННЫЕ]", "НК РФ ст. 259 — ускоренная аморт.", "[ДАННЫЕ]"),
+        "dta_val": ("[ОЦЕНКА]", "Порог реализуемости DTA", "[ПАР]"),
+        "min_tax": ("[ДАННЫЕ]", "НК РФ — мин. ставка (если применимо)", "[ДАННЫЕ]"),
+        "wht_rate": ("[ДАННЫЕ]", "НК РФ / СОИДН — ставка WHT", "[ДАННЫЕ]"),
+        "intang_amort": ("[ДАННЫЕ]", "МСФО — срок аморт. НМА", "[ДАННЫЕ]"),
+        "prov_accrual": ("[ОЦЕНКА]", "Среднегодовое начисление резервов", "[ПАР]"),
+        "prov_util": ("[ОЦЕНКА]", "Средняя утилизация резервов", "[ПАР]"),
+        "sc_th_": ("[НОРМ]", "Шкала рейтингов (Score→Grade)", "[НОРМ]"),
         "buyback": ("[ОЦЕНКА]", "Программа обратного выкупа", "[ПАР]"),
         "r²": ("[РАСЧЁТ]", "01_Macro — OLS RSQ", "[РАСЧЁТ]"),
         # Russian-label params that don't match English prefixes
