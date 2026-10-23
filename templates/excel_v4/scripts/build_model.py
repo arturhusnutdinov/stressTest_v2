@@ -4437,11 +4437,12 @@ def build_control_panel(wb, cfg):
         # adjusted_β = β × w + 1.0 × (1-w) where w = MIN(1, |β/SE| / 2)
         beta_ref = f"'{NAME['MA']}'!$C${ma_beta}"
         se_ref = f"'{NAME['MA']}'!$C${ma_se}"
+        # t_stat = |β/SE|, but SE can be 0 → wrap ALL divisions in IFERROR
+        t_ref = f"IFERROR(ABS({beta_ref}/{se_ref}),0)"
         formula_cell(ws, r, 3,
-                     f"=IF(IFERROR(ABS({beta_ref}/{se_ref}),0)>=2,"
+                     f"=IF({t_ref}>=2,"
                      f"{beta_ref},"
-                     f"{beta_ref}*MIN(1,ABS({beta_ref}/{se_ref})/2)"
-                     f"+1*(1-MIN(1,ABS({beta_ref}/{se_ref})/2)))",
+                     f"IFERROR({beta_ref}*MIN(1,{t_ref}/2)+1*(1-MIN(1,{t_ref}/2)),1))",
                      FMT_RATIO)
         ws.cell(r, 9, "[РАСЧЁТ] OLS β, сужение к 1 при t<2").font = F_NOTE
         ws.cell(r, 10, "01_Macro — SLOPE/STEYX").font = F_NOTE
@@ -4808,11 +4809,24 @@ def build_control_panel(wb, cfg):
         ("ROE", "RA", "roe", FMT_PCT),
     ]:
         label_row(ws, r, label)
-        for c in range(4, 4 + len(cfg["fc_years"])):
-            cl = get_column_letter(c)
+        # year_headers wrote: col 3=last_hist, col 4..4+n_fc-1=forecast
+        # Model sheets: col 3+n_hist_display = first forecast col
+        n_hist_display = len(cfg["hist_years"][-3:])
+        fc_start_model = 3 + n_hist_display  # col F on model sheets
+        # Summary: col 4 = first forecast header (after 1 hist year)
+        for i in range(len(cfg["fc_years"])):
+            summary_col = 4 + i  # col on CP summary
+            model_col = fc_start_model + i  # col on PL/BS/Ratios
+            cl_model = get_column_letter(model_col)
             row_src = REG.get(f"{code}.{key}")
             if row_src:
-                ref_cell(ws, r, c, f"='{NAME[code]}'!{cl}${row_src}", fmt)
+                ref_cell(ws, r, summary_col, f"='{NAME[code]}'!{cl_model}${row_src}", fmt)
+        # Also show last hist year
+        last_hist_model_col = fc_start_model - 1  # col E
+        cl_hist = get_column_letter(last_hist_model_col)
+        row_src = REG.get(f"{code}.{key}")
+        if row_src:
+            ref_cell(ws, r, 3, f"='{NAME[code]}'!{cl_hist}${row_src}", fmt)
         r += 1
 
 

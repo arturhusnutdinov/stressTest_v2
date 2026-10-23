@@ -813,11 +813,18 @@ def fill_revenue(wb, data: dict, company: str):
 
         # Compute OLS β from historical Δln(price) ~ Δln(factor)
         beta_price = 1.0  # default elasticity
+        # Normalize YAML factor names to macro data names
+        _yaml_to_macro = {
+            "lme_ni_usd": "lme_nickel", "lme_cu_usd": "lme_copper",
+            "lme_pd_usd": "lme_palladium", "lme_pt_usd": "lme_platinum",
+            "lme_al_usd": "lme_aluminium", "brent_usd": "brent",
+        }
         if factor_name:
+            factor_name_macro = _yaml_to_macro.get(factor_name, factor_name)
             macro_data = data.get("macro", [])
             factor_series = {}
             for item in macro_data:
-                if item["factor"] == factor_name:
+                if item["factor"] == factor_name_macro:
                     factor_series[item["year"]] = item["value"]
 
             if len(factor_series) >= 3 and len(price_data) >= 3:
@@ -846,7 +853,7 @@ def fill_revenue(wb, data: dict, company: str):
 
         # Forecast: DON'T override — build_model creates formulas in 11_Segments
         # Write OLS results to 01_Macro econ block (CP.rev_elasticity is formula → 01_Macro)
-        if factor_name and beta_price != 1.0:
+        if factor_name:
             # G1 audit: Econometrics in Excel (SLOPE/RSQ/INTERCEPT formulas).
             # Fill the OLS data block (revenue + factor for 2018-2025) so formulas compute.
             ws_ma = wb["01_Macro"]
@@ -863,11 +870,12 @@ def fill_revenue(wb, data: dict, company: str):
                     "lme_nickel": "lme_nickel", "lme_copper": "lme_copper",
                     "brent": "brent",
                 }
-                fac_key = fac_name_map.get(factor_name.lower().replace(" ", "_"), factor_name.lower())
+                factor_name_norm = _yaml_to_macro.get(factor_name, factor_name)
                 macro_data = data.get("macro", [])
                 fac_hist = {}
                 for item in macro_data:
-                    if item.get("factor", "").lower().replace(" ", "_") == factor_name.lower().replace(" ", "_"):
+                    if item.get("factor", "") == factor_name_norm or \
+                       item.get("factor", "").lower().replace(" ", "_") == factor_name.lower().replace(" ", "_"):
                         fac_hist[item["year"]] = item["value"]
 
                 full_years = list(range(2018, 2026))
