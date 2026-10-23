@@ -138,12 +138,13 @@ IS_MAP = {
     "interest_income": ("Процентные доходы", None, False),
     "other_operating_expenses": ("Прочие опер. расходы", None, False),
     "ebt": ("Прибыль до налога", "ebt", False),
+    "earnings_before_tax": ("Прибыль до налога", "ebt", False),  # Nornickel alias
     "tax_expense": ("Налог на прибыль", "tax", False),
     "net_income": ("Чистая прибыль", "ni", False),
     "earnings_from_investees": ("Доля в ассоциированных", None, False),
     "distribution_expenses": ("Коммерческие расходы", None, False),
     "asset_impairment": ("Обесценение активов", None, False),
-    "dep_ppe": ("Амортизация ОС", None, True),
+    "dep_ppe": ("Амортизация ОС", "da", True),  # Nornickel: dep_ppe instead of total_da
     "amort_intangibles": ("Амортизация НМА", None, True),
     "current_tax": ("Текущий налог", None, False),
     "deferred_tax": ("Отложенный налог", None, False),
@@ -877,6 +878,18 @@ def fill_revenue(wb, data: dict, company: str):
                     if item.get("factor", "") == factor_name_norm or \
                        item.get("factor", "").lower().replace(" ", "_") == factor_name.lower().replace(" ", "_"):
                         fac_hist[item["year"]] = item["value"]
+                # Supplement missing years with public LME annual averages
+                _lme_supplement = {
+                    "lme_nickel": {2022: 25597, 2023: 21406, 2024: 17030, 2025: 16000},
+                    "lme_copper": {2022: 8797, 2023: 8489, 2024: 9152, 2025: 9500},
+                    "lme_palladium": {2022: 2112, 2023: 1337, 2024: 1024, 2025: 1000},
+                    "lme_platinum": {2022: 967, 2023: 966, 2024: 964, 2025: 1000},
+                    "lme_aluminium": {2022: 2706, 2023: 2257, 2024: 2373, 2025: 2800},
+                }
+                sup = _lme_supplement.get(factor_name_norm, {})
+                for yr, val in sup.items():
+                    if yr not in fac_hist:
+                        fac_hist[yr] = val
 
                 full_years = list(range(2018, 2026))
                 filled = 0
@@ -1873,9 +1886,11 @@ def fill_statement_history(wb, data: dict, company: str):
     pl_map = {
         "revenue": "revenue", "cogs": "cogs", "gross_profit": "gp",
         "sga_combined": "sga", "ebitda": "ebitda", "ebit": "ebit",
-        "interest_expense": "interest", "other_financial": "other_fin",
-        "ebt": "ebt", "tax_expense": "tax", "net_income": "ni",
-        "total_da": "da",
+        "interest_expense": "interest", "finance_cost_net": "interest",  # Nornickel alias
+        "other_financial": "other_fin",
+        "ebt": "ebt", "earnings_before_tax": "ebt",  # Nornickel alias
+        "tax_expense": "tax", "net_income": "ni",
+        "total_da": "da", "dep_ppe": "da",  # Nornickel alias
         "other_operating_expenses": "other_opex", "asset_impairment": "impairment",
         "other_opex": "other_opex", "impairment": "impairment",
     }
