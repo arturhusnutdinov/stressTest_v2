@@ -1904,9 +1904,9 @@ def build_pl(wb, cfg):
                      f"='{NAME['OI']}'!{cl}${REG['OI.other_fin']}"
                      f"+{rev_fx}",
                      FMT_MLN)
-        # Tax ← 19_Tax
-        ref_cell(ws, REG["PL.tax"], c_idx,
-                 f"='{NAME['TX']}'!{cl}${REG['TX.total']}", FMT_MLN)
+        # Tax ← 19_Tax (negative on PL per IFRS: expense = negative)
+        formula_cell(ws, REG["PL.tax"], c_idx,
+                     f"=-ABS('{NAME['TX']}'!{cl}${REG['TX.total']})", FMT_MLN)
 
         # Other opex = carry forward as % of revenue + provision charge (net accrual)
         prev_cl = get_column_letter(c_idx - 1)
@@ -1935,9 +1935,9 @@ def build_pl(wb, cfg):
         formula_cell(ws, REG["PL.ebt"], c_idx,
                      f"={cl}{REG['PL.ebit']}+{cl}{REG['PL.interest']}+{cl}{REG['PL.interest_income']}+"
                      f"{cl}{REG['PL.other_fin']}+{cl}{REG['PL.associates']}", FMT_MLN, bold=True)
-        # NI = EBT - Tax
+        # NI = EBT + Tax (tax is negative per IFRS: expense)
         formula_cell(ws, REG["PL.ni"], c_idx,
-                     f"={cl}{REG['PL.ebt']}-{cl}{REG['PL.tax']}", FMT_MLN, bold=True)
+                     f"={cl}{REG['PL.ebt']}+{cl}{REG['PL.tax']}", FMT_MLN, bold=True)
         # Margins
         formula_cell(ws, r_em, c_idx,
                      f"=IF({cl}{REG['PL.revenue']}<>0,{cl}{REG['PL.ebitda']}/{cl}{REG['PL.revenue']},0)",
