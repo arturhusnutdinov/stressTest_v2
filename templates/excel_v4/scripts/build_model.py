@@ -112,6 +112,7 @@ COMPANY_CONFIGS = {
         "industry": "metals",
         "currency": "USD",
         "hist_years": [2021, 2022, 2023, 2024, 2025],
+        "_fill_hist_years": list(range(2011, 2026)),  # full range for 02_Hist col mapping
         "fc_years": [2026, 2027, 2028],
         "segments": [
             {"name": "Primary Aluminium", "key": "seg1", "driver": "LME Aluminium",
@@ -159,6 +160,7 @@ COMPANY_CONFIGS = {
         "industry": "metals",
         "currency": "USD",
         "hist_years": [2021, 2022, 2023, 2024, 2025],
+        "_fill_hist_years": list(range(2010, 2026)),  # full range for 02_Hist col mapping
         "fc_years": [2026, 2027, 2028],
         "segments": [
             {"name": "Nickel", "key": "seg1", "driver": "LME Nickel"},
@@ -2228,21 +2230,24 @@ def build_checks(wb, cfg):
         ("PPE: 15_PPE = 02_Hist (col E only)", f"'{NAME['PP']}'", REG['PP.net_close'], "HI.ppe_net"),
         ("BS: 20_BS TA = 02_Hist", f"'{NAME['BS']}'", REG['BS.ta'], "HI.ta"),
     ]
-    # fill_data writes history data to 02_Hist at cols C/D/E (same positions as
-    # model sheets), so no column offset needed — both use the same 3-col layout.
-    # (fill_data overwrites 02_Hist cols C-E with last 3 years' data)
+    # Model refs now point to correct HI columns (O/P/Q for 2023-2025 in 15-year layout).
+    # 90_Checks compares model sheet C/D/E with the SAME HI columns the model reads from.
+    # Since model reads from HI via refs (='02_Hist'!O$row), the check should use same cols.
+    # Model col C (2023) → HI col for 2023 = C + offset where offset = len(all_hist) - n_hist.
+    n_hist_all = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
+    hi_col_offset = n_hist_all - n_hist  # e.g. 15-3=12 for rusal, 0 if no extension
     for i, (label, sheet_ref, calc_row, hi_key) in enumerate(hist_checks):
         r_hc = r_hist_base + 1 + i
         label_row(ws, r_hc, label, "mln", "Должно быть ~0")
         hi_row = REG.get(hi_key)
         if hi_row:
-            # PPE: only last hist year (earlier years may be empty)
             cols_range = [3 + n_hist - 1] if "PPE" in label else range(3, 3 + n_hist)
             for c in cols_range:
                 cl = get_column_letter(c)
+                hi_cl = get_column_letter(c + hi_col_offset)
                 formula_cell(ws, r_hc, c,
                              f"=ROUND({sheet_ref}!{cl}${calc_row}"
-                             f"-'{NAME['HI']}'!{cl}${hi_row},1)",
+                             f"-'{NAME['HI']}'!{hi_cl}${hi_row},1)",
                              FMT_RATIO)
 
     r_hist_err = r_hist_base + len(hist_checks) + 1
