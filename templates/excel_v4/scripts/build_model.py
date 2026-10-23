@@ -231,7 +231,7 @@ def build_cover(wb, cfg):
     # Sum error counts across all forecast years
     fc_cols = [get_column_letter(3 + len(cfg["hist_years"][-3:]) + i)
                for i in range(len(cfg["fc_years"]))]
-    err_refs = "+".join(f"'90_Checks'!{c}${REG['CK.error_count']}" for c in fc_cols)
+    err_refs = "+".join(f"'90_Checks'!{c}${REG.get('CK.error_count', 24)}" for c in fc_cols)
     formula_cell(ws, r, 3, f"={err_refs}", FMT_INT)
     r += 1
     label_row(ws, r, "Статус", "")
