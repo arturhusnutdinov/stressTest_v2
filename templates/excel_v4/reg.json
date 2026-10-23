@@ -591,5 +591,6 @@
   "TX.dta_nol": 31,
   "TX.dta_gross": 32,
   "TX.dta_val_allow": 33,
-  "TX.wht": 43
+  "TX.wht": 43,
+  "COV.breach_count": 33
 }

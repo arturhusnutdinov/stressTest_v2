@@ -244,6 +244,21 @@ def build_cover(wb, cfg):
     fg_refs = "+".join(f"'{NAME['DT']}'!{c}${REG['DT.funding_gap']}" for c in fc_cols)
     formula_cell(ws, r, 3, f"={fg_refs}", FMT_MLN)
     r += 1
+    # Covenant breach count on cover (from 32_Covenants)
+    label_row(ws, r, "Нарушения ковенант", "")
+    cov_breach_row = REG.get("COV.breach_count")
+    if cov_breach_row:
+        cov_refs = "+".join(f"'{NAME['CO']}'!{c}${cov_breach_row}" for c in fc_cols)
+        formula_cell(ws, r, 3, f"={cov_refs}", FMT_INT)
+    r += 1
+    # Updated status: includes covenant breaches
+    label_row(ws, r, "Статус (полный)", "")
+    formula_cell(ws, r, 3,
+                 f"=IF(AND($C${r-4}=0,$C${r-1}=0),\"✅ ОК\","
+                 f"IF($C${r-4}>0,\"❌ ОШИБКИ\","
+                 f"IF($C${r-1}>0,\"⚠ КОВЕНАНТЫ НАРУШЕНЫ\",\"✅ ОК\")))",
+                 FMT_TEXT, bold=True)
+    r += 1
     label_row(ws, r, "calc_reset режим", "")
     formula_cell(ws, r, 3, "=IF(calc_reset=1,\"SEED (не финальный)\",\"ITERATE (финальный)\")", FMT_TEXT)
 
@@ -668,7 +683,7 @@ def build_assump(wb, cfg):
 
     # PP&E — use REG
     section_header(ws, r, "ОСНОВНЫЕ СРЕДСТВА"); r += 1
-    for label, key in [("DA rate", "CP.da_rate"), ("Sustaining CapEx / DA", "CP.sustaining_ratio"),
+    for label, key in [("DA rate", "CP.da_rate"), ("CapEx / DA (всего)", "CP.sustaining_ratio"),
                         ("Expansion CapEx", "CP.expansion_pct")]:
         label_row(ws, r, label)
         cp_r = REG.get(key)
@@ -1465,24 +1480,15 @@ def build_ppe(wb, cfg):
         # Gross: open = prev close
         formula_cell(ws, REG["PP.gross_open"], c_idx, f"={prev}{REG['PP.gross_close']}", FMT_MLN)
 
-        # ── CapEx = sustaining + expansion ──
-        # sustaining = prev_DA × sustaining_ratio
-        # expansion = MAX(0, volume_growth) × capex_per_unit
-        #   volume_growth from seg1 (primary product)
-        #   capex_per_unit ≈ PPE_net / capacity → expansion_pct × rev as proxy
+        # ── CapEx = DA × (CapEx/DA ratio) ──
+        # Audit v6: cp_sustaining is actually TOTAL CapEx/DA (includes expansion).
+        # No separate expansion additive — it's already in the historical ratio.
         rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
-        prev_rev_ref = f"'{NAME['RV']}'!{prev}${REG['RV.total_rev']}"
-        # Volume-driven expansion: growth in seg1 volume → capex
-        vol_ref = f"'{NAME['RV']}'!{cl}${REG.get('RV.seg1_vol', 8)}"
-        prev_vol_ref = f"'{NAME['RV']}'!{prev}${REG.get('RV.seg1_vol', 8)}"
-        # expansion = MAX(0, Δvol/vol_prev) × PPE_net × expansion_pct
-        # If volumes don't grow → expansion = 0 (no capex for declining business)
         formula_cell(ws, REG["PP.capex"], c_idx,
                      f"=MAX("
-                     f"{prev}{REG['PP.dep_charge']}*{cp_sustaining}"  # sustaining
-                     f"+IFERROR(MAX(0,{vol_ref}/{prev_vol_ref}-1),0)*{prev}{REG['PP.net_close']}*{cp_expansion}"  # expansion from volume
+                     f"{prev}{REG['PP.dep_charge']}*{cp_sustaining}"
                      f","
-                     f"ABS({rev_ref})*{cp_da_rate}*0.5"  # floor: 50% of rev-based
+                     f"{rev_ref}*{cp_da_rate}*0.5"  # floor: 50% of rev-based
                      f")",
                      FMT_MLN)
 
@@ -2276,10 +2282,14 @@ def build_checks(wb, cfg):
         id_parts += [f"IF(ISERROR({ref}),1,0)" for ref in key_cells]
         formula_cell(ws, r_err, c_idx, "=" + "+".join(id_parts), FMT_INT, bold=True)
 
-        # ФЛАГИ СОСТОЯНИЯ: OK to be > 0 in stress
+        # ФЛАГИ СОСТОЯНИЯ: OK to be > 0 in stress (includes covenant breaches)
         flag_rows = [REG["CK.rc_limit"], REG["CK.funding_gap"],
                      REG["CK.cash_min"], REG["CK.maint_debt"]]
         fl_parts = [f"IF(IFERROR({cl}{r},0)>0,1,0)" for r in flag_rows]
+        # Add covenant breach flag from 32_Covenants
+        cov_br = REG.get("COV.breach_count")
+        if cov_br:
+            fl_parts.append(f"IF('{NAME['CO']}'!{cl}${cov_br}>0,1,0)")
         formula_cell(ws, r_flags, c_idx, "=" + "+".join(fl_parts), FMT_INT)
 
     # History error count (cols C:E)
@@ -3333,9 +3343,9 @@ def build_cf(wb, cfg):
         # WC change ← WC delta
         ref_cell(ws, REG["CF.wc_change"], c_idx,
                  f"='{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}", FMT_MLN)
-        # CapEx ← PPE
-        ref_cell(ws, REG["CF.capex"], c_idx,
-                 f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
+        # CapEx ← PPE (negative sign for CF convention: outflow = negative)
+        formula_cell(ws, REG["CF.capex"], c_idx,
+                     f"=-'{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
         # Debt draw ← Debt (refi + new_term + RC_draw)
         formula_cell(ws, REG["CF.debt_draw"], c_idx,
                      f"='{NAME['DT']}'!{cl}${REG['DT.refi']}"
@@ -3382,9 +3392,9 @@ def build_cf(wb, cfg):
                      f"='{NAME['PP']}'!{cl}${REG['PP.disp_gross']}"
                      f"-'{NAME['PP']}'!{cl}${REG['PP.dep_disp']}",
                      FMT_MLN)
-        # CFI = -capex + disp + other
+        # CFI = capex (already negative) + disp + other
         formula_cell(ws, r_cfi, c_idx,
-                     f"=-{cl}{REG['CF.capex']}+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
+                     f"={cl}{REG['CF.capex']}+{cl}{REG['CF.disp_proceeds']}+{cl}{REG['CF.other_cfi']}",
                      FMT_MLN, bold=True)
 
         # CFF_без_RC_и_NewTerm: deterministic financing flows only
@@ -4149,13 +4159,13 @@ def build_covenants(wb, cfg):
                 formula_cell(ws, r, c, f"={cl}{r-2}-{cl}{thresh_r}", fmt)
         r += 2
 
-    # Breach count
+    # Breach count (registered for Cover and 90_Checks)
     section_header(ws, r, "ИТОГО НАРУШЕНИЙ")
     r += 1
     label_row(ws, r, "Количество нарушений", "", "0 = все ОК")
+    REG["COV.breach_count"] = r
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
-        # Count headroom rows < 0 (every 5th row starting from 10)
         parts = []
         for i, (_, _, _, _, _, _) in enumerate(cov_defs):
             headroom_r = 10 + i * 5
@@ -4495,7 +4505,7 @@ def build_control_panel(wb, cfg):
         input_cell(ws, r, 3, 0.07, FMT_PCT)
     REG["CP.da_rate"] = r
     r += 1
-    label_row(ws, r, "Sustaining CapEx / DA ratio")
+    label_row(ws, r, "CapEx / DA (всего) ratio")
     as_cd = REG.get("AS.capex_da")
     if as_cd:
         formula_cell(ws, r, 3, f"='{NAME['AS']}'!$F${as_cd}", FMT_PCT)
