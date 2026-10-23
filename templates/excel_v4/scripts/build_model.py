@@ -233,12 +233,7 @@ def build_cover(wb, cfg):
                for i in range(len(cfg["fc_years"]))]
     err_refs = "+".join(f"'90_Checks'!{c}${REG.get('CK.error_count', 24)}" for c in fc_cols)
     formula_cell(ws, r, 3, f"={err_refs}", FMT_INT)
-    r += 1
-    label_row(ws, r, "Статус", "")
-    formula_cell(ws, r, 3,
-                 f"=IF({get_column_letter(3)}{r-1}=0,\"✅ ОК\","
-                 f"IF({get_column_letter(3)}{r-1}<=3,\"⚠ ПРЕДУПРЕЖДЕНИЯ\",\"❌ ОШИБКИ\"))",
-                 FMT_TEXT, bold=True)
+    err_row = r
     r += 1
     label_row(ws, r, "Funding gap", "mln")
     fg_refs = "+".join(f"'{NAME['DT']}'!{c}${REG['DT.funding_gap']}" for c in fc_cols)
@@ -251,12 +246,11 @@ def build_cover(wb, cfg):
         cov_refs = "+".join(f"'{NAME['CO']}'!{c}${cov_breach_row}" for c in fc_cols)
         formula_cell(ws, r, 3, f"={cov_refs}", FMT_INT)
     r += 1
-    # Updated status: includes covenant breaches
-    label_row(ws, r, "Статус (полный)", "")
+    # Single unified status: errors + covenants
+    label_row(ws, r, "Статус", "")
     formula_cell(ws, r, 3,
-                 f"=IF(AND($C${r-4}=0,$C${r-1}=0),\"✅ ОК\","
-                 f"IF($C${r-4}>0,\"❌ ОШИБКИ\","
-                 f"IF($C${r-1}>0,\"⚠ КОВЕНАНТЫ НАРУШЕНЫ\",\"✅ ОК\")))",
+                 f"=IF($C${err_row}>0,\"❌ ОШИБКИ\","
+                 f"IF($C${r-1}>0,\"⚠ КОВЕНАНТЫ НАРУШЕНЫ\",\"✅ ОК\"))",
                  FMT_TEXT, bold=True)
     r += 1
     label_row(ws, r, "calc_reset режим", "")
@@ -4171,9 +4165,9 @@ def build_covenants(wb, cfg):
         r += 2
 
     # Breach count (registered for Cover and 90_Checks)
-    section_header(ws, r, "ИТОГО НАРУШЕНИЙ")
-    r += 1
-    label_row(ws, r, "Количество нарушений", "", "0 = все ОК")
+    # No empty section header — formula directly on labeled row
+    label_row(ws, r, "ИТОГО НАРУШЕНИЙ", "", "0 = все ОК")
+    ws.cell(r, 1).font = F_LABEL_B
     REG["COV.breach_count"] = r
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
@@ -4868,9 +4862,10 @@ def build_control_panel(wb, cfg):
         "rev_elast": ("[РАСЧЁТ]", "01_Macro — OLS SLOPE", "[РАСЧЁТ]"),
         "ppi_beta": ("[ОЦЕНКА]", "Чувствительность COGS к PPI", "[ПАР]"),
         "mr_damp": ("[ОЦЕНКА]", "Dampening mean-reversion", "[ПАР]"),
-        "term_tenor": ("[ДАННЫЕ]", "Raw_IFRS — средневзвешенный тенор", "[ДАННЫЕ]"),
+        "term_tenor": ("[РЕЗЕРВ]", "Не подключён — тенор в _Debt_Schedule", "[РЕЗЕРВ]"),
+        "term_tenor_capex": ("[РЕЗЕРВ]", "Не подключён — тенор проектного долга", "[РЕЗЕРВ]"),
         "active": ("[ПАР]", "Переключатель сценария (1/2/3)", "[ПАР]"),
-        "ewa_half": ("[ОЦЕНКА]", "Период полураспада EWA", "[ПАР]"),
+        "ewa_half": ("[РЕЗЕРВ]", "Не подключён — EWA в 03_Assump", "[РЕЗЕРВ]"),
         "rc_ставка": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
         "commitment": ("[ДОГОВОР]", "Кредитное соглашение", "[ДОГОВОР]"),
         "maint_share": ("[ОЦЕНКА]", "Доля поддерж. CapEx от DA", "[ПАР]"),
@@ -4899,6 +4894,7 @@ def build_control_panel(wb, cfg):
         "prov_accrual": ("[ОЦЕНКА]", "Среднегодовое начисление резервов", "[ПАР]"),
         "prov_util": ("[ОЦЕНКА]", "Средняя утилизация резервов", "[ПАР]"),
         "sc_th_": ("[НОРМ]", "Шкала рейтингов (Score→Grade)", "[НОРМ]"),
+        "sentinel": ("[НОРМ]", "Модельное соглашение: IFERROR fallback", "[НОРМ]"),
         "buyback": ("[ОЦЕНКА]", "Программа обратного выкупа", "[ПАР]"),
         "r²": ("[РАСЧЁТ]", "01_Macro — OLS RSQ", "[РАСЧЁТ]"),
         # Russian-label params that don't match English prefixes
