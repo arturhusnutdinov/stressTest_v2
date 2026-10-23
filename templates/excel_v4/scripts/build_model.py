@@ -2894,7 +2894,8 @@ def build_debt(wb, cfg):
         cp_cov_nd = f"'Control_Panel'!$C${REG.get('CP.cov_nd_ebitda', 71)}"
         # Covenant breach: EBITDA ≤ 0 is ALWAYS breach (negative ratio ≠ "OK")
         prev_ebitda = f"'{NAME['PL']}'!{prev}${REG['PL.ebitda']}"
-        prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/{prev_ebitda},99)"
+        cp_sentinel = f"'Control_Panel'!$C${REG.get('CP.sentinel_inf', 79)}"
+        prev_nd_ebitda = f"IFERROR({prev}{REG['DT.nd']}/{prev_ebitda},{cp_sentinel})"
         cov_breach = f"OR({prev_ebitda}<=0,{prev_nd_ebitda}>{cp_cov_nd})"
 
         cbrc = f"{cl}{REG['DT.cash_before_rc']}"
@@ -2907,7 +2908,7 @@ def build_debt(wb, cfg):
         # → P = Need₀ / (1 - rate×(1-t))
         # Gate on PREV year data only (no circular) — determines rate, not access
         cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
-        prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},99)"
+        prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},{cp_sentinel})"
         gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
         cp_pen_limit = f"'Control_Panel'!$C${REG.get('CP.penalty_limit', 73)}"
         cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
@@ -2966,7 +2967,7 @@ def build_debt(wb, cfg):
         # voluntary_term: leverage-driven OR excess cash drain
         # Leverage repay: NI>0, no breach, overleveraged → vol_st + vol_lt
         # Excess cash: NI>0, no breach → excess (regardless of leverage)
-        lev_repay = f"IF(IFERROR({est_nd}/ABS({ebitda_ref}),99)>{cp_target_lev},{vol_st}+{vol_lt},0)"
+        lev_repay = f"IF(IFERROR({est_nd}/ABS({ebitda_ref}),{cp_sentinel})>{cp_target_lev},{vol_st}+{vol_lt},0)"
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
                      f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,NOT({cov_breach})),"
                      f"MAX({lev_repay},{excess_cash}),"
@@ -3373,9 +3374,13 @@ def build_cf(wb, cfg):
                      f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}"
                      f"+'{NAME['BS']}'!{cl}${REG['BS.prov']}-'{NAME['BS']}'!{prev}${REG['BS.prov']}",
                      FMT_MLN)
-        # Interest paid: 0 in CFF (interest flows through NI in CFO)
-        # US GAAP style: interest is operating, not financing
-        formula_cell(ws, REG["CF.interest_paid"], c_idx, "=0", FMT_MLN)
+        # Interest paid: 0 in CFF — interest is in NI (CFO), not separate CFF item.
+        # IAS 7.33: entity may classify as operating (default) or financing.
+        # This model uses indirect method: interest already in PL.ebt → NI → CFO.
+        # No CFF reclassification — consistent with most corporate filings.
+        formula_cell(ws, REG["CF.interest_paid"], c_idx,
+                     "=0*1",  # explicit zero (not empty cell — documented convention)
+                     FMT_MLN)
 
         # CFO = NI + DA + impairment + deferred_tax - WC_change - associates + other_noncash
         # Associates: non-cash equity method income, subtract from CFO
@@ -4085,15 +4090,21 @@ def build_score(wb, cfg):
     label_row(ws, r_rating, "Рейтинг (S&P эквивалент)", "")
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
-        # Score → Rating lookup (thresholds from CP — no hardcoded constants)
-        cp_th = {g: f"'Control_Panel'!$C${REG.get(f'CP.sc_th_{g}', 120)}"
-                 for g in ["aaa", "aa", "a", "bbb", "bb", "b", "ccc"]}
-        formula_cell(ws, r_rating, c,
-                     f'=IF({cl}{r_final}>={cp_th["aaa"]},"AAA",IF({cl}{r_final}>={cp_th["aa"]},"AA",'
-                     f'IF({cl}{r_final}>={cp_th["a"]},"A",IF({cl}{r_final}>={cp_th["bbb"]},"BBB",'
-                     f'IF({cl}{r_final}>={cp_th["bb"]},"BB",IF({cl}{r_final}>={cp_th["b"]},"B",'
-                     f'IF({cl}{r_final}>={cp_th["ccc"]},"CCC","D")))))))',
-                     FMT_TEXT)
+        # Score → Rating lookup (17-step scale from CP thresholds)
+        grades = [
+            ("aaa", "AAA"), ("aap", "AA+"), ("aa", "AA"), ("aam", "AA-"),
+            ("ap", "A+"), ("a", "A"), ("am", "A-"),
+            ("bbbp", "BBB+"), ("bbb", "BBB"), ("bbbm", "BBB-"),
+            ("bbp", "BB+"), ("bb", "BB"), ("bbm", "BB-"),
+            ("bp", "B+"), ("b", "B"), ("bm", "B-"),
+            ("ccc", "CCC"),
+        ]
+        # Build nested IF: IF(score>=AAA,"AAA",IF(score>=AA+,"AA+",...,"D"))
+        formula = '"D"'
+        for key, label in reversed(grades):
+            cp_ref = f"'Control_Panel'!$C${REG.get(f'CP.sc_th_{key}', 120)}"
+            formula = f'IF({cl}{r_final}>={cp_ref},"{label}",{formula})'
+        formula_cell(ws, r_rating, c, f"={formula}", FMT_TEXT)
 
 
 def build_covenants(wb, cfg):
@@ -4611,7 +4622,8 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, cfg.get("spread_step", 0.005), FMT_PCT2)
     REG["CP.spread_step"] = r; r += 1
 
-    label_row(ws, r, "Доступность нового долга (1=Да, 0=Нет)", "", "Сценарный")
+    label_row(ws, r, "Доступность нового долга (1=Да, 0=Нет)", "",
+              "ДОПУЩЕНИЕ: 1=долг доступен даже при нарушении ковенантов (по штрафной ставке). 0=закрыт")
     input_cell(ws, r, 3, 1, FMT_INT)
     REG["CP.new_debt_available"] = r; r += 1
 
@@ -4628,8 +4640,13 @@ def build_control_panel(wb, cfg):
     REG["CP.penalty_limit"] = r; r += 1
 
     label_row(ws, r, "Covenant reclass LT→ST (1=Да, 0=Нет)", "", "IAS 1.74: opt-in (default=0, waiver assumed)")
-    input_cell(ws, r, 3, 0, FMT_INT)  # Default 0: assume waiver. Analyst enables for stress
+    input_cell(ws, r, 3, 0, FMT_INT)
     REG["CP.cov_reclass"] = r; r += 1
+    label_row(ws, r, "Sentinel infinity (для IFERROR)", "", "Заменяет литерал 99 в формулах долга")
+    input_cell(ws, r, 3, 99, FMT_INT)
+    ws.cell(r, 9, "[НОРМ]").font = F_NOTE
+    ws.cell(r, 10, "Модельное соглашение: бесконечный leverage").font = F_NOTE
+    REG["CP.sentinel_inf"] = r; r += 1
 
     label_row(ws, r, "FX USDCNY change YoY", "%", "Input: no USD/CNY in macro yet")
     input_cell(ws, r, 3, 0.0, FMT_PCT)
@@ -4761,12 +4778,22 @@ def build_control_panel(wb, cfg):
     # Rating thresholds (score → letter grade)
     section_header(ws, r, "РЕЙТИНГОВАЯ ШКАЛА (Score → Grade)"); r += 1
     for grade, threshold, key in [
-        ("AAA ≥", 85, "CP.sc_th_aaa"),
-        ("AA ≥", 75, "CP.sc_th_aa"),
+        ("AAA ≥", 90, "CP.sc_th_aaa"),
+        ("AA+ ≥", 85, "CP.sc_th_aap"),
+        ("AA ≥", 80, "CP.sc_th_aa"),
+        ("AA- ≥", 75, "CP.sc_th_aam"),
+        ("A+ ≥", 70, "CP.sc_th_ap"),
         ("A ≥", 65, "CP.sc_th_a"),
-        ("BBB ≥", 55, "CP.sc_th_bbb"),
-        ("BB ≥", 40, "CP.sc_th_bb"),
-        ("B ≥", 25, "CP.sc_th_b"),
+        ("A- ≥", 60, "CP.sc_th_am"),
+        ("BBB+ ≥", 55, "CP.sc_th_bbbp"),
+        ("BBB ≥", 50, "CP.sc_th_bbb"),
+        ("BBB- ≥", 45, "CP.sc_th_bbbm"),
+        ("BB+ ≥", 40, "CP.sc_th_bbp"),
+        ("BB ≥", 35, "CP.sc_th_bb"),
+        ("BB- ≥", 30, "CP.sc_th_bbm"),
+        ("B+ ≥", 27, "CP.sc_th_bp"),
+        ("B ≥", 22, "CP.sc_th_b"),
+        ("B- ≥", 18, "CP.sc_th_bm"),
         ("CCC ≥", 12, "CP.sc_th_ccc"),
     ]:
         label_row(ws, r, grade)
