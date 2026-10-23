@@ -5224,9 +5224,17 @@ def build_changelog(wb, cfg):
     ws.cell(3, 1, "Версия").font = F_LABEL_B
     ws.cell(3, 2, "Дата").font = F_LABEL_B
     ws.cell(3, 3, "Изменения").font = F_LABEL_B
-    ws.cell(4, 1, "v4.0")
-    ws.cell(4, 2, "2026-10-05")
-    ws.cell(4, 3, "Начальная версия шаблона v4 (Excel-driven)")
+    changes = [
+        ("v5.7", "2026-10-23", "Аудит v4-v9: HI cols O/P/Q, IAS 12 налог, 9 корксроев, 17 рейтинговых ступеней"),
+        ("v5.0", "2026-10-23", "Полный IAS 12 модуль + Tax basis PPE + Intangibles/Provisions корксрои"),
+        ("v4.6", "2026-10-22", "K1-I1 аудит: cached values, OLS, 40_Scen dynamic, ABS removal"),
+        ("v4.0", "2026-10-05", "Начальная версия шаблона v4 (Excel-driven)"),
+    ]
+    for i, (ver, date, desc) in enumerate(changes):
+        r = 4 + i
+        ws.cell(r, 1, ver)
+        ws.cell(r, 2, date)
+        ws.cell(r, 3, desc)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
