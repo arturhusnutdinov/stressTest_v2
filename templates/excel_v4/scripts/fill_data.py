@@ -1960,6 +1960,10 @@ def fill_bs_history(wb, data: dict, company: str):
         "prov": "prov", "dtl": "dtl", "other_ncl": "other_ncl",
         "sc": "sc", "apic": "apic", "re": "re", "aoci": "aoci",
         "equity": "te",
+        # Totals: needed for 90_Checks history comparison (fill_hist_sheet writes
+        # old years to these rows; fill_bs_history must overwrite with correct year)
+        "ta": "ta", "tca": "tca", "tnca": "tnca",
+        "tl": "tl", "tcl": "tcl", "tncl": "tncl",
     }
 
     filled = 0

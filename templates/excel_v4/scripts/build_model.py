@@ -2208,10 +2208,9 @@ def build_checks(wb, cfg):
         ("PPE: 15_PPE = 02_Hist (col E only)", f"'{NAME['PP']}'", REG['PP.net_close'], "HI.ppe_net"),
         ("BS: 20_BS TA = 02_Hist", f"'{NAME['BS']}'", REG['BS.ta'], "HI.ta"),
     ]
-    # HI has ALL hist years (C:G for 5 years), model sheets show LAST 3 (C:E).
-    # Need to offset HI column: model col C (2023) → HI col E (2023).
-    n_hist_all = len(cfg["hist_years"])
-    hi_col_offset = n_hist_all - n_hist  # e.g. 5 - 3 = 2
+    # fill_data writes history data to 02_Hist at cols C/D/E (same positions as
+    # model sheets), so no column offset needed — both use the same 3-col layout.
+    # (fill_data overwrites 02_Hist cols C-E with last 3 years' data)
     for i, (label, sheet_ref, calc_row, hi_key) in enumerate(hist_checks):
         r_hc = r_hist_base + 1 + i
         label_row(ws, r_hc, label, "mln", "Должно быть ~0")
@@ -2221,10 +2220,9 @@ def build_checks(wb, cfg):
             cols_range = [3 + n_hist - 1] if "PPE" in label else range(3, 3 + n_hist)
             for c in cols_range:
                 cl = get_column_letter(c)
-                hi_cl = get_column_letter(c + hi_col_offset)
                 formula_cell(ws, r_hc, c,
                              f"=ROUND({sheet_ref}!{cl}${calc_row}"
-                             f"-'{NAME['HI']}'!{hi_cl}${hi_row},1)",
+                             f"-'{NAME['HI']}'!{cl}${hi_row},1)",
                              FMT_RATIO)
 
     r_hist_err = r_hist_base + len(hist_checks) + 1
