@@ -1756,10 +1756,21 @@ def build_bs(wb, cfg):
         formula_cell(ws, REG["BS.rou"], c_idx,
                      f"='{NAME['LS']}'!{cl}${REG['LS.rou_close']}", FMT_MLN)
 
-        for key in ["other_ca", "goodwill", "intang",
-                     "other_cl", "prov",
+        for key in ["other_ca", "goodwill",
+                     "other_cl",
                      "other_ncl", "sc", "apic"]:
             formula_cell(ws, REG[f"BS.{key}"], c_idx, f"={prev}{REG[f'BS.{key}']}", FMT_MLN)
+        # Intangibles: amortization corkscrew (open - amort)
+        cp_ia = f"'Control_Panel'!$C${REG.get('CP.intang_amort', 90)}"
+        formula_cell(ws, REG["BS.intang"], c_idx,
+                     f"=MAX(0,{prev}{REG['BS.intang']}*(1-{cp_ia}))", FMT_MLN)
+        # Provisions: accrual/utilization corkscrew (open + accrual - utilization)
+        cp_prov_acc = f"'Control_Panel'!$C${REG.get('CP.prov_accrual_pct', 90)}"
+        cp_prov_util = f"'Control_Panel'!$C${REG.get('CP.prov_util_pct', 90)}"
+        rev_ref_prov = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
+        formula_cell(ws, REG["BS.prov"], c_idx,
+                     f"={prev}{REG['BS.prov']}+{rev_ref_prov}*{cp_prov_acc}"
+                     f"-{prev}{REG['BS.prov']}*{cp_prov_util}", FMT_MLN)
         # AOCI: carry-forward + FX reval on debt (moved from PL to OCI per IAS 21)
         if nci_pct == 0:
             formula_cell(ws, REG["BS.aoci"], c_idx,
@@ -1833,9 +1844,14 @@ def build_pl(wb, cfg):
         # SGA ← 13_SGA
         ref_cell(ws, REG["PL.sga"], c_idx,
                  f"='{NAME['SA']}'!{cl}${REG['SA.sga_total']}", FMT_MLN)
-        # D&A ← 15_PPE dep_charge
-        ref_cell(ws, REG["PL.da"], c_idx,
-                 f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
+        # D&A ← 15_PPE dep_charge + intangible amortization (BS.intang decrease)
+        # Intang amort = prev_intang - curr_intang (positive = amortization charge)
+        prev_cl_da = get_column_letter(c_idx - 1)
+        formula_cell(ws, REG["PL.da"], c_idx,
+                     f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
+                     f"+MAX(0,'{NAME['BS']}'!{prev_cl_da}${REG['BS.intang']}"
+                     f"-'{NAME['BS']}'!{cl}${REG['BS.intang']})",
+                     FMT_MLN)
         # Interest ← 17_Debt (always negative in PL — expense)
         formula_cell(ws, REG["PL.interest"], c_idx,
                      f"=-'{NAME['DT']}'!{cl}${REG['DT.interest']}", FMT_MLN)
@@ -1876,12 +1892,16 @@ def build_pl(wb, cfg):
         ref_cell(ws, REG["PL.tax"], c_idx,
                  f"='{NAME['TX']}'!{cl}${REG['TX.total']}", FMT_MLN)
 
-        # Other opex = carry forward as % of revenue (history ratio ~4%)
+        # Other opex = carry forward as % of revenue + provision charge (net accrual)
         prev_cl = get_column_letter(c_idx - 1)
         prev_rev_ref = f"ABS('{NAME['RV']}'!{prev_cl}${REG['RV.total_rev']})"
+        # Provision charge = ΔProv (increase in provision = expense, negative for PL)
+        prov_chg = (f"-MAX(0,'{NAME['BS']}'!{cl}${REG['BS.prov']}"
+                    f"-'{NAME['BS']}'!{prev_cl}${REG['BS.prov']})")
         formula_cell(ws, REG["PL.other_opex"], c_idx,
                      f"=IFERROR({prev_cl}{REG['PL.other_opex']}*ABS({cl}{REG['PL.revenue']})"
-                     f"/MAX(1,{prev_rev_ref}),{prev_cl}{REG['PL.other_opex']})",
+                     f"/MAX(1,{prev_rev_ref}),{prev_cl}{REG['PL.other_opex']})"
+                     f"+{prov_chg}",
                      FMT_MLN)
         # Impairment = 0 in forecast (explicit assumption: no impairments planned)
         formula_cell(ws, REG["PL.impairment"], c_idx, "=0", FMT_MLN)
@@ -3287,9 +3307,12 @@ def build_cf(wb, cfg):
         # NI ← PL
         ref_cell(ws, REG["CF.ni"], c_idx,
                  f"='{NAME['PL']}'!{cl}${REG['PL.ni']}", FMT_MLN)
-        # DA ← PPE
-        ref_cell(ws, REG["CF.da"], c_idx,
-                 f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
+        # DA ← PPE + intangible amortization (must match PL.da for CF bridge)
+        formula_cell(ws, REG["CF.da"], c_idx,
+                     f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
+                     f"+MAX(0,'{NAME['BS']}'!{prev}${REG['BS.intang']}"
+                     f"-'{NAME['BS']}'!{cl}${REG['BS.intang']})",
+                     FMT_MLN)
         # Deferred tax ← Tax
         ref_cell(ws, REG["CF.deferred_tax"], c_idx,
                  f"='{NAME['TX']}'!{cl}${REG['TX.deferred']}", FMT_MLN)
@@ -3317,12 +3340,14 @@ def build_cf(wb, cfg):
         # Dividends ← Equity
         ref_cell(ws, REG["CF.div_paid"], c_idx,
                  f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}", FMT_MLN)
-        # Other non-cash: ΔTaxPay + Lease_dep + Lease_int
+        # Other non-cash: ΔTaxPay + Lease_dep + Lease_int + ΔProvisions
         # FX reval removed — now in OCI (not PL), no CFO reversal needed
+        # ΔProvisions: increase = addback (non-cash expense accrued)
         formula_cell(ws, REG["CF.other_noncash"], c_idx,
                      f"='{NAME['BS']}'!{cl}${REG['BS.tax_pay']}-'{NAME['BS']}'!{prev}${REG['BS.tax_pay']}"
                      f"+ABS('{NAME['LS']}'!{cl}${REG['LS.rou_dep']})"
-                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}",
+                     f"+'{NAME['LS']}'!{cl}${REG['LS.liab_int']}"
+                     f"+'{NAME['BS']}'!{cl}${REG['BS.prov']}-'{NAME['BS']}'!{prev}${REG['BS.prov']}",
                      FMT_MLN)
         # Interest paid: 0 in CFF (interest flows through NI in CFO)
         # US GAAP style: interest is operating, not financing
@@ -3461,91 +3486,253 @@ def build_equity(wb, cfg):
 
 
 def build_tax(wb, cfg):
-    """19_Tax — IAS 12 tax model."""
+    """19_Tax — full IAS 12 tax model.
+
+    Includes:
+    - Tax basis PPE corkscrew (separate from book PPE)
+    - NOL carryforward with expiry
+    - DTA from NOL + timing differences, with valuation allowance
+    - DTL from accelerated tax depreciation
+    - Deferred tax = ΔDTL - ΔDTA
+    - Current tax with minimum tax floor
+    - WHT on dividends
+    """
     ws = wb["19_Tax"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"19_Tax — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "IAS 12: Current + Deferred + NOL + Tax Basis PPE").font = F_SUBTITLE
     n_hist = len(cfg["hist_years"][-3:])
+    n_fc = len(cfg["fc_years"])
+    fc_start = 3 + n_hist
     year_headers(ws, 4, cfg["hist_years"][-3:], cfg["fc_years"])
 
-    section_header(ws, 6, "НАЛОГ НА ПРИБЫЛЬ (IAS 12)")
-    for key, label in [("ebt", "Прибыль до налога (EBT)"), ("nol_open", "NOL начало"),
-                       ("nol_used", "NOL использовано"), ("taxable", "Налогооблагаемая прибыль"),
-                       ("current", "Текущий налог"), ("deferred", "Отложенный налог"),
-                       ("total", "ИТОГО налог"), ("eff_rate", "Эффективная ставка")]:
-        r = REG.get(f"TX.{key}", 7)
+    # ── A. CURRENT TAX ──
+    section_header(ws, 6, "A. ТЕКУЩИЙ НАЛОГ")
+    r = 7
+    tx_rows = {}
+    for key, label in [
+        ("ebt", "Прибыль до налога (EBT)"),
+        ("nol_open", "NOL начало"),
+        ("nol_used", "NOL использовано"),
+        ("nol_new", "NOL новые убытки"),
+        ("nol_expired", "NOL истёкшие"),
+        ("nol_close", "NOL конец"),
+        ("taxable", "Налогооблагаемая прибыль"),
+        ("current_base", "Текущий налог (базовый)"),
+        ("min_tax", "Минимальный налог"),
+        ("current", "Текущий налог (max базовый, мин.)"),
+    ]:
+        label_row(ws, r, label, "mln")
+        tx_rows[key] = r
+        REG[f"TX.{key}"] = r
+        r += 1
+    r += 1
+
+    # ── B. TAX BASIS PPE ──
+    section_header(ws, r, "B. НАЛОГОВАЯ БАЗА ОС (Tax Basis PPE)")
+    r += 1
+    for key, label in [
+        ("tb_gross_open", "Налоговая стоимость ОС (начало)"),
+        ("tb_additions", "Поступления (= book CapEx)"),
+        ("tb_disposals", "Выбытия"),
+        ("tb_gross_close", "Налоговая стоимость ОС (конец)"),
+        ("tb_dep_charge", "Налоговая амортизация"),
+        ("tb_dep_accum_open", "Накопл. аморт. (начало)"),
+        ("tb_dep_accum_close", "Накопл. аморт. (конец)"),
+        ("tb_net", "Налоговая нетто стоимость"),
+        ("timing_diff", "Временная разница (Book - Tax net)"),
+    ]:
+        label_row(ws, r, label, "mln")
+        tx_rows[key] = r
+        REG[f"TX.{key}"] = r
+        r += 1
+    r += 1
+
+    # ── C. ОТЛОЖЕННЫЕ НАЛОГИ ──
+    section_header(ws, r, "C. ОТЛОЖЕННЫЕ НАЛОГИ (DTA / DTL)")
+    r += 1
+    for key, label in [
+        ("dtl_ppe", "DTL от ОС (timing × rate)"),
+        ("dta_nol", "DTA от NOL (NOL × rate)"),
+        ("dta_gross", "DTA валовый"),
+        ("dta_val_allow", "Valuation allowance"),
+        ("dta_open", "DTA начало"),
+        ("dta_close", "DTA конец"),
+        ("dtl_open", "DTL начало"),
+        ("dtl_close", "DTL конец"),
+        ("deferred", "Отложенный налог (ΔDTL − ΔDTA)"),
+    ]:
+        label_row(ws, r, label, "mln")
+        tx_rows[key] = r
+        REG[f"TX.{key}"] = r
+        r += 1
+    r += 1
+
+    # ── D. ИТОГО ──
+    section_header(ws, r, "D. ИТОГО НАЛОГ")
+    r += 1
+    for key, label in [
+        ("total", "ИТОГО налог на прибыль"),
+        ("eff_rate", "Эффективная ставка"),
+        ("wht", "WHT на дивиденды"),
+    ]:
         label_row(ws, r, label, "mln" if key != "eff_rate" else "%")
+        tx_rows[key] = r
+        REG[f"TX.{key}"] = r
+        r += 1
 
-    section_header(ws, REG["TX.nol_close"] - 1, "NOL CARRYFORWARD")
-    label_row(ws, REG["TX.nol_close"], "NOL конец", "mln")
-
-    section_header(ws, REG["TX.dta_open"] - 1, "ОТЛОЖЕННЫЕ НАЛОГИ (DTA / DTL)")
-    for key, label in [("dta_open", "DTA начало"), ("dta_close", "DTA конец"),
-                       ("dtl_open", "DTL начало"), ("dtl_close", "DTL конец")]:
-        label_row(ws, REG[f"TX.{key}"], label, "mln")
-
-    # History: DTA/DTL from 02_Hist (last hist col)
+    # ── History: DTA/DTL from 02_Hist ──
     lhc = 3 + n_hist - 1
     cl_lh = get_column_letter(lhc)
     hi_dta = REG.get("HI.dta")
     hi_dtl = REG.get("HI.dtl")
+    hi_ppe = REG.get("HI.ppe_net")
     if hi_dta:
-        ref_cell(ws, REG["TX.dta_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
-        ref_cell(ws, REG["TX.dta_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
+        ref_cell(ws, tx_rows["dta_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
+        ref_cell(ws, tx_rows["dta_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
     if hi_dtl:
-        ref_cell(ws, REG["TX.dtl_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
-        ref_cell(ws, REG["TX.dtl_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
+        ref_cell(ws, tx_rows["dtl_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
+        ref_cell(ws, tx_rows["dtl_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
+    # Tax basis PPE history: assume = book PPE (no historical gap)
+    if hi_ppe:
+        ref_cell(ws, tx_rows["tb_net"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_ppe}", FMT_MLN)
+        ref_cell(ws, tx_rows["tb_gross_close"], lhc,
+                 f"='{NAME['PP']}'!{cl_lh}${REG['PP.gross_close']}", FMT_MLN)
+        ref_cell(ws, tx_rows["tb_dep_accum_close"], lhc,
+                 f"='{NAME['PP']}'!{cl_lh}${REG['PP.dep_close']}", FMT_MLN)
 
-    # Tax formulas (forecast)
-    for c_idx in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    # CP references
+    cp = lambda k, d=80: f"'Control_Panel'!$C${REG.get(k, d)}"
+    cp_rate = cp("CP.tax_rate")
+    cp_nol_cap = cp("CP.nol_cap")
+    cp_nol_expiry = cp("CP.nol_expiry")
+    cp_tax_ul = cp("CP.tax_useful_life")
+    cp_tax_accel = cp("CP.tax_accel")
+    cp_dta_val_yrs = cp("CP.dta_val_years")
+    cp_min_rate = cp("CP.min_tax_rate")
+    cp_wht = cp("CP.wht_rate")
+
+    # ── Forecast formulas ──
+    for c_idx in range(fc_start, fc_start + n_fc):
         cl = get_column_letter(c_idx)
         prev = get_column_letter(c_idx - 1)
+        yr_idx = c_idx - fc_start  # 0, 1, 2
 
-        # EBT from PL
-        ref_cell(ws, REG["TX.ebt"], c_idx,
+        # A. Current tax
+        ref_cell(ws, tx_rows["ebt"], c_idx,
                  f"='{NAME['PL']}'!{cl}${REG['PL.ebt']}", FMT_MLN)
-        # NOL open = prev close
-        formula_cell(ws, REG["TX.nol_open"], c_idx, f"={prev}{REG['TX.nol_close']}", FMT_MLN)
-        # NOL used = min(NOL_open, EBT × NOL_cap) — from CP
-        cp_nol_cap = f"'Control_Panel'!$C${REG.get('CP.nol_cap', 82)}"
-        formula_cell(ws, REG["TX.nol_used"], c_idx,
-                     f"=MIN({cl}{REG['TX.nol_open']},MAX(0,{cl}{REG['TX.ebt']})*{cp_nol_cap})", FMT_MLN)
-        # Taxable = EBT - NOL_used
-        formula_cell(ws, REG["TX.taxable"], c_idx,
-                     f"=MAX(0,{cl}{REG['TX.ebt']}-{cl}{REG['TX.nol_used']})", FMT_MLN)
-        # Д7: Current tax = (taxable - timing_difference) × rate
-        # Timing diff = tax_DA - book_DA = book_DA × 0.2 (Д7: 1.2 coefficient)
-        cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
-        book_da = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
-        timing_diff = f"({book_da}*0.2)"  # tax DA is 20% higher than book
-        formula_cell(ws, REG["TX.current"], c_idx,
-                     f"=MAX(0,({cl}{REG['TX.taxable']}-{timing_diff}))*{cp_tax_rate}", FMT_MLN)
-        # Total = current + deferred
-        formula_cell(ws, REG["TX.total"], c_idx,
-                     f"={cl}{REG['TX.current']}+{cl}{REG['TX.deferred']}", FMT_MLN, bold=True)
-        # Effective rate
-        formula_cell(ws, REG["TX.eff_rate"], c_idx,
-                     f"=IFERROR({cl}{REG['TX.total']}/{cl}{REG['TX.ebt']},0)", FMT_PCT)
-        # NOL close = open - used + new_losses (accumulate when EBT < 0)
-        formula_cell(ws, REG["TX.nol_close"], c_idx,
-                     f"={cl}{REG['TX.nol_open']}-{cl}{REG['TX.nol_used']}"
-                     f"+MAX(0,-{cl}{REG['TX.ebt']})", FMT_MLN)
+        formula_cell(ws, tx_rows["nol_open"], c_idx, f"={prev}{tx_rows['nol_close']}", FMT_MLN)
+        # NOL used = MIN(NOL_open, MAX(0, EBT) × cap)
+        formula_cell(ws, tx_rows["nol_used"], c_idx,
+                     f"=MIN({cl}{tx_rows['nol_open']},MAX(0,{cl}{tx_rows['ebt']})*{cp_nol_cap})",
+                     FMT_MLN)
+        # NOL new = MAX(0, -EBT) (accumulate losses)
+        formula_cell(ws, tx_rows["nol_new"], c_idx,
+                     f"=MAX(0,-{cl}{tx_rows['ebt']})", FMT_MLN)
+        # NOL expired: IF expiry > 0 AND yr_idx >= expiry, expire oldest vintage
+        # Simplified: flat expiry = NOL_open / expiry_years (if expiry > 0)
+        formula_cell(ws, tx_rows["nol_expired"], c_idx,
+                     f"=IF({cp_nol_expiry}>0,"
+                     f"MIN({cl}{tx_rows['nol_open']},{cl}{tx_rows['nol_open']}/{cp_nol_expiry}),0)",
+                     FMT_MLN)
+        # NOL close = open - used + new - expired
+        formula_cell(ws, tx_rows["nol_close"], c_idx,
+                     f"={cl}{tx_rows['nol_open']}-{cl}{tx_rows['nol_used']}"
+                     f"+{cl}{tx_rows['nol_new']}-{cl}{tx_rows['nol_expired']}",
+                     FMT_MLN)
+        # Taxable = MAX(0, EBT - NOL_used)
+        formula_cell(ws, tx_rows["taxable"], c_idx,
+                     f"=MAX(0,{cl}{tx_rows['ebt']}-{cl}{tx_rows['nol_used']})", FMT_MLN)
+        # Current base = taxable × rate
+        formula_cell(ws, tx_rows["current_base"], c_idx,
+                     f"={cl}{tx_rows['taxable']}*{cp_rate}", FMT_MLN)
+        # Minimum tax = MAX(0, EBT) × min_rate
+        formula_cell(ws, tx_rows["min_tax"], c_idx,
+                     f"=MAX(0,{cl}{tx_rows['ebt']})*{cp_min_rate}", FMT_MLN)
+        # Current = MAX(base, minimum)
+        formula_cell(ws, tx_rows["current"], c_idx,
+                     f"=MAX({cl}{tx_rows['current_base']},{cl}{tx_rows['min_tax']})",
+                     FMT_MLN, bold=True)
 
-        # DTA/DTL: deferred tax from PPE timing difference
-        # DTL grows when book depreciation < tax depreciation (accelerated)
-        # Simplified: deferred_tax = (book_DA - tax_DA) × tax_rate
-        # Tax DA ≈ book DA × 1.2 (accelerated as proxy)
-        formula_cell(ws, REG["TX.dta_open"], c_idx, f"={prev}{REG['TX.dta_close']}", FMT_MLN)
-        formula_cell(ws, REG["TX.dtl_open"], c_idx, f"={prev}{REG['TX.dtl_close']}", FMT_MLN)
-        # Deferred tax expense = (tax_DA - book_DA) × tax_rate (DTL increasing)
-        book_da = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
-        formula_cell(ws, REG["TX.deferred"], c_idx,
-                     f"=({book_da}*1.2-{book_da})*{cp_tax_rate}", FMT_MLN)
-        # DTA_close = DTA_open (simplified — no new DTA sources)
-        formula_cell(ws, REG["TX.dta_close"], c_idx, f"={cl}{REG['TX.dta_open']}", FMT_MLN)
-        # DTL_close = DTL_open + deferred_tax_expense
-        formula_cell(ws, REG["TX.dtl_close"], c_idx,
-                     f"={cl}{REG['TX.dtl_open']}+{cl}{REG['TX.deferred']}", FMT_MLN)
+        # B. Tax basis PPE
+        # Gross open = prev close
+        formula_cell(ws, tx_rows["tb_gross_open"], c_idx,
+                     f"={prev}{tx_rows['tb_gross_close']}", FMT_MLN)
+        # Additions = book CapEx (same asset, different depreciation)
+        ref_cell(ws, tx_rows["tb_additions"], c_idx,
+                 f"='{NAME['PP']}'!{cl}${REG['PP.capex']}", FMT_MLN)
+        # Disposals = book disposals
+        ref_cell(ws, tx_rows["tb_disposals"], c_idx,
+                 f"='{NAME['PP']}'!{cl}${REG['PP.disp_gross']}", FMT_MLN)
+        # Gross close = open + add - disp
+        formula_cell(ws, tx_rows["tb_gross_close"], c_idx,
+                     f"={cl}{tx_rows['tb_gross_open']}+{cl}{tx_rows['tb_additions']}"
+                     f"-{cl}{tx_rows['tb_disposals']}", FMT_MLN)
+        # Tax dep = gross_close / tax_UL × accel_factor (accelerated SL)
+        formula_cell(ws, tx_rows["tb_dep_charge"], c_idx,
+                     f"=IFERROR({cl}{tx_rows['tb_gross_close']}/{cp_tax_ul}*{cp_tax_accel},0)",
+                     FMT_MLN)
+        # Accum dep: open = prev close
+        formula_cell(ws, tx_rows["tb_dep_accum_open"], c_idx,
+                     f"={prev}{tx_rows['tb_dep_accum_close']}", FMT_MLN)
+        # Accum dep close = open + charge (capped at gross)
+        formula_cell(ws, tx_rows["tb_dep_accum_close"], c_idx,
+                     f"=MIN({cl}{tx_rows['tb_gross_close']},"
+                     f"{cl}{tx_rows['tb_dep_accum_open']}+{cl}{tx_rows['tb_dep_charge']})",
+                     FMT_MLN)
+        # Tax net = gross - accum_dep
+        formula_cell(ws, tx_rows["tb_net"], c_idx,
+                     f"={cl}{tx_rows['tb_gross_close']}-{cl}{tx_rows['tb_dep_accum_close']}",
+                     FMT_MLN, bold=True)
+        # Timing diff = book_net - tax_net (positive → DTL, negative → DTA)
+        formula_cell(ws, tx_rows["timing_diff"], c_idx,
+                     f"='{NAME['PP']}'!{cl}${REG['PP.net_close']}-{cl}{tx_rows['tb_net']}",
+                     FMT_MLN)
+
+        # C. Deferred taxes (incremental approach — no transition jump)
+        # DTL: driven by PPE timing difference (tax DA > book DA → DTL grows)
+        # deferred_ppe = (tax_dep - book_dep) × rate (positive = DTL increase)
+        book_da_c = f"'{NAME['PP']}'!{cl}${REG['PP.dep_charge']}"
+        formula_cell(ws, tx_rows["dtl_ppe"], c_idx,
+                     f"=({cl}{tx_rows['tb_dep_charge']}-{book_da_c})*{cp_rate}", FMT_MLN)
+        # DTL open/close: accumulate from history
+        formula_cell(ws, tx_rows["dtl_open"], c_idx, f"={prev}{tx_rows['dtl_close']}", FMT_MLN)
+        formula_cell(ws, tx_rows["dtl_close"], c_idx,
+                     f"=MAX(0,{cl}{tx_rows['dtl_open']}+{cl}{tx_rows['dtl_ppe']})", FMT_MLN)
+
+        # DTA from NOL = NOL_close × rate
+        formula_cell(ws, tx_rows["dta_nol"], c_idx,
+                     f"={cl}{tx_rows['nol_close']}*{cp_rate}", FMT_MLN)
+        # DTA gross = DTA_nol + MAX(0, -timing_diff_delta) × rate
+        # (if book_DA > tax_DA → DTA from PPE)
+        formula_cell(ws, tx_rows["dta_gross"], c_idx,
+                     f"={cl}{tx_rows['dta_nol']}+MAX(0,-{cl}{tx_rows['timing_diff']})*{cp_rate}",
+                     FMT_MLN)
+        # Valuation allowance: if EBT < 0, write down DTA proportionally
+        formula_cell(ws, tx_rows["dta_val_allow"], c_idx,
+                     f"=IF({cl}{tx_rows['ebt']}<0,"
+                     f"{cl}{tx_rows['dta_gross']}*MIN(1,1/{cp_dta_val_yrs}),0)",
+                     FMT_MLN)
+        # DTA open/close
+        formula_cell(ws, tx_rows["dta_open"], c_idx, f"={prev}{tx_rows['dta_close']}", FMT_MLN)
+        formula_cell(ws, tx_rows["dta_close"], c_idx,
+                     f"=MAX(0,{cl}{tx_rows['dta_gross']}-{cl}{tx_rows['dta_val_allow']})",
+                     FMT_MLN)
+        # Deferred tax = ΔDTL - ΔDTA (positive = expense)
+        formula_cell(ws, tx_rows["deferred"], c_idx,
+                     f"=({cl}{tx_rows['dtl_close']}-{cl}{tx_rows['dtl_open']})"
+                     f"-({cl}{tx_rows['dta_close']}-{cl}{tx_rows['dta_open']})",
+                     FMT_MLN)
+
+        # D. Total
+        formula_cell(ws, tx_rows["total"], c_idx,
+                     f"={cl}{tx_rows['current']}+{cl}{tx_rows['deferred']}",
+                     FMT_MLN, bold=True)
+        formula_cell(ws, tx_rows["eff_rate"], c_idx,
+                     f"=IFERROR({cl}{tx_rows['total']}/{cl}{tx_rows['ebt']},0)", FMT_PCT)
+        # WHT on dividends
+        formula_cell(ws, tx_rows["wht"], c_idx,
+                     f"='{NAME['EQ']}'!{cl}${REG['EQ.div']}*{cp_wht}", FMT_MLN)
 
 
 def build_valuation(wb, cfg):
@@ -4459,17 +4646,26 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, cov.get("icr_min", 1.5), FMT_MULT)
     REG["CP.cov_icr"] = r; r += 2
 
-    # ── I. НАЛОГИ ──
-    section_header(ws, r, "I. НАЛОГИ"); r += 1
-    label_row(ws, r, "Statutory tax rate")
-    input_cell(ws, r, 3, 0.25, FMT_PCT)
-    REG["CP.tax_rate"] = r; r += 1
-    label_row(ws, r, "NOL opening balance", "mln")
-    input_cell(ws, r, 3, 0, FMT_MLN0)
-    REG["CP.nol_open"] = r; r += 1
-    label_row(ws, r, "NOL max utilization (%)")
-    input_cell(ws, r, 3, 0.80, FMT_PCT)
-    REG["CP.nol_cap"] = r; r += 2
+    # ── I. НАЛОГИ (полный IAS 12 модуль) ──
+    section_header(ws, r, "I. НАЛОГИ (IAS 12)"); r += 1
+    for param, val, key, fmt in [
+        ("Statutory tax rate", 0.25, "CP.tax_rate", FMT_PCT),
+        ("NOL opening balance", 0, "CP.nol_open", FMT_MLN0),
+        ("NOL max utilization (%)", 0.80, "CP.nol_cap", FMT_PCT),
+        ("NOL expiry (лет, 0=бессрочно)", 10, "CP.nol_expiry", FMT_INT),
+        ("Tax useful life (лет)", 20, "CP.tax_useful_life", FMT_INT),
+        ("Tax accel. factor (1=SL, 2=ускоренная)", 1.0, "CP.tax_accel", FMT_RATIO),
+        ("DTA valuation: макс. лет убытков", 3, "CP.dta_val_years", FMT_INT),
+        ("Minimum tax rate (альтернативный)", 0.0, "CP.min_tax_rate", FMT_PCT),
+        ("WHT on dividends", 0.0, "CP.wht_rate", FMT_PCT),
+        ("Intangibles amort. rate (%)", 0.10, "CP.intang_amort", FMT_PCT),
+        ("Provisions accrual (% rev)", 0.005, "CP.prov_accrual_pct", FMT_PCT),
+        ("Provisions utilization (%)", 0.30, "CP.prov_util_pct", FMT_PCT),
+    ]:
+        label_row(ws, r, param)
+        input_cell(ws, r, 3, val, fmt)
+        REG[key] = r; r += 1
+    r += 1
 
     # ── J. ДИВИДЕНДЫ И КАПИТАЛ ──
     section_header(ws, r, "J. ДИВИДЕНДЫ И КАПИТАЛ"); r += 1
