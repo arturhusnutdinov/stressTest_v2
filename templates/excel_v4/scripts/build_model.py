@@ -1332,15 +1332,18 @@ def build_revenue(wb, cfg):
     r_recon = REG.get("RV.recon", 19)
     label_row(ws, r_recon, "Other revenue (VAP, foil, elim.)", "mln",
               "02_Hist rev minus segments (~25%). Grows proportionally")
-    # History: formula
+    # History: formula (must use correct HI column, not model column)
     hi_rev = REG.get("HI.revenue", 7)
+    n_hist_all_rv = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
+    hi_offset_rv = n_hist_all_rv - n_hist
     for c in range(3, 3 + n_hist):
         cl = get_column_letter(c)
+        hi_cl = get_column_letter(c + hi_offset_rv)
         seg_parts = "+".join(
             f"{cl}{REG.get('RV.' + seg['key'] + '_rev', 10)}"
             for seg in cfg["segments"])
         formula_cell(ws, r_recon, c,
-                     f"='{NAME['HI']}'!{cl}${hi_rev}-({seg_parts})", FMT_MLN)
+                     f"='{NAME['HI']}'!{hi_cl}${hi_rev}-({seg_parts})", FMT_MLN)
     # Forecast
     for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
         # Д2: Reconciliation grows proportionally to segment total (not frozen)
@@ -2591,14 +2594,16 @@ def build_wc(wb, cfg):
         # DSO = AR/Revenue×365, DIH = INV/COGS×365, DPO = AP/COGS×365
         driver_map = {"dso": ("HI.ar", "HI.revenue"), "dio": ("HI.inv", "HI.cogs"), "dpo": ("HI.ap", "HI.cogs")}
         num_key, den_key = driver_map[key]
+        n_hist_all_wc = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
+        hi_off_wc = n_hist_all_wc - n_hist
         for c in range(3, 3 + n_hist):
-            cl = get_column_letter(c)
+            hi_cl = get_column_letter(c + hi_off_wc)
             num_r = REG.get(num_key)
             den_r = REG.get(den_key)
             if num_r and den_r:
                 formula_cell(ws, r, c,
-                             f"=IFERROR(ABS('{NAME['HI']}'!{cl}${num_r})"
-                             f"/ABS('{NAME['HI']}'!{cl}${den_r})*365,0)",
+                             f"=IFERROR(ABS('{NAME['HI']}'!{hi_cl}${num_r})"
+                             f"/ABS('{NAME['HI']}'!{hi_cl}${den_r})*365,0)",
                              FMT_DAYS)
             else:
                 input_cell(ws, r, c, 0, FMT_DAYS)
@@ -3124,13 +3129,15 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl}{REG['DT.nd']}/{ebitda_ref},0)",
                      FMT_MULT)
 
-    # Historical inputs — formulas from 02_Hist for ALL hist years
+    # Historical inputs — formulas from 02_Hist (correct column mapping)
     hi_st = REG.get("HI.st_debt")
     hi_lt = REG.get("HI.lt_debt")
     hi_cash = REG.get("HI.cash")
     hi_int = REG.get("HI.interest")
+    n_hist_all_dt = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
+    hi_off_dt = n_hist_all_dt - n_hist
     for hc in range(3, 3 + n_hist):
-        cl_h = get_column_letter(hc)
+        cl_h = get_column_letter(hc + hi_off_dt)  # correct HI column
         # D1 audit: debt in 02_Hist is positive → no ABS needed
         if hi_st and hi_lt:
             td = f"'{NAME['HI']}'!{cl_h}${hi_st}+'{NAME['HI']}'!{cl_h}${hi_lt}"
@@ -3174,9 +3181,11 @@ def build_debt(wb, cfg):
                      f"=IFERROR({cl_lh}{REG['DT.st']}/({cl_lh}{REG['DT.st']}+{cl_lh}{REG['DT.lt']}),0)", FMT_PCT)
     hi_da = REG.get("HI.da")
     hi_capex = REG.get("HI.capex")
+    n_hist_all_dt2 = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
+    cl_hi_lh = get_column_letter(lhc + n_hist_all_dt2 - n_hist)
     if hi_da and hi_capex:
         formula_cell(ws, REG["DT.cal_maint_share"], lhc,
-                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_lh}${hi_da})/ABS('{NAME['HI']}'!{cl_lh}${hi_capex}),0)", FMT_PCT)
+                     f"=IFERROR(ABS('{NAME['HI']}'!{cl_hi_lh}${hi_da})/ABS('{NAME['HI']}'!{cl_hi_lh}${hi_capex}),0)", FMT_PCT)
     ri_kr = REG.get("RI.kr_row")
     if ri_kr:
         formula_cell(ws, REG["DT.cal_spread"], lhc,
@@ -3586,21 +3595,22 @@ def build_tax(wb, cfg):
         REG[f"TX.{key}"] = r
         r += 1
 
-    # ── History: DTA/DTL from 02_Hist ──
+    # ── History: DTA/DTL from 02_Hist (correct column) ──
     lhc = 3 + n_hist - 1
-    cl_lh = get_column_letter(lhc)
+    cl_lh = get_column_letter(lhc)  # model col (E)
+    n_hist_all_tx = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
+    cl_hi_lh_tx = get_column_letter(lhc + n_hist_all_tx - n_hist)  # correct HI col (Q)
     hi_dta = REG.get("HI.dta")
     hi_dtl = REG.get("HI.dtl")
     hi_ppe = REG.get("HI.ppe_net")
     if hi_dta:
-        ref_cell(ws, tx_rows["dta_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
-        ref_cell(ws, tx_rows["dta_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dta}", FMT_MLN)
+        ref_cell(ws, tx_rows["dta_open"], lhc, f"='{NAME['HI']}'!{cl_hi_lh_tx}${hi_dta}", FMT_MLN)
+        ref_cell(ws, tx_rows["dta_close"], lhc, f"='{NAME['HI']}'!{cl_hi_lh_tx}${hi_dta}", FMT_MLN)
     if hi_dtl:
-        ref_cell(ws, tx_rows["dtl_open"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
-        ref_cell(ws, tx_rows["dtl_close"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_dtl}", FMT_MLN)
-    # Tax basis PPE history: assume = book PPE (no historical gap)
+        ref_cell(ws, tx_rows["dtl_open"], lhc, f"='{NAME['HI']}'!{cl_hi_lh_tx}${hi_dtl}", FMT_MLN)
+        ref_cell(ws, tx_rows["dtl_close"], lhc, f"='{NAME['HI']}'!{cl_hi_lh_tx}${hi_dtl}", FMT_MLN)
     if hi_ppe:
-        ref_cell(ws, tx_rows["tb_net"], lhc, f"='{NAME['HI']}'!{cl_lh}${hi_ppe}", FMT_MLN)
+        ref_cell(ws, tx_rows["tb_net"], lhc, f"='{NAME['HI']}'!{cl_hi_lh_tx}${hi_ppe}", FMT_MLN)
         ref_cell(ws, tx_rows["tb_gross_close"], lhc,
                  f"='{NAME['PP']}'!{cl_lh}${REG['PP.gross_close']}", FMT_MLN)
         ref_cell(ws, tx_rows["tb_dep_accum_close"], lhc,
