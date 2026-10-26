@@ -1460,11 +1460,17 @@ def build_ppe(wb, cfg):
     label_row(ws, r_capex_rev, "CapEx / Revenue", "%")
     label_row(ws, r_da_rate, "DA / ОС нетто (rate)", "%")
     # Fill CapEx/Rev and DA rate for ALL columns (history + forecast)
+    # History CapEx from CF.capex (PPE.capex empty for hist C/D); forecast from PP.capex
     n_hist_ppe = len(cfg["hist_years"][-3:])
     for c_idx in range(3, 3 + n_hist_ppe + len(cfg["fc_years"])):
         cl = get_column_letter(c_idx)
+        if c_idx < 3 + n_hist_ppe:
+            # History: use ABS(CF.capex) since CF stores negative
+            capex_src = f"ABS('{NAME['CF']}'!{cl}${REG.get('CF.capex', 15)})"
+        else:
+            capex_src = f"{cl}{REG['PP.capex']}"
         formula_cell(ws, r_capex_rev, c_idx,
-                     f"=IFERROR({cl}{REG['PP.capex']}/'{NAME['RV']}'!{cl}${REG['RV.total_rev']},0)",
+                     f"=IFERROR({capex_src}/'{NAME['RV']}'!{cl}${REG['RV.total_rev']},0)",
                      FMT_PCT)
         formula_cell(ws, r_da_rate, c_idx,
                      f"=IFERROR({cl}{REG['PP.dep_charge']}/{cl}{REG['PP.net_close']},0)",
@@ -1493,7 +1499,7 @@ def build_ppe(wb, cfg):
                      f"=MAX("
                      f"{prev}{REG['PP.dep_charge']}*{cp_sustaining}"
                      f","
-                     f"{rev_ref}*{cp_da_rate}*0.5"  # floor: 50% of rev-based
+                     f"{rev_ref}*{cp_da_rate}*'Control_Panel'!$C${REG.get('CP.capex_floor', 50)}"
                      f")",
                      FMT_MLN)
 
@@ -4541,8 +4547,11 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Useful life (лет)", "yr", "→ DA = Gross / UL")
     input_cell(ws, r, 3, 16, FMT_INT)
     REG["CP.useful_life"] = r; r += 1
+    label_row(ws, r, "CapEx floor (% of rev×DA)", "%", "Мин. CapEx = Rev × DA_rate × floor_pct")
+    input_cell(ws, r, 3, 0.5, FMT_PCT)
+    REG["CP.capex_floor"] = r; r += 1
     label_row(ws, r, "Disposal % of CapEx", "%", "→ 15_PPE выбытия")
-    input_cell(ws, r, 3, 0.0, FMT_PCT)  # 0 default — avoids BS imbalance unless proceeds connected
+    input_cell(ws, r, 3, 0.0, FMT_PCT)
     REG["CP.disposal_pct"] = r; r += 2
 
     # ── G. ОБОРОТНЫЙ КАПИТАЛ ──
