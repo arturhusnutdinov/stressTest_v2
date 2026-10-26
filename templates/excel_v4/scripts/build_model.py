@@ -2525,7 +2525,8 @@ def build_cogs(wb, cfg):
             # PPI uplift: prev × (1 + ppi_beta × dampening × macro_ppi_growth)
             cp_ppi = f"'Control_Panel'!$C${REG.get('CP.ppi_beta', 20)}"
             cp_damp = f"'Control_Panel'!$C${REG.get('CP.mr_dampening', 20)}"
-            method3 = f"{prev_cl}{r_total}*(1+{cp_ppi}*{cp_damp}*0.05)"  # 5% PPI proxy
+            cp_ppi_proxy = f"'Control_Panel'!$C${REG.get('CP.expansion_pct', 47)}"  # reuse expansion_pct as PPI proxy step
+            method3 = f"{prev_cl}{r_total}*(1+{cp_ppi}*{cp_damp}*{cp_ppi_proxy})"
             formula_cell(ws, r_total, c,
                          f"=IF({cp_cogs_method}=1,{method1},"
                          f"IF({cp_cogs_method}=2,{method2},{method3}))",
@@ -2570,7 +2571,7 @@ def build_sga(wb, cfg):
             cp_sga = f"'Control_Panel'!$C${REG.get('CP.sga_ratio', 30)}"
             for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
                 cl = get_column_letter(c)
-                rev_ref = f"ABS('{NAME['RV']}'!{cl}${REG['RV.total_rev']})"
+                rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
                 formula_cell(ws, r, c, f"=-{rev_ref}*{cp_sga}", FMT_MLN)
         else:
             for c in range(3, 3 + n_hist):
@@ -2873,12 +2874,10 @@ def build_debt(wb, cfg):
                      FMT_MLN)
 
         # ── B. TERM DEBT corkscrew ──
-        # term_open = prev term_close + prev FX_reval (carry revaluation forward)
         formula_cell(ws, REG["DT.term_open"], c_idx,
                      f"={prev}{REG['DT.term_close']}+{prev}{REG['DT.fx_reval']}", FMT_MLN)
-        # Mandatory — input, filled by fill_data from schedule
+        # Mandatory/Refi — input, filled by fill_data from schedule
         input_cell(ws, REG["DT.mandatory"], c_idx, 0, FMT_MLN)
-        # Refi — input, filled by fill_data (= mandatory × refi_pct)
         input_cell(ws, REG["DT.refi"], c_idx, 0, FMT_MLN)
 
         # ── cash_before_RC: from CF totals ──
