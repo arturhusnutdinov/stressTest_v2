@@ -129,10 +129,14 @@ for each forecast year:
 
 ## Key Principles (from bank model)
 1. openpyxl writes formulas, Excel calculates
-2. AppleScript for recalc (10 iterations) and reading values
-3. No fullCalcOnLoad — preserve cached values
+2. AppleScript for recalc (finalize.py: recalc + scenario snapshots + cached values)
+3. fullCalcOnLoad=1 post-build (книга пересчитывается при открытии); iterate снят —
+   модель чистый DAG (0 циклов, граф Tarjan SCC), кэш актуален после finalize.py
 4. NORMSDIST not NORM.S.DIST
 5. Notes must NOT start with '='
 6. Column alignment: ALL sheets use same C-E=hist, F-H=fc layout
 7. Data fills AFTER build, before Excel recalc
-8. reg.json = single source of truth for row numbers
+8. reg.json = single source of truth for row numbers (builder персистит REG обратно)
+9. День-счёт (365) — только через CP.day_count, литералы в формулах запрещены
+10. Скалярные блоки аналитики (WACC/Net Debt/SOTP-terminal) вне годовой сетки —
+    год ячейки определяется ближайшим заголовком ВЫШЕ (проверка E2 аудитора)
