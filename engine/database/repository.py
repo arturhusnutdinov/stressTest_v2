@@ -676,17 +676,22 @@ class Repository:
         grade: str,
         score: float,
         factor_metrics: Optional[List[Dict[str, Any]]] = None,
+        score_detail: Optional[Dict[str, Any]] = None,
+        nd_ebitda: Optional[float] = None,
+        icr: Optional[float] = None,
     ) -> int:
         period_id = self.ensure_period(company_id, year, is_forecast=1)
+        score_detail_json = json.dumps(score_detail, ensure_ascii=False) if score_detail else None
         self.execute(
             """
             INSERT INTO ratings
-                (company_id, scenario_id, period_id, methodology, grade, score, updated_at)
-            VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP)
+                (company_id, scenario_id, period_id, methodology, grade, score, score_detail, updated_at)
+            VALUES (?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
             ON CONFLICT(company_id, scenario_id, period_id, methodology) DO UPDATE SET
-                grade = excluded.grade, score = excluded.score, updated_at = CURRENT_TIMESTAMP
+                grade = excluded.grade, score = excluded.score,
+                score_detail = excluded.score_detail, updated_at = CURRENT_TIMESTAMP
             """,
-            (company_id, scenario_id, period_id, methodology, grade, score),
+            (company_id, scenario_id, period_id, methodology, grade, score, score_detail_json),
         )
         # rating_id
         row = self.query_one(
@@ -710,6 +715,22 @@ class Repository:
                 """,
                 fm_rows,
             )
+
+        if rating_id:
+            credit_rows = []
+            if nd_ebitda is not None:
+                credit_rows.append((rating_id, 'credit_metrics', 'net_debt_ebitda', nd_ebitda, None, None))
+            if icr is not None:
+                credit_rows.append((rating_id, 'credit_metrics', 'interest_coverage', icr, None, None))
+            if credit_rows:
+                self.conn.executemany(
+                    """
+                    INSERT OR REPLACE INTO rating_metrics
+                        (rating_id, factor_name, metric_name, value, score, weight)
+                    VALUES (?,?,?,?,?,?)
+                    """,
+                    credit_rows,
+                )
         return rating_id or 0
 
     # ── расписания: tax / equity / lease / ppe / segment / operational / intangible ──

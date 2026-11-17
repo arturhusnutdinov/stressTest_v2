@@ -349,6 +349,7 @@ CREATE TABLE IF NOT EXISTS ratings (
     methodology  TEXT    NOT NULL,
     grade        TEXT,
     score        REAL,
+    score_detail TEXT,               -- JSON: sub_scores, weights, key_drivers, headrooms
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (company_id, scenario_id, period_id, methodology)
 );
@@ -611,7 +612,20 @@ def create_schema(conn) -> None:
     # Check if legacy operational_drivers table needs migration
     _migrate_operational_drivers(conn)
     conn.executescript(SCHEMA_DDL)
+    _migrate_ratings_score_detail(conn)
     conn.commit()
+
+
+def _migrate_ratings_score_detail(conn) -> None:
+    """Add ratings.score_detail column to pre-existing DBs (JSON details from rating runner)."""
+    try:
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(ratings)")]
+    except Exception:
+        return  # table doesn't exist yet — will be created by DDL
+    if not cols:
+        return  # table doesn't exist
+    if 'score_detail' not in cols:
+        conn.execute("ALTER TABLE ratings ADD COLUMN score_detail TEXT")
 
 
 def _migrate_operational_drivers(conn) -> None:
