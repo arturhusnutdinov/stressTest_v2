@@ -18,6 +18,7 @@ H (формульность), I (сценарии), J (выход).
 import argparse
 import datetime
 import json
+import math
 import re
 import subprocess
 import sys
@@ -983,6 +984,63 @@ def check_group_e(wbf, wbv) -> list:
     results.append(("E2:сетка_годов_ссылок",
                     "FAIL" if uniq else "PASS",
                     f"{len(uniq)}; " + "; ".join(uniq[:12]) if uniq else "0 смещений"))
+
+    # E7: sanity bounds — fail-fast гейты adequacy (зеркало engine ModelConfig.sanity_*).
+    # Тождества сходятся и при абсурдных значениях (AUDIT_ADEQUACY §3.3:
+    # STD=5.6e15, interest=7.7e14 при BS diff=0) — второй слой после C-группы.
+    E7_INT_REV_MAX = 0.50   # interest_expense / revenue
+    E7_DEBT_REV_MAX = 10.0  # total_debt / revenue
+    E7_DEBT_GROWTH_MAX = 1.00  # |Δdebt| / debt_prev за год
+    E7_ABS_MAX = 1e12       # отсечка денормалов (mUSD)
+
+    def _row_by_label(ws, *needles) -> Optional[int]:
+        want = [n.lower() for n in needles]
+        for r in range(1, ws.max_row + 1):
+            v = ws.cell(row=r, column=1).value
+            if isinstance(v, str):
+                lv = v.strip().lower()
+                if all(n in lv for n in want):
+                    return r
+        return None
+
+    e7_bad = []
+    if {"21_PL", "17_Debt", "20_BS"} <= set(wbv.sheetnames):
+        ws_pl, ws_dt, ws_bs = wbv["21_PL"], wbv["17_Debt"], wbv["20_BS"]
+        r_rev = _row_by_label(wbf["21_PL"], "выручк")
+        r_int = _row_by_label(wbf["21_PL"], "процентные расходы")
+        r_debt = _row_by_label(wbf["17_Debt"], "итого долг")
+        r_cash = _row_by_label(wbf["20_BS"], "денежные средства")
+        r_ta = _row_by_label(wbf["20_BS"], "итого активы")
+        if all(x is not None for x in (r_rev, r_int, r_debt, r_cash, r_ta)):
+            g_pl = grids.get("21_PL", {})
+            debt_prev = None
+            for col, yr in sorted(g_pl.items()):
+                if yr <= 2025:
+                    continue  # прогнозные годы только
+                rev = ws_pl.cell(row=r_rev, column=col).value
+                interest = ws_pl.cell(row=r_int, column=col).value
+                debt = ws_dt.cell(row=r_debt, column=col).value
+                cash = ws_bs.cell(row=r_cash, column=col).value
+                ta = ws_bs.cell(row=r_ta, column=col).value
+                vals = [("cash", cash), ("TA", ta)]
+                for name, v in vals:
+                    if isinstance(v, (int, float)) and (not math.isfinite(v) or abs(v) > E7_ABS_MAX):
+                        e7_bad.append(f"{yr}: {name}={v:.3g} (|x|>{E7_ABS_MAX:.0g})")
+                if not (isinstance(rev, (int, float)) and rev):
+                    continue
+                if isinstance(interest, (int, float)) and abs(interest) / abs(rev) > E7_INT_REV_MAX:
+                    e7_bad.append(f"{yr}: interest/revenue={abs(interest)/abs(rev):.2f}>{E7_INT_REV_MAX}")
+                if isinstance(debt, (int, float)) and abs(debt) > E7_DEBT_REV_MAX * abs(rev):
+                    e7_bad.append(f"{yr}: debt/revenue={abs(debt)/abs(rev):.1f}>{E7_DEBT_REV_MAX}")
+                if debt_prev and isinstance(debt, (int, float)) and abs(debt_prev) > 0:
+                    growth = abs(debt - debt_prev) / abs(debt_prev)
+                    if growth > E7_DEBT_GROWTH_MAX:
+                        e7_bad.append(f"{yr}: |Δdebt|/debt={growth:.2f}>{E7_DEBT_GROWTH_MAX}")
+                if isinstance(debt, (int, float)):
+                    debt_prev = debt
+    results.append(("E7:sanity_bounds",
+                    "FAIL" if e7_bad else "PASS",
+                    "; ".join(e7_bad[:10]) if e7_bad else "interest/rev, debt/rev, Δdebt, денормалы — в порогах"))
     return results
 
 

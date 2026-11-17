@@ -93,6 +93,7 @@ def build_model(
     run_covenants:    bool = False,
     stress_scenarios: Optional[List[str]] = None,  # None = все встроенные
     log_level:        int  = logging.INFO,
+    sanity_mode:      str  = "fail",               # fail|warn — гейты adequacy (ModelConfig.sanity_*)
 ) -> BuildResult:
     """
     Full pipeline: preprocessor → macro → model → stress → rating → covenants.
@@ -215,6 +216,7 @@ def build_model(
                     scenario_name=scenario_name,
                 )
                 historic, config = loader.load()
+                config.sanity_mode = sanity_mode
 
                 logger.info(f"  История: {historic.years[0]}–{historic.base_year}")
                 logger.info(f"  Прогноз: {config.forecast_start_year}–{config.forecast_end_year}")
@@ -436,6 +438,8 @@ def main():
     parser.add_argument("--covenants", action="store_true")
     parser.add_argument("--db", help="Путь к БД")
     parser.add_argument("--config", help="Путь к project.yaml")
+    parser.add_argument("--sanity", choices=["fail", "warn"], default="fail",
+                        help="Гейты adequacy: fail=остановка при абсурдных значениях, warn=только лог")
     args = parser.parse_args()
 
     res = build_model(
@@ -449,6 +453,7 @@ def main():
         run_stress=args.stress,
         run_rating=args.rating,
         run_covenants=args.covenants,
+        sanity_mode=args.sanity,
     )
     exit(0 if res.success else 1)
 

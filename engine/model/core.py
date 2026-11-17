@@ -57,6 +57,10 @@ class BSImbalanceError(ModelError):
 class CFBridgeError(ModelError):
     pass
 
+class ModelSanityError(ModelError):
+    """Решение сходится по тождествам, но экономически абсурдно
+    (AUDIT_ADEQUACY §3.3: fail-fast гейты adequacy)."""
+
 
 # ─── результат прогона ────────────────────────────────────────────────────────
 
@@ -224,6 +228,14 @@ class ThreeStatementModel:
                 for check_name, diff_val in checks.items():
                     if diff_val > BS_TOL:
                         result.warnings.append(f"{year}: {check_name}={diff_val:.0f}")
+                # Sanity bounds (fail-fast adequacy gates, AUDIT_ADEQUACY §3.3)
+                sanity_issues = self._sanity_checks(state, prev)
+                if sanity_issues:
+                    msg = f"{year}: sanity FAIL — " + "; ".join(sanity_issues)
+                    if self._c.sanity_mode == "warn":
+                        result.warnings.append(msg)
+                    else:
+                        raise ModelSanityError(msg)
                 result.years[year] = state
                 result.debt_lines[year] = list(self._last_debt_lines)
                 prev = state
@@ -239,6 +251,47 @@ class ThreeStatementModel:
                 break
 
         return result
+
+    # ── Sanity bounds (AUDIT_ADEQUACY §3.3) ────────────────────────────
+
+    def _sanity_checks(self, state: YearState, prev: YearState) -> List[str]:
+        """Гейты адекватности решения: тождества сходятся и при абсурдных
+        значениях (на усечённой БД: STD=5.6e15, interest=7.7e14 при BS diff=0).
+        Пороги — ModelConfig.sanity_*; режим — sanity_mode (fail|warn).
+        Возвращает список нарушений (пусто = OK)."""
+        c = self._c
+        issues: List[str] = []
+
+        def _denorm_guard(name: str, value: float) -> None:
+            if not math.isfinite(value) or abs(value) > c.sanity_abs_max:
+                issues.append(f"{name}={value:.3g} (|x|>{c.sanity_abs_max:.0g} или non-finite)")
+
+        rev = abs(state.revenue)
+        _denorm_guard("revenue", state.revenue)
+        _denorm_guard("cash_close", state.cash)
+        _denorm_guard("total_assets", state.total_assets)
+
+        if rev > 0:
+            int_ratio = abs(state.interest_expense) / rev
+            if int_ratio > c.sanity_interest_rev_max:
+                issues.append(
+                    f"interest/revenue={int_ratio:.2f} > {c.sanity_interest_rev_max:.2f} "
+                    f"(int={state.interest_expense:.0f}, rev={state.revenue:.0f})"
+                )
+            if state.total_debt > c.sanity_debt_rev_max * rev:
+                issues.append(
+                    f"debt/revenue={state.total_debt / rev:.1f} > {c.sanity_debt_rev_max:.1f} "
+                    f"(debt={state.total_debt:.0f})"
+                )
+        debt_prev = abs(prev.total_debt)
+        if debt_prev > 0:
+            growth = abs(state.total_debt - prev.total_debt) / debt_prev
+            if growth > c.sanity_debt_growth_max:
+                issues.append(
+                    f"|d_debt|/debt={growth:.2f} > {c.sanity_debt_growth_max:.2f} "
+                    f"({prev.total_debt:.0f} -> {state.total_debt:.0f})"
+                )
+        return issues
 
     # ── _solve_year ───────────────────────────────────────────────────────────
 

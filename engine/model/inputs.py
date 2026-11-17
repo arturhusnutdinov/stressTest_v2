@@ -490,6 +490,14 @@ class ModelConfig:
     max_iter: int   = 10      # максимум итераций joint solver
     tol:      float = 1000.0  # допуск сходимости ($1K)
 
+    # Sanity bounds — fail-fast гейты адекватности решения (AUDIT_ADEQUACY §3.3):
+    # тождества не ловят «согласованно-безумное» решение (STD=5.6e15 при BS=0)
+    sanity_mode: str = "fail"                # "fail" = raise ModelSanityError | "warn" = лог + продолжение
+    sanity_interest_rev_max: float = 0.50    # interest_expense / revenue (предел адекватности, mUSD)
+    sanity_debt_rev_max: float = 10.0        # total_debt / revenue
+    sanity_debt_growth_max: float = 1.00     # |Δdebt| / debt_prev за год
+    sanity_abs_max: float = 1e12             # |cash|, |TA| — отсечка денормалов (mUSD)
+
     # Feature flags
     use_ppe_corkscrew: bool = True
     use_wc_days: bool = True
