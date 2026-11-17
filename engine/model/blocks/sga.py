@@ -14,14 +14,33 @@ if TYPE_CHECKING:
 
 def solve_sga(state, prev, historic, config):
     # type: (YearState, YearState, HistoricState, ModelConfig) -> YearState
+    # Приоритет источника sga_pct:
+    # 1) split-режим: явные компоненты конфигурации (% of revenue) — сумма есть
+    #    единый источник истины для total SGA;
+    # 2) sga_ratio_recommended (dist+admin) из preprocessor;
+    # 3) sga_ratio_last; 4) медиана истории.
+    # opex_ratio НЕ используется: это агрегат (|sga| + |distribution|)/rev, и при
+    # IFRS-маппинге, где distribution уже внутри sga, даёт двойной счёт
+    # (RUSAL 17.11: opex 20.2% vs sga 13.5% → EBITDA engine ≈ 0 vs Excel 1,313).
+    split_total = None
+    if getattr(config, 'sga_split_enabled', False):
+        comp_pcts = [
+            getattr(config, 'sga_distribution_pct_rev', None),
+            getattr(config, 'sga_admin_pct_rev', None),
+            getattr(config, 'sga_ecl_pct_rev', None),
+            getattr(config, 'sga_other_opex_pct_rev', None),
+        ]
+        available = [p for p in comp_pcts if p]
+        if len(available) >= 2:
+            split_total = float(sum(available))
+
     sga_pct = config.sga_pct
+    if split_total is not None:
+        sga_pct = split_total
     if not sga_pct:
         pp_mr = historic.preprocess.get('margin_ratios', {})
-        rec = pp_mr.get('opex_ratio_recommended')
+        rec = pp_mr.get('sga_ratio_recommended')
         if isinstance(rec, dict): rec = rec.get(-1)
-        if not rec:
-            rec = pp_mr.get('sga_ratio_recommended')
-            if isinstance(rec, dict): rec = rec.get(-1)
         if not rec:
             rec = pp_mr.get('sga_ratio_last')
             if isinstance(rec, dict): rec = rec.get(-1)
@@ -50,9 +69,11 @@ def solve_sga(state, prev, historic, config):
     _sga_hist_lo = config.get_constraint("sga", "hist_clamp_low", SGA_HIST_CLAMP_LOW)
     _sga_hist_hi = config.get_constraint("sga", "hist_clamp_high", SGA_HIST_CLAMP_HIGH)
 
-    hist_sga = historic.preprocess.get("margin_ratios", {}).get("opex_ratio") or \
-               historic.preprocess.get("margin_ratios", {}).get("sga_ratio", {})
-    if isinstance(hist_sga, dict):
+    hist_sga = historic.preprocess.get("margin_ratios", {}).get("sga_ratio") or \
+               historic.preprocess.get("margin_ratios", {}).get("opex_ratio", {})
+    if split_total is not None:
+        pass  # явные компоненты конфигурации — вне статистического клампа
+    elif isinstance(hist_sga, dict):
         hist_vals = [v for k, v in hist_sga.items() if isinstance(k, int) and k > 0 and v is not None]
         if hist_vals:
             sga_pct = max(min(hist_vals)*_sga_hist_lo, min(max(hist_vals)*_sga_hist_hi, sga_pct))
