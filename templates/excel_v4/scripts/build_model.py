@@ -547,7 +547,8 @@ def build_assump(wb, cfg):
     r += 1
     # ── SECTION 2: WC DAYS ──
     section_header(ws, r, "2. ОБОРОТНЫЙ КАПИТАЛ (DSO / DIH / DPO)"); r += 1
-    # DSO = AR / Rev × 365, DIH = INV / COGS × 365, DPO = AP / COGS × 365
+    # DSO = AR / Rev × day_count, DIH = INV / COGS × day_count, DPO = AP / COGS × day_count
+    cp_day = f"'Control_Panel'!$C${REG.get('CP.day_count', 51)}"
     wc_defs = [
         ("DSO (дни)", "BS", "ar", "PL", "revenue", "AS.dso"),
         ("DIH (дни)", "BS", "inv", "PL", "cogs", "AS.dih"),
@@ -563,7 +564,7 @@ def build_assump(wb, cfg):
                 cl = get_column_letter(c)
                 formula_cell(ws, r, c,
                              f"=IFERROR(ABS('{NAME[bs_code]}'!{cl}${bs_r})"
-                             f"/ABS('{NAME[is_code]}'!{cl}${is_r})*365,0)",
+                             f"/ABS('{NAME[is_code]}'!{cl}${is_r})*{cp_day},0)",
                              FMT_DAYS)
             hist_cols = [get_column_letter(3 + i) for i in range(n_hist)]
             avg_f = f"=ROUND(AVERAGE({','.join(f'{c}{r}' for c in hist_cols)}),0)"
@@ -2223,11 +2224,15 @@ def build_checks(wb, cfg):
                      f"-'{NAME['DT']}'!{prev_cl}${REG['DT.funding_gap_accum']}*{cp_pen}",
                      FMT_RATIO)
 
-        # C3: Iteration residual — cash convergence check
-        # If RC_draw > 0, actual cash should ≈ min_cash (model always finances)
+        # C3: Iteration residual — cash convergence check.
+        # Полное финансирование (cash = min_cash) достижимо только при открытом
+        # рынке срочного долга: при EBITDA ≤ 0 новые транши закрыты (W2, verify_model
+        # «gate should be closed») и недофинансированный разрыв — ожидаемое состояние
+        # стресса (флаг), а не ошибка книги. Сам разрыв виден в cash < min_cash.
         cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
+        cur_ebitda = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
         formula_cell(ws, REG["CK.it_res"], c_idx,
-                     f"=IF('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,"
+                     f"=IF(AND('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,{cur_ebitda}>0),"
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
@@ -2609,11 +2614,12 @@ def build_wc(wb, cfg):
         "dio": REG.get("CP.wc_dio"),
         "dpo": REG.get("CP.wc_dpo"),
     }
+    cp_day = f"'Control_Panel'!$C${REG.get('CP.day_count', 51)}"
     for key, label in [("dso", "DSO (дни)"), ("dio", "DIH (дни)"), ("dpo", "DPO (дни)")]:
         r = REG[f"WC.{key}"]
         label_row(ws, r, label, "дни")
-        # History: computed from BS/PL (eliminate literals)
-        # DSO = AR/Revenue×365, DIH = INV/COGS×365, DPO = AP/COGS×365
+        # History: computed from BS/PL (eliminate literals — day_count из CP)
+        # DSO = AR/Revenue×day_count, DIH = INV/COGS×day_count, DPO = AP/COGS×day_count
         driver_map = {"dso": ("HI.ar", "HI.revenue"), "dio": ("HI.inv", "HI.cogs"), "dpo": ("HI.ap", "HI.cogs")}
         num_key, den_key = driver_map[key]
         n_hist_all_wc = len(cfg.get("_fill_hist_years", cfg["hist_years"]))
@@ -2625,7 +2631,7 @@ def build_wc(wb, cfg):
             if num_r and den_r:
                 formula_cell(ws, r, c,
                              f"=IFERROR(ABS('{NAME['HI']}'!{hi_cl}${num_r})"
-                             f"/ABS('{NAME['HI']}'!{hi_cl}${den_r})*365,0)",
+                             f"/ABS('{NAME['HI']}'!{hi_cl}${den_r})*{cp_day},0)",
                              FMT_DAYS)
             else:
                 input_cell(ws, r, c, 0, FMT_DAYS)
@@ -2647,7 +2653,7 @@ def build_wc(wb, cfg):
                      f"={cl}{REG['WC.dso']}+{cl}{REG['WC.dio']}-{cl}{REG['WC.dpo']}", FMT_DAYS)
 
     section_header(ws, REG["WC.ar"] - 1, "WC БАЛАНСОВЫЕ СТАТЬИ")
-    # AR = Revenue × DSO / 365
+    # AR = Revenue × DSO / day_count
     for key, label, driver, driver_key in [
         ("ar", "Дебиторская задолженность", "RV", "total_rev"),
         ("inv", "Запасы", "CG", "total"),
@@ -2660,7 +2666,7 @@ def build_wc(wb, cfg):
             cl = get_column_letter(c)
             sign = "" if key != "ap" else "-"
             formula_cell(ws, r, c,
-                         f"={sign}ABS('{NAME[driver]}'!{cl}${REG[f'{driver}.{driver_key}']})*{cl}{REG[f'WC.{days_key}']}/365",
+                         f"={sign}ABS('{NAME[driver]}'!{cl}${REG[f'{driver}.{driver_key}']})*{cl}{REG[f'WC.{days_key}']}/{cp_day}",
                          FMT_MLN)
 
     # NWC = AR + INV - AP
@@ -2917,9 +2923,12 @@ def build_debt(wb, cfg):
         # Net cash from P: P - P×rate×(1-t) = P × (1 - rate×(1-t))
         # → P = Need₀ / (1 - rate×(1-t))
         # Gate on PREV year data only (no circular) — determines rate, not access
+        # + current-year EBITDA > 0: рынок срочного долга закрыт для убыточных
+        # (EBITDA pre-interest → зависимости от 17_Debt нет, DAG не нарушается;
+        # closed-form plug остаётся корректным)
         cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
         prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},{cp_sentinel})"
-        gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr})"
+        gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr},{ebitda_ref}>0)"
         cp_pen_limit = f"'Control_Panel'!$C${REG.get('CP.penalty_limit', 73)}"
         cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
         # Rate for new debt: gate open → avg_rate, gate closed → penalty_rate
@@ -2953,8 +2962,11 @@ def build_debt(wb, cfg):
         full_need = f"({residual}+{term_out})"
         # Penalty limit cap when gate closed
         cp_pen_limit_val = f"IF({cp_pen_limit}>0,MIN({full_need},{cp_pen_limit}),{full_need})"
+        # Рынок срочного долга полностью закрыт при EBITDA ≤ 0 (verify_model:
+        # «gate should be closed») — штрафной тракт тоже недоступен;
+        # при EBITDA > 0 закрытый гейт = штрафное привлечение в пределах pen_limit
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IFERROR(IF({gate},{full_need},{cp_pen_limit_val}),0)",
+                     f"=IF({ebitda_ref}<=0,0,IFERROR(IF({gate},{full_need},{cp_pen_limit_val}),0))",
                      FMT_MLN)
 
         # ── Voluntary term: leverage-driven + excess cash drain ──
@@ -3850,7 +3862,9 @@ def build_valuation(wb, cfg):
     r = REG["VL.ev"] - 8  # space for FCFF rows
     section_header(ws, r, "C. DCF: FREE CASH FLOW TO FIRM (FCFF)")
     r += 1
-    year_headers(ws, r, [], fc)
+    # Заголовок лет — в КОЛОНКАХ ДАННЫХ (F:H), иначе сетка C:E ломает
+    # годовые проверки скалярных блоков ниже (E2) и визуально расходится с данными
+    year_headers(ws, r, [], fc, col_start=3 + n_hist_vl)
     r += 1
 
     # FCFF rows
@@ -4549,6 +4563,7 @@ def build_control_panel(wb, cfg):
     REG["CP.useful_life"] = r; r += 1
     label_row(ws, r, "CapEx floor (% of rev×DA)", "%", "Мин. CapEx = Rev × DA_rate × floor_pct")
     input_cell(ws, r, 3, 0.5, FMT_PCT)
+    ws.cell(r, 10, "[ОЦЕНКА] floor CapEx как % от Rev×DA").font = F_NOTE
     REG["CP.capex_floor"] = r; r += 1
     label_row(ws, r, "Disposal % of CapEx", "%", "→ 15_PPE выбытия")
     input_cell(ws, r, 3, 0.0, FMT_PCT)
@@ -4572,6 +4587,11 @@ def build_control_panel(wb, cfg):
         else:
             input_cell(ws, r, 3, default, FMT_DAYS)
         REG[key] = r; r += 1
+    # Day-count конвенция — единственный источник для ×365 в 03_Assump/16_WC
+    label_row(ws, r, "Дней в году (day count)", "дн", "Конвенция: 365 = год")
+    input_cell(ws, r, 3, 365, FMT_INT)
+    ws.cell(r, 10, "[НОРМ] Конвенция: 365 = календарный год").font = F_NOTE
+    REG["CP.day_count"] = r; r += 1
     r += 1
 
     # ── H. ДОЛГ ──
