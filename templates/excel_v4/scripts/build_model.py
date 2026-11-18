@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -295,6 +296,9 @@ def build_macro(wb, cfg):
             if s_idx == 0:
                 # Base: input cells (fill_data writes web consensus)
                 # Alumina: formula = LME Al × ratio (even in Base)
+                # W4: стартовая точка Base — аналитическое допущение, тег [ОЦЕНКА]
+                ws.cell(r, 9, "стартовая точка сценария").font = F_NOTE   # I = Метод
+                ws.cell(r, 11, "[ОЦЕНКА]").font = F_NOTE                  # K = Роль
                 if "Alumina" in factor and i > 0:
                     cp_alumina_pct = f"'Control_Panel'!$C${REG.get('CP.alumina_lme_ratio', 99)}"
                     al_r_base = scenario_starts.get(0, [r])[0] if 0 in scenario_starts else r - 1
@@ -5384,6 +5388,24 @@ def build(company: str, output: str, backtest_end: int | None = None):
     # ── Save updated REG to reg.json (so fill_data sees runtime keys) ──
     reg_path = BASE_DIR / "reg.json"
     reg_path.write_text(json.dumps(REG, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # ── W4: конвенция цветов — кросс-листовые ссылки в аналитике зелёные ──
+    # (чёрный остаётся для внутрилистовых формул; синий — ввод; AUDIT_ADEQUACY §3.4)
+    _xref_re = re.compile(r"(?:'[^']+'|[A-Za-zА-Яа-я0-9_]{2,})!")
+    _analytics = ("30_Ratios", "31_Score", "32_Covenants", "33_RevStress",
+                  "35_Valuation", "40_Scen")
+    n_recolored = 0
+    for sh in _analytics:
+        if sh not in wb.sheetnames:
+            continue
+        for row in wb[sh].iter_rows():
+            for cell in row:
+                v = cell.value
+                if isinstance(v, str) and v.startswith("=") and _xref_re.search(v):
+                    bold = bool(cell.font and cell.font.bold)
+                    cell.font = F_REF_BOLD if bold else F_REF
+                    n_recolored += 1
+    print(f"  W4: {n_recolored} кросс-ссылок перекрашено в зелёный (аналитика 30–40)")
 
     # ── Embed REG into the workbook as hidden _Reg sheet ──
     # fill_data reads layout from THIS sheet (book self-describing), not from

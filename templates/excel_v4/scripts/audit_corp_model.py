@@ -1181,6 +1181,28 @@ def check_group_h(wbf) -> list:
                     if re.match(r"^=\$?[A-Z]{1,3}\$?\d+$", c.value[1:].strip()):
                         carry += 1
     results.append(("H3:=прошлый_год", "WARN" if carry else "PASS", f"{carry} ячеек"))
+    # H4 (W4/F6): кросс-листовые ссылки в аналитике — конвенция зелёного цвета.
+    # INFO-уровень: чёрный = внутрилистовая формула, зелёный = ссылка на другой лист.
+    xref_re = re.compile(r"(?:'[^']+'|[A-Za-zА-Яа-я0-9_]{2,})!")
+    analytics = ("30_Ratios", "31_Score", "32_Covenants", "33_RevStress",
+                 "35_Valuation", "40_Scen")
+    not_green = []
+    for sh in analytics:
+        if sh not in wbf.sheetnames:
+            continue
+        for row in wbf[sh].iter_rows():
+            for c in row:
+                v = c.value
+                if isinstance(v, str) and v.startswith("=") and xref_re.search(v):
+                    rgb = None
+                    if c.font and c.font.color and c.font.color.rgb:
+                        rgb = str(c.font.color.rgb)
+                    if not (rgb and rgb.endswith("008000")):
+                        not_green.append(f"{sh}!{c.coordinate}")
+    results.append(("H4:цвета_кросс-ссылок",
+                    "WARN" if not_green else "PASS",
+                    f"{len(not_green)} не зелёных: " + "; ".join(not_green[:10]) if not_green
+                    else "все кросс-ссылки аналитики зелёные"))
     return results
 
 
