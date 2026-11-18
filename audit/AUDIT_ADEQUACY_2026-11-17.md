@@ -108,3 +108,29 @@ verify ALL BEHAVIORAL PASS ×2, sync_gate_corp PASS, pytest 81)
 **Итог: PASS с замечаниями.** Приоритет доработок: sanity bounds engine (дешево,
 закрывает класс «мусор на входе») → helper-разбивка 17_Debt r27–28 → backtest-флаг
 в orchestrator → маркировка 01_Macro и цвета аналитики → CP-вынесение спредов 17_Debt.
+
+---
+
+## Закрыто (2026-11-18, коммиты 9b82de2…14dacd6)
+
+| Замечание | Решение | Статус |
+|---|---|---|
+| §3.3 Отсутствуют sanity bounds в engine | W1: `ModelConfig.sanity_*` (interest/rev<50%, debt/rev<10×, Δdebt/debt<100%, \|x\|<1e12), `_sanity_checks` per year после full_validation, `ModelSanityError`, `--sanity={fail,warn}`; зеркало E7 в аудиторе Excel; 8 unit-тестов | ✅ DONE |
+| §3.1 Формулы >300 симв. (17_Debt r27/28) | W2: helper-строки 57–63 (gate/new_term_raw/vol_*/excess_cash); max длина в 17_Debt <300 | ✅ DONE |
+| §3.3 Нет формального backtest + окно жёстко | W3: `--backtest END` (orchestrator+loader, auto-detect off), `scripts/backtest.py` (копия БД + truncation, MAPE-отчёт), Excel-зеркало `--backtest` в build/fill | ✅ DONE |
+| §3.4 Цвета кросс-ссылок в аналитике | W4: постобработка build() — 265 ссылок/книга в зелёный; аудитор H4 PASS ×2 | ✅ DONE |
+| §3.4 Теги [ОЦЕНКА] на 01_Macro 8–14 | W4: I='стартовая точка сценария', K='[ОЦЕНКА]' | ✅ DONE |
+| §3.2 Литералы 17_Debt (0.08/0.5/0.15) | W5: CP.avg_rate_fallback / CP.st_share_fallback / CP.st_drift_tol; H1 103→92, 109→98 | ✅ DONE |
+| §3.5 Словарь определений метрик | W6: `docs/METRICS_GLOSSARY.md` (EBITDA три определения, эталон ebitda_reported), backtest переведён на ebitda_reported | ✅ DONE |
+| §3.5 Факт 2024 'revenue' не найден | Проверено: на месте (rusal/us_steel × IS/BS/CF) — замечание снято | ✅ СНЯТО |
+| §3.3 remark: gate Nornickel | W7: задокументировано (TODO.md #20, AGENTS.md) — требуется Vertex PG | ✅ DOCS |
+| **Новая находка W3**: debt optimizer diverges на усечённом окне (debt=1.0e16, BS diff=9.6e15) | Sanity bounds ловят/останавливают (fail-отчёт); ремедиация optimizer — отдельная задача (anchor графика / связь draw→CF в optimizer mode) | ⚠️ ОТКРЫТО |
+| Остаток >300: 31_Score!F16 (608), 90_Checks!F24 (455) | Вне W2 (шаблонные, обе книги идентичны); рейтинг-шкала → lookup-таблица отдельной задачей | ⚠️ ОТКРЫТО |
+
+**Финальная батарея (18.11):** pytest 89 passed; аудиты книг 0 FAIL, 0 расх. кэша,
+E2/E7/H4 PASS ×2; verify_model ALL BEHAVIORAL PASS ×2; sync_gate rusal PASS
+(структура P&L в допуске); backtest revenue MAPE engine 4.1/12.3%, Excel 14.4/8.3%.
+
+**Процессный фикс (важно):** `_Reg`-лист — книга самоописывающаяся; fill_data
+больше не зависит от shared reg.json (иначе сборка B между build A и fill A
+сдвигала CP-раскладку → corruption: EWA halflife=31 вместо 5 → спираль долга).
