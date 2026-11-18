@@ -2625,11 +2625,21 @@ def fill_macro_forecasts(wb, data: dict, company: str):
     print(f"    Macro forecasts: {filled} historical + {scenario_filled} scenario cells")
 
 
-def fill_all(company: str, model_path: str):
-    """Main entry: load data and fill model."""
+def fill_all(company: str, model_path: str, backtest_end: int | None = None):
+    """Main entry: load data and fill model.
+
+    backtest_end: заполнение только годами ≤ END (история), fc_years = END+1..END+3
+    — зеркало backtest-сборки build_model.py --backtest (AUDIT_ADEQUACY §3.3).
+    """
     print(f"\n{'='*60}")
     print(f"Filling data for: {company}")
     print(f"{'='*60}")
+
+    if backtest_end:
+        src = SOURCES[company]
+        src["hist_years"] = [y for y in src["hist_years"] if y <= backtest_end]
+        src["fc_years"] = [backtest_end + 1, backtest_end + 2, backtest_end + 3]
+        print(f"Backtest-режим: история ≤ {backtest_end}, fc_years = {src['fc_years']}")
 
     # Load source data
     print("\n1. Loading source data...")
@@ -2743,5 +2753,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fill Corporate Model v4 with data")
     parser.add_argument("--company", required=True, choices=["rusal", "nornickel"])
     parser.add_argument("--model", required=True, help="Path to model xlsx (relative to v4 root)")
+    parser.add_argument("--backtest", type=int, metavar="END_YEAR", default=None,
+                        help="Заполнение годами ≤ END (backtest-сборка)")
     args = parser.parse_args()
-    fill_all(args.company, args.model)
+    fill_all(args.company, args.model, backtest_end=args.backtest)

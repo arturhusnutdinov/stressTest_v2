@@ -5299,13 +5299,24 @@ def build_changelog(wb, cfg):
 # MAIN BUILD
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build(company: str, output: str):
-    """Build complete workbook."""
+def build(company: str, output: str, backtest_end: int | None = None):
+    """Build complete workbook.
+
+    backtest_end: базовый год бэктеста — история ≤ END, прогноз END+1..END+3
+    (AUDIT_ADEQUACY §3.3: backtest-сборка тем же пайплайном).
+    """
     if company not in COMPANY_CONFIGS:
         print(f"Unknown company: {company}. Available: {list(COMPANY_CONFIGS.keys())}")
         return
 
-    cfg = COMPANY_CONFIGS[company]
+    cfg = dict(COMPANY_CONFIGS[company])
+    if backtest_end:
+        _fill_full = [y for y in cfg["_fill_hist_years"] if y <= backtest_end]
+        cfg["_fill_hist_years"] = _fill_full
+        cfg["hist_years"] = _fill_full[-3:]
+        cfg["fc_years"] = [backtest_end + 1, backtest_end + 2, backtest_end + 3]
+        cfg["name"] = f"{cfg['name']} (backtest ≤{backtest_end})"
+        print(f"Backtest-режим: история ≤ {backtest_end}, прогноз {cfg['fc_years']}")
     print(f"Building model for {cfg['name']}...")
 
     wb = openpyxl.Workbook()
@@ -5547,5 +5558,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build Corporate Financial Model v4")
     parser.add_argument("--company", required=True, choices=["rusal", "nornickel"])
     parser.add_argument("--output", default="model/model_v4.xlsx")
+    parser.add_argument("--backtest", type=int, metavar="END_YEAR", default=None,
+                        help="Backtest-сборка: история ≤ END_YEAR, прогноз END+1..END+3")
     args = parser.parse_args()
-    build(args.company, args.output)
+    build(args.company, args.output, backtest_end=args.backtest)

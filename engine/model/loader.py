@@ -37,11 +37,14 @@ class ModelInputLoader:
         repo: Repository,
         config_path: Optional[Path] = None,
         scenario_name: str = "base",
+        backtest_end_year: Optional[int] = None,
     ) -> None:
         self.company_id = company_id
         self._repo = repo
         self._config_path = config_path
         self._scenario_name = scenario_name
+        # Backtest: фиксируем базовый год, auto-detect detected_base_year отключается
+        self._backtest_end_year = backtest_end_year
 
     def load(self) -> tuple[HistoricState, ModelConfig]:
         """Главный метод — возвращает (HistoricState, ModelConfig)."""
@@ -248,19 +251,28 @@ class ModelInputLoader:
 
         # Auto-detect base year from preprocessor (if available)
         _yaml_end_year = periods.get("history_end_year", 2024)
-        _detected_base = self._repo.get_preprocess_scalar(
-            self.company_id, "periods", "detected_base_year"
-        ) if hasattr(self._repo, 'get_preprocess_scalar') else None
-        _history_end = int(_detected_base) if _detected_base and _detected_base > 0 else _yaml_end_year
-        _forecast_start = periods.get("forecast_start_year", _history_end + 1)
-
+        _span = int(periods.get("forecast_end_year", _yaml_end_year + 3)) - \
+                int(periods.get("forecast_start_year", _yaml_end_year + 1)) + 1
+        if self._backtest_end_year:
+            # Backtest-режим: базовый год жёстко END, горизонт = span из YAML,
+            # auto-detect отключён (AUDIT_ADEQUACY §3.3-1: auto-detect не сдвигал окно)
+            _history_end = int(self._backtest_end_year)
+            _forecast_start = _history_end + 1
+            _fc_end = _history_end + _span
+        else:
+            _detected_base = self._repo.get_preprocess_scalar(
+                self.company_id, "periods", "detected_base_year"
+            ) if hasattr(self._repo, 'get_preprocess_scalar') else None
+            _history_end = int(_detected_base) if _detected_base and _detected_base > 0 else _yaml_end_year
+            _forecast_start = periods.get("forecast_start_year", _history_end + 1)
+            _fc_end = periods.get("forecast_end_year", _history_end + 3)
         mc = ModelConfig(
             company_id=self.company_id,
             scenario_name=self._scenario_name,
             history_start_year=periods.get("history_start_year", 2010),
             history_end_year=_history_end,
             forecast_start_year=_forecast_start,
-            forecast_end_year=periods.get("forecast_end_year", _history_end + 3),
+            forecast_end_year=_fc_end,
             accounting_standard=company_cfg.get("accounting_standard", "US_GAAP"),
             db_unit=company_cfg.get("db_unit", "tUSD"),
             # Drivers (могут быть переопределены в YAML)

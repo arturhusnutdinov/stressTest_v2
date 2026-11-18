@@ -94,6 +94,7 @@ def build_model(
     stress_scenarios: Optional[List[str]] = None,  # None = все встроенные
     log_level:        int  = logging.INFO,
     sanity_mode:      str  = "fail",               # fail|warn — гейты adequacy (ModelConfig.sanity_*)
+    backtest_end_year: Optional[int] = None,       # backtest: base=END, fc=END+1..END+span, auto-detect off
 ) -> BuildResult:
     """
     Full pipeline: preprocessor → macro → model → stress → rating → covenants.
@@ -150,6 +151,21 @@ def build_model(
         with open(config_path) as _cf:
             _project_cfg = _yaml_loader.safe_load(_cf) or {}
 
+    # Backtest: макро-окно сдвигаем на END+1..END+span (иначе run_macro читает
+    # forecast_start_year из yaml = production-горизонт)
+    _macro_forecast_years = _get_forecast_years(_project_cfg)
+    if backtest_end_year:
+        import copy as _copy
+        _project_cfg = _copy.deepcopy(_project_cfg)
+        _periods = (
+            _project_cfg.setdefault("model", {}).setdefault("standard", {})
+            .setdefault("periods", {})
+        )
+        _periods["forecast_start_year"] = backtest_end_year + 1
+        _periods["forecast_end_year"] = backtest_end_year + _macro_forecast_years
+        logger.info(f"  Backtest-режим: base={backtest_end_year}, "
+                    f"fc={backtest_end_year + 1}–{backtest_end_year + _macro_forecast_years}")
+
     try:
         with Repository(db_path=db_path) as repo:
 
@@ -190,7 +206,7 @@ def build_model(
                     repo=repo,
                     config_path=macro_cfg,
                     scenario_name=scenario_name,
-                    forecast_years=_get_forecast_years(_project_cfg),
+                    forecast_years=_macro_forecast_years,
                     project_config=_project_cfg,
                 )
                 result.macro_result = macro_result
@@ -214,6 +230,7 @@ def build_model(
                     repo=repo,
                     config_path=config_path if config_path.exists() else None,
                     scenario_name=scenario_name,
+                    backtest_end_year=backtest_end_year,
                 )
                 historic, config = loader.load()
                 config.sanity_mode = sanity_mode
@@ -440,6 +457,8 @@ def main():
     parser.add_argument("--config", help="Путь к project.yaml")
     parser.add_argument("--sanity", choices=["fail", "warn"], default="fail",
                         help="Гейты adequacy: fail=остановка при абсурдных значениях, warn=только лог")
+    parser.add_argument("--backtest", type=int, metavar="END_YEAR", default=None,
+                        help="Backtest-режим: base=END_YEAR, прогноз END+1..END+span, auto-detect off")
     args = parser.parse_args()
 
     res = build_model(
@@ -454,6 +473,7 @@ def main():
         run_rating=args.rating,
         run_covenants=args.covenants,
         sanity_mode=args.sanity,
+        backtest_end_year=args.backtest,
     )
     exit(0 if res.success else 1)
 
