@@ -22,6 +22,7 @@ from openpyxl.utils import get_column_letter
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from styles import *
+import macro_config as MC
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SV2_ROOT = BASE_DIR.parent.parent  # stressTest_v2 root
@@ -659,16 +660,9 @@ def fill_macro(wb, data: dict, company: str):
 
 
     # Fill actual values into SCENARIO rows (history cols C:E = 2023:2025)
-    # These are FX anchors — critical for cost FX adjustment
+    # Источник: config/macro_scenarios.yaml → hist_actuals (SSOT, [ДАННЫЕ])
     hist3 = src["hist_years"][-3:]  # [2023, 2024, 2025]
-    actuals_by_year = {
-        2023: {"LME Aluminium": 2251, "LME Alumina": 349, "USD/RUB": 85.5,
-               "USD/CNY": 7.08, "Brent": 82.2, "CPI RU": 0.073, "PPI RU": 0.040},
-        2024: {"LME Aluminium": 2398, "LME Alumina": 459, "USD/RUB": 92.3,
-               "USD/CNY": 7.25, "Brent": 80.6, "CPI RU": 0.095, "PPI RU": 0.043},
-        2025: {"LME Aluminium": 2632, "LME Alumina": 353, "USD/RUB": 83.8,
-               "USD/CNY": 7.19, "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017},
-    }
+    actuals_by_year = MC.get_hist_actuals(company)
     filled_hist = 0
     for yr_idx, yr in enumerate(hist3):
         col = 3 + yr_idx
@@ -879,13 +873,8 @@ def fill_revenue(wb, data: dict, company: str):
                        item.get("factor", "").lower().replace(" ", "_") == factor_name.lower().replace(" ", "_"):
                         fac_hist[item["year"]] = item["value"]
                 # Supplement missing years with public LME annual averages
-                _lme_supplement = {
-                    "lme_nickel": {2022: 25597, 2023: 21406, 2024: 17030, 2025: 16000},
-                    "lme_copper": {2022: 8797, 2023: 8489, 2024: 9152, 2025: 9500},
-                    "lme_palladium": {2022: 2112, 2023: 1337, 2024: 1024, 2025: 1000},
-                    "lme_platinum": {2022: 967, 2023: 966, 2024: 964, 2025: 1000},
-                    "lme_aluminium": {2022: 2706, 2023: 2257, 2024: 2373, 2025: 2800},
-                }
+                # (номинал, config/macro_scenarios.yaml → ols_supplement, [ДАННЫЕ])
+                _lme_supplement = MC.get_ols_supplement()
                 sup = _lme_supplement.get(factor_name_norm, {})
                 for yr, val in sup.items():
                     if yr not in fac_hist:
@@ -2528,71 +2517,9 @@ def fill_macro_forecasts(wb, data: dict, company: str):
         elif not label:
             break  # end of Base block
 
-    # ── WEB-BASED MACRO SCENARIOS (Oct 2026) ──
-    # Sources: World Bank (Al), CBR (FX/Rate), FocusEconomics, Statista
-    web_scenarios = {
-        "rusal": {
-            # Base: consensus forecasts
-            "base": {
-                "LME Aluminium":  [2800, 2750, 2700],  # Realized 2652 + moderate growth
-                # LME Alumina: formula = LME_Al × CP.alumina_lme_ratio (all scenarios)
-                "USD/RUB":        [85, 95, 99],         # CBR consensus
-                "USD/CNY":        [7.0, 6.7, 6.5],      # Exchange rates consensus
-                "Brent":          [70, 68, 65],          # EIA
-                "CPI RU":         [0.07, 0.05, 0.04],   # CBR target path
-                "PPI RU":         [0.03, 0.02, 0.02],   # FocusEconomics
-            },
-            # Stress: commodity -20%, FX +15%
-            "stress": {
-                "LME Aluminium":  [2240, 2200, 2160],  # −20% from base
-                # LME Alumina: formula = LME_Al × 0.16 (in build_model)
-                "USD/RUB":        [98, 109, 114],
-                "USD/CNY":        [7.3, 7.0, 6.8],
-                "Brent":          [56, 54, 52],
-                "CPI RU":         [0.09, 0.07, 0.06],
-                "PPI RU":         [0.05, 0.04, 0.03],
-            },
-            # Severe: commodity -40%, FX +30%
-            "severe": {
-                "LME Aluminium":  [1680, 1650, 1620],  # −40% from base
-                # LME Alumina: formula = LME_Al × 0.16 (in build_model)
-                "USD/RUB":        [85, 95, 99],         # = Base (pure price shock)
-                "USD/CNY":        [7.0, 6.7, 6.5],     # = Base
-                "Brent":          [42, 41, 39],
-                "CPI RU":         [0.12, 0.10, 0.08],
-                "PPI RU":         [0.08, 0.06, 0.05],
-            },
-        },
-        "nornickel": {
-            "base": {
-                "LME Nickel":     [16000, 17000, 18000],
-                "LME Copper":     [9500, 10000, 10500],
-                "LME Palladium":  [1000, 1050, 1100],
-                "LME Platinum":   [1000, 1050, 1100],
-                "USD/RUB":        [85, 95, 99],
-                "Brent":          [70, 68, 65],
-                "GDP World":      [0.032, 0.033, 0.034],
-            },
-            "stress": {
-                "LME Nickel":     [12800, 13600, 14400],
-                "LME Copper":     [7600, 8000, 8400],
-                "LME Palladium":  [800, 840, 880],
-                "LME Platinum":   [800, 840, 880],
-                "USD/RUB":        [98, 109, 114],
-                "Brent":          [56, 54, 52],
-                "GDP World":      [0.020, 0.022, 0.025],
-            },
-            "severe": {
-                "LME Nickel":     [9600, 10200, 10800],
-                "LME Copper":     [5700, 6000, 6300],
-                "LME Palladium":  [600, 630, 660],
-                "LME Platinum":   [600, 630, 660],
-                "USD/RUB":        [110, 124, 129],
-                "Brent":          [42, 41, 39],
-                "GDP World":      [0.010, 0.015, 0.020],
-            },
-        },
-    }
+    # ── МАКРОСЦЕНАРИИ ИЗ SSOT-КОНФИГА (config/macro_scenarios.yaml) ──
+    # Винтаж — meta.vintage конфига. У каждого фактора source (кол. J) и tag (кол. K).
+    web_scenarios = {company: MC.get_scenarios(company)}
 
     # Write ALL scenarios (Base as input, Stress/Severe to protect from overwrite)
     scenario_filled = 0
@@ -2615,13 +2542,26 @@ def fill_macro_forecasts(wb, data: dict, company: str):
             label = ws.cell(r, 1).value
             if not label:
                 break
-            if label and isinstance(label, str) and label.strip() in sc_vals:
-                vals = sc_vals[label.strip()]
+            fdata = sc_vals.get(label.strip()) if isinstance(label, str) else None
+            if fdata:
+                vals = fdata.get("values", [])
                 for i, v in enumerate(vals[:len(fc_years)]):
                     c = fc_start_col + i
                     ws.cell(r, c, round(v, 4)).font = F_INPUT
                     ws.cell(r, c).number_format = '#,##0.00' if abs(v) < 100 else '#,##0'
                     scenario_filled += 1
+                # Источник и тег в книгу (аудит: у каждого прогноза есть источник)
+                if fdata.get("source"):
+                    ws.cell(r, 10, str(fdata["source"])[:120]).font = F_NOTE   # J = Источник
+                if fdata.get("tag"):
+                    ws.cell(r, 11, str(fdata["tag"])).font = F_NOTE             # K = Роль/тег
+
+    # Alumina / LME ratio из SSOT (факт 2025 = 353/2561 = 0.134; был 0.203 — винтаж пика 2024)
+    if company == "rusal":
+        cp_al_r = REG.get("CP.alumina_lme_ratio")
+        if cp_al_r:
+            ws_cp = wb["Control_Panel"]
+            ws_cp.cell(cp_al_r, 3, MC.get_alumina_lme_ratio()).font = F_INPUT
 
     print(f"    Macro forecasts: {filled} historical + {scenario_filled} scenario cells")
 

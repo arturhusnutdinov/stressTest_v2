@@ -24,6 +24,7 @@ from openpyxl.utils import get_column_letter
 # Add parent to path for styles import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from styles import *
+import macro_config as MC
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -166,7 +167,8 @@ COMPANY_CONFIGS = {
         "segments": [
             {"name": "Nickel", "key": "seg1", "driver": "LME Nickel"},
             {"name": "Copper", "key": "seg2", "driver": "LME Copper"},
-            {"name": "PGM (Pd+Pt)", "key": "seg3", "driver": "LME Palladium"},
+            {"name": "PGM (Pd+Pt)", "key": "seg3", "driver": "LME Palladium",
+             "pgm_mix": True},  # цена = chain-link от микса 0.72×Pd + 0.28×Pt (D2)
         ],
         "macro_factors": ["LME Nickel", "LME Copper", "LME Palladium", "LME Platinum",
                           "USD/RUB", "Brent", "GDP World"],
@@ -1261,6 +1263,17 @@ def build_segments(wb, cfg):
             if i < 2:  # seg1, seg2: macro price driver
                 formula_cell(ws, r, c,
                              f"='{NAME['MA']}'!{cl}${act_base + i}", FMT_INT)
+            elif seg.get("pgm_mix"):
+                # D2: PGM (Pd+Pt) — chain-link от микса LME Pd/Pt
+                # PGM_t = PGM_{t-1} × (w_pd×Pd_t + w_pt×Pt_t) / (w_pd×Pd_{t-1} + w_pt×Pt_{t-1})
+                r_pd = REG.get("MA.act_lme_pd")
+                r_pt = REG.get("MA.act_lme_pt")
+                mix = MC.load_macro_config().get("nornickel", {}).get("pgm_mix", {})
+                w_pd, w_pt = float(mix.get("pd", 0.72)), float(mix.get("pt", 0.28))
+                ma = NAME['MA']
+                mix_t = f"({w_pd}*'{ma}'!{cl}${r_pd}+{w_pt}*'{ma}'!{cl}${r_pt})"
+                mix_p = f"({w_pd}*'{ma}'!{prev}${r_pd}+{w_pt}*'{ma}'!{prev}${r_pt})"
+                formula_cell(ws, r, c, f"={prev}{r}*{mix_t}/MAX(1,{mix_p})", FMT_INT)
             else:  # seg3+: carry-forward (no commodity driver)
                 formula_cell(ws, r, c, f"={prev}{r}", FMT_INT)
         r += 1
@@ -1330,11 +1343,21 @@ def build_revenue(wb, cfg):
             # Active scenario rows start at REG.get("MA.act_base", 36)
             act_base = REG.get("MA.act_base", 36)
             seg_idx = cfg["segments"].index(seg)
-            # Price: macro driver for seg1/seg2, carry-forward for seg3+
+            # Price: macro driver for seg1/seg2, PGM mix chain-link (D2), carry-forward иначе
             if seg_idx < 2:
                 macro_price_row = act_base + seg_idx
                 formula_cell(ws, base_r + 1, c,
                              f"='{NAME['MA']}'!{col_l}${macro_price_row}", FMT_INT)
+            elif seg.get("pgm_mix"):
+                r_pd = REG.get("MA.act_lme_pd")
+                r_pt = REG.get("MA.act_lme_pt")
+                mix = MC.load_macro_config().get("nornickel", {}).get("pgm_mix", {})
+                w_pd, w_pt = float(mix.get("pd", 0.72)), float(mix.get("pt", 0.28))
+                ma = NAME['MA']
+                mix_t = f"({w_pd}*'{ma}'!{col_l}${r_pd}+{w_pt}*'{ma}'!{col_l}${r_pt})"
+                mix_p = f"({w_pd}*'{ma}'!{prev_col}${r_pd}+{w_pt}*'{ma}'!{prev_col}${r_pt})"
+                formula_cell(ws, base_r + 1, c,
+                             f"={prev_col}{base_r+1}*{mix_t}/MAX(1,{mix_p})", FMT_INT)
             else:
                 formula_cell(ws, base_r + 1, c,
                              f"={prev_col}{base_r + 1}", FMT_INT)
@@ -4756,8 +4779,9 @@ def build_control_panel(wb, cfg):
     REG["CP.alumina_norm"] = r; r += 1
 
     label_row(ws, r, "Alumina / LME ratio", "%",
-              "Rusal effective cost: 20.3% (LME index 13.4%, premium for captive supply)")
-    input_cell(ws, r, 3, 0.203, FMT_PCT)
+              "Факт 2025 = 353/2561 = 0.134 [ДАННЫЕ] (LME Alumina Platts / LME Al). "
+              "fill_data перезаписывает из config/macro_scenarios.yaml")
+    input_cell(ws, r, 3, 0.134, FMT_PCT)
     # REG set below after Fixed material
 
     r_alumina = r; r += 1

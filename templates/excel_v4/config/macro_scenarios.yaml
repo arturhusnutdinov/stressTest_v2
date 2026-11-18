@@ -1,0 +1,142 @@
+# =============================================================================
+# МАКРОСЦЕНАРИИ — единый SSOT для excel_v4 (книги) и Python engine (stressTest_v2)
+#
+# Винтаж: 2026-11-18. Все прогнозные значения имеют источник (source + url).
+# Правило: Base = консенсус/официальный прогноз на дату винтажа; Stress = шок к Base;
+# Severe = глубокий шок. История (hist_actuals) = [ДАННЫЕ], прогноз = [ОЦЕНКА].
+#
+# Использование:
+#   - книги: templates/excel_v4/scripts/fill_data.py (fill_macro / fill_macro_forecasts)
+#   - engine: engine/macro/scenario_config.py → macro_forecasts (method=scenario_base)
+# =============================================================================
+
+meta:
+  vintage: "2026-11-18"
+  fc_years: [2026, 2027, 2028]
+  history_note: >
+    История LME-металлов — номинальные среднегодовые cash-settlement (Westmetall/LME).
+    2026 — частичный год (по 17.11.2026), [ДАННЫЕ].
+
+# ─── Общие источники (шорткаты) ──────────────────────────────────────────────
+sources:
+  westmetall:   {name: "LME cash-settlement, Westmetall", url: "https://www.westmetall.com/en/markdaten.php?action=table&field=LME_Al_cash", accessed: "2026-11-18"}
+  wb_cmo:       {name: "World Bank Commodity Markets Outlook, Oct 2026", url: "https://documents1.worldbank.org/curated/en/099741210282619392/pdf/IDU-e91881a0-52ca-4623-a28d-63c23120bfcf.pdf", accessed: "2026-11-18"}
+  cbr_survey:   {name: "Макроэкономический опрос Банка России, окт 2026", url: "https://cbr.ru/statistics/ddkp/mo_br/", accessed: "2026-11-18"}
+  cbr_mtp:      {name: "Среднесрочный прогноз ЦБ РФ, 23.10.2026", url: "https://www.cbr.ru/press/keypr/", accessed: "2026-11-18"}
+  minfin:       {name: "Бюджетные допущения Минфина / прогноз ПСР (бюджет 2026-2028)", url: "http://government.ru/news/59963/", accessed: "2026-11-18"}
+  ecb_staff:    {name: "ECB staff projections, Sep 2026", url: "https://www.centralbank.ie/statistics/interest-rates-exchange-rates/ecb-interest-rates", accessed: "2026-11-18"}
+  imf_weo:      {name: "IMF World Economic Outlook, Oct 2026", url: "https://www.imf.org/en/Publications/WEO", accessed: "2026-11-18"}
+  focus_alumina: {name: "LME Alumina (Platts) via FocusEconomics", url: "https://www.focus-economics.com/commodities/base-metals/alumina/", accessed: "2026-11-18"}
+  lme_nickel:   {name: "LME Nickel official, 17.11.2026", url: "https://www.lme.com/metals/non-ferrous/lme-nickel", accessed: "2026-11-18"}
+  inn_pgm:      {name: "INN Palladium Forecast 2026 + spot (Kitco/TE 17.11.2026)", url: "https://investingnews.com/palladium-forecast/", accessed: "2026-11-18"}
+  rosstat:      {name: "Росстат ИПЦ/ИЦП", url: "https://rosstat.gov.ru/", accessed: "2026-11-18"}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# UC RUSAL
+# ═════════════════════════════════════════════════════════════════════════════
+rusal:
+  # Фактические исторические значения в строках сценариев (C:E = 2023-2025)
+  hist_actuals:
+    2023: {"LME Aluminium": 2148, "LME Alumina": 349, "USD/RUB": 85.5, "USD/CNY": 7.08, "Brent": 82.2, "CPI RU": 0.073, "PPI RU": 0.040}
+    2024: {"LME Aluminium": 2438, "LME Alumina": 459, "USD/RUB": 92.3, "USD/CNY": 7.25, "Brent": 80.6, "CPI RU": 0.095, "PPI RU": 0.043}
+    2025: {"LME Aluminium": 2561, "LME Alumina": 353, "USD/RUB": 83.8, "USD/CNY": 7.19, "Brent": 69.1, "CPI RU": 0.087, "PPI RU": 0.017}
+  # Доля глинозёма в цене алюминия (CP.alumina_lme_ratio): факт 2025 = 353/2561
+  alumina_lme_ratio: {value: 0.134, source: "LME Alumina Platts / LME Al, факт 2025", tag: "[ДАННЫЕ]"}
+  scenarios:
+    base:
+      "LME Aluminium": {values: [3250, 3050, 2900],
+        source: "LME cash 2026 YTD ≈ 3 270 (Westmetall, 17.11); WB CMO Oct-26: рекорды 2026, снижение 2027, остаётся высоким", tag: "[ОЦЕНКА]"}
+      "USD/RUB": {values: [85, 95, 99],
+        source: "Опрос ЦБ окт-26: 81.2 (2026); Минфин: 92.2 (2026); МЭР: 100.2 (2026)→106.0 (2028). Путь — середина коридора", tag: "[ОЦЕНКА]"}
+      "USD/CNY": {values: [7.0, 6.9, 6.8],
+        source: "Фиксинг PBoC/consensus: постепенное укрепление CNY", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [72, 70, 68],
+        source: "Опрос ЦБ окт-26: $70 (2026, налоговая цена повышена); Минфин Urals $53 (2027); WB CMO baseline $91/79 — верхняя граница (конфликт БВ)", tag: "[ОЦЕНКА]"}
+      "CPI RU": {values: [0.070, 0.055, 0.045],
+        source: "ЦБ: возврат к цели ~4% в 2027-28; 2026 ≈ 7-8% (среднесрочный прогноз 23.10.2026)", tag: "[ОЦЕНКА]"}
+      "PPI RU": {values: [0.045, 0.035, 0.030],
+        source: "ИЦП Росстат: исторически > ИПЦ (металлургия, энергия); нормализация к ~3%", tag: "[ОЦЕНКА]"}
+    stress:
+      "LME Aluminium": {values: [2600, 2440, 2320], source: "Base × (1−20%)", tag: "[ОЦЕНКА]"}
+      "USD/RUB": {values: [98, 108, 115], source: "Base + девальвация ~15-20%", tag: "[ОЦЕНКА]"}
+      "USD/CNY": {values: [7.3, 7.2, 7.1], source: "Base + ослабление CNY", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [58, 56, 54], source: "Base × 0.8", tag: "[ОЦЕНКА]"}
+      "CPI RU": {values: [0.090, 0.075, 0.065], source: "Base +2 п.п.", tag: "[ОЦЕНКА]"}
+      "PPI RU": {values: [0.060, 0.050, 0.045], source: "Base +1.5 п.п.", tag: "[ОЦЕНКА]"}
+    severe:
+      "LME Aluminium": {values: [1950, 1830, 1740], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
+      "USD/RUB": {values: [110, 124, 129], source: "Base +30%", tag: "[ОЦЕНКА]"}
+      "USD/CNY": {values: [7.0, 6.9, 6.8], source: "= Base (чисто ценовой шок)", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [45, 43, 42], source: "Уровень отсечения Минфина $50 с дисконтом", tag: "[ОЦЕНКА]"}
+      "CPI RU": {values: [0.120, 0.100, 0.080], source: "Base +5 п.п.", tag: "[ОЦЕНКА]"}
+      "PPI RU": {values: [0.085, 0.070, 0.060], source: "Base +4 п.п.", tag: "[ОЦЕНКА]"}
+  # Факторы только для engine (в книге не отображаются)
+  engine:
+    cbr_key_rate: {values: [14.6, 11.5, 9.0], source: "ЦБ 23.10.2026: средняя 2026 = 14.6; 2027 = 10.5-12.5 (SberCIB base 12.5); 2028 ≈ 8.5-9", tag: "[ОЦЕНКА]"}
+    cbr_key_rate_policy: {values: [14.0, 12.0, 9.0], source: "ЦБ: ставка на конец 2026 = 14.0 (заседание 23.10.2026); траектория снижения", tag: "[ОЦЕНКА]"}
+    euribor_6m: {values: [2.6, 2.6, 2.3], source: "ECB staff proj Sep-26: депо 2.5% средняя 2026, 2.6% 2027, 2.3% 2028; Euribor 6M ≈ депо +10-15 б.п.", tag: "[ОЦЕНКА]"}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# NORNICKEL
+# ═════════════════════════════════════════════════════════════════════════════
+nornickel:
+  hist_actuals:
+    2023: {"LME Nickel": 21474, "LME Copper": 8489, "LME Palladium": 1383, "LME Platinum": 967, "USD/RUB": 85.5, "Brent": 82.2}
+    2024: {"LME Nickel": 16736, "LME Copper": 9152, "LME Palladium": 985, "LME Platinum": 950, "USD/RUB": 92.3, "Brent": 80.6}
+    2025: {"LME Nickel": 16070, "LME Copper": 9590, "LME Palladium": 1017, "LME Platinum": 990, "USD/RUB": 83.8, "Brent": 69.1}
+  # PGM-микс для сегмента (доля Pd в PGM-корзине по выручке, факт 2023-2025)
+  pgm_mix: {pd: 0.72, pt: 0.28, source: "Доля Pd в PGM-выручке Норникеля (факт 2023-2025)", tag: "[ДАННЫЕ]"}
+  scenarios:
+    base:
+      "LME Nickel": {values: [16000, 17000, 18000],
+        source: "LME spot 15 790 (17.11.2026); консенсус: восстановление спроса 2027-28", tag: "[ОЦЕНКА]"}
+      "LME Copper": {values: [12000, 11500, 11000],
+        source: "LME spot 13 225 (17.11.2026); WB CMO Oct-26: рекорд 2026, снижение 2027, остаётся высоким", tag: "[ОЦЕНКА]"}
+      "LME Palladium": {values: [1000, 1050, 1100],
+        source: "Spot 935-990 (17.11.2026) после пика 1 900+; средняя 2026 ≈ 1 617 (StatMuse); INN-консенсус 950-1 500", tag: "[ОЦЕНКА]"}
+      "LME Platinum": {values: [1450, 1480, 1500],
+        source: "Spot ~1 520 (05.11.2026); WB CMO: Pt +110% янв-сен 2026, дефицит предложения", tag: "[ОЦЕНКА]"}
+      "USD/RUB": {values: [85, 95, 99], source: "Как rusal (единый FX-шок)", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [72, 70, 68], source: "Как rusal", tag: "[ОЦЕНКА]"}
+      "GDP World": {values: [0.030, 0.031, 0.032], source: "IMF WEO Oct-2026 ≈ 3.0% роста мировой экономики", tag: "[ОЦЕНКА]"}
+    stress:
+      "LME Nickel": {values: [12800, 13600, 14400], source: "Base × (1−20%)", tag: "[ОЦЕНКА]"}
+      "LME Copper": {values: [9600, 9200, 8800], source: "Base × (1−20%)", tag: "[ОЦЕНКА]"}
+      "LME Palladium": {values: [800, 840, 880], source: "Base × (1−20%)", tag: "[ОЦЕНКА]"}
+      "LME Platinum": {values: [1160, 1184, 1200], source: "Base × (1−20%)", tag: "[ОЦЕНКА]"}
+      "USD/RUB": {values: [98, 108, 115], source: "Base +15-20%", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [58, 56, 54], source: "Base × 0.8", tag: "[ОЦЕНКА]"}
+      "GDP World": {values: [0.020, 0.022, 0.025], source: "Рецессионный шок спроса", tag: "[ОЦЕНКА]"}
+    severe:
+      "LME Nickel": {values: [9600, 10200, 10800], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
+      "LME Copper": {values: [7200, 6900, 6600], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
+      "LME Palladium": {values: [600, 630, 660], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
+      "LME Platinum": {values: [870, 888, 900], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
+      "USD/RUB": {values: [110, 124, 129], source: "Base +30%", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [45, 43, 42], source: "= rusal severe", tag: "[ОЦЕНКА]"}
+      "GDP World": {values: [0.010, 0.015, 0.020], source: "Глобальная рецессия", tag: "[ОЦЕНКА]"}
+
+# Номинальные годовые средние для OLS-блока книг (2018-2025, источники: LME/Westmetall/StatMuse)
+ols_supplement:
+  lme_nickel:    {2018: 13128, 2019: 13930, 2020: 13835, 2021: 18466, 2022: 25597, 2023: 21474, 2024: 16736, 2025: 16070}
+  lme_copper:    {2018: 6523, 2019: 6000, 2020: 6182, 2021: 9317, 2022: 8797, 2023: 8489, 2024: 9152, 2025: 9590}
+  lme_palladium: {2018: 1029, 2019: 1539, 2020: 2207, 2021: 2397, 2022: 2112, 2023: 1383, 2024: 985, 2025: 1017}
+  lme_platinum:  {2018: 880, 2019: 863, 2020: 882, 2021: 1089, 2022: 967, 2023: 967, 2024: 950, 2025: 990}
+  lme_aluminium: {2018: 2110, 2019: 1791, 2020: 1734, 2021: 2484, 2022: 2702, 2023: 2148, 2024: 2438, 2025: 2561}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# История LME Aluminium (номинал, $/т, годовые средние cash-settlement)
+# Исправляет заниженный ряд driver CSV (был ~25% ниже номинала).
+# 2026 — частичный год (по 17.11), YTD ≈ 3 270.
+# ═════════════════════════════════════════════════════════════════════════════
+lme_al_history:
+  source: "LME cash-settlement annual averages (Westmetall), винтаж 2026-11-18"
+  values: {
+    1990: 1660, 1991: 1254, 1992: 1180, 1993: 1132, 1994: 1480,
+    1995: 1818, 1996: 1513, 1997: 1579, 1998: 1354, 1999: 1363,
+    2000: 1551, 2001: 1444, 2002: 1351, 2003: 1431, 2004: 1717,
+    2005: 1898, 2006: 2566, 2007: 2638, 2008: 2573, 2009: 1665,
+    2010: 2173, 2011: 2395, 2012: 2018, 2013: 1845, 2014: 1866,
+    2015: 1665, 2016: 1604, 2017: 1968, 2018: 2110, 2019: 1791,
+    2020: 1734, 2021: 2484, 2022: 2702, 2023: 2148, 2024: 2438,
+    2025: 2561, 2026: 3270 }
