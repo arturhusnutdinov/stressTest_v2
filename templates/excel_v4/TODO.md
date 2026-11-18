@@ -84,3 +84,4 @@
 | 12 | Forecast columns в COGS/SGA — формулы ratio, но нужны input или forecast-method | FIXED | 2026-10-05 |
 | 13 | **CRITICAL**: Column misalignment — Revenue/WC use C-E=hist+F-H=fc, but BS/PL/CF use C=hist+D-F=fc | FIXING | 2026-10-05 |
 | 14 | BS history col C not filled for Other_CA, Lease, Reserves → carry-forward = 0 | FIXED | 2026-10-05 |
+| 20 | Sync gate Nornickel требует Vertex PG: локально exit 2 ('NoneType' to_flat — нет history в SQLite, только Rusal/US Steel). Триггер прогона: доступ к production PG | INFO | 2026-11-18 |
