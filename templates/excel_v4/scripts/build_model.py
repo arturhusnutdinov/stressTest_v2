@@ -1487,6 +1487,10 @@ def build_ppe(wb, cfg):
     r_da_rate = REG.get("PP.da_rate", 21)
     label_row(ws, r_capex_rev, "CapEx / Revenue", "%")
     label_row(ws, r_da_rate, "DA / ОС нетто (rate)", "%")
+    # D1: плановый CapEx (до отложенного проектного) — ациклическая база для 17_Debt
+    REG.setdefault("PP.capex_plan", 23)
+    label_row(ws, REG["PP.capex_plan"], "CapEx плановый (до defer)", "mln",
+              "Формула sustaining+growth; PP.capex = plan − DT.capex_defer")
     # Fill CapEx/Rev and DA rate for ALL columns (history + forecast)
     # History CapEx from CF.capex (PPE.capex empty for hist C/D); forecast from PP.capex
     n_hist_ppe = len(cfg["hist_years"][-3:])
@@ -1522,13 +1526,18 @@ def build_ppe(wb, cfg):
         # ── CapEx = DA × (CapEx/DA ratio) ──
         # Audit v6: cp_sustaining is actually TOTAL CapEx/DA (includes expansion).
         # No separate expansion additive — it's already in the historical ratio.
+        # D1: план пишем в PP.capex_plan; PP.capex = plan − DT.capex_defer (иерархия Uses)
         rev_ref = f"'{NAME['RV']}'!{cl}${REG['RV.total_rev']}"
-        formula_cell(ws, REG["PP.capex"], c_idx,
+        formula_cell(ws, REG["PP.capex_plan"], c_idx,
                      f"=MAX("
                      f"{prev}{REG['PP.dep_charge']}*{cp_sustaining}"
                      f","
                      f"{rev_ref}*{cp_da_rate}*'Control_Panel'!$C${REG.get('CP.capex_floor', 50)}"
                      f")",
+                     FMT_MLN)
+        formula_cell(ws, REG["PP.capex"], c_idx,
+                     f"=MAX(0,{cl}{REG['PP.capex_plan']}"
+                     f"-'{NAME['DT']}'!{cl}${REG.get('DT.capex_defer', 65)})",
                      FMT_MLN)
 
         # Disposals = CapEx × disposal_pct (from CP, default 0)
@@ -2662,12 +2671,23 @@ def build_wc(wb, cfg):
                              FMT_DAYS)
             else:
                 input_cell(ws, r, c, 0, FMT_DAYS)
-        # Forecast: reference Control_Panel if available, else carry forward
+        # Forecast: partial adjustment к CP-target (D4) — плавная нормализация,
+        # год 1: prev+λ×(target−prev); год 2: +2λ (capped 1); год 3: target
         cp_row = cp_days.get(key)
+        cp_lam = f"'Control_Panel'!$C${REG.get('CP.wc_lambda', 51)}"
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             prev = get_column_letter(c - 1)
             if cp_row:
-                ref_cell(ws, r, c, f"='Control_Panel'!$C${cp_row}", FMT_DAYS)
+                i = c - (3 + n_hist)
+                if i == 0:
+                    lam = cp_lam
+                elif i == 1:
+                    lam = f"MIN(1,2*{cp_lam})"
+                else:
+                    lam = "1"
+                formula_cell(ws, r, c,
+                             f"={prev}{r}+{lam}*('Control_Panel'!$C${cp_row}-{prev}{r})",
+                             FMT_DAYS)
             else:
                 formula_cell(ws, r, c, f"={prev}{r}", FMT_DAYS)
 
@@ -2835,6 +2855,9 @@ def build_debt(wb, cfg):
     label_row(ws, REG["DT.nd"], "Чистый долг (ND)", "mln")
     label_row(ws, REG["DT.nd_ebitda"], "ND / EBITDA", "x")
     section_header(ws, REG["DT.gate"] - 1, "F2. HELPERS — разбивка длинных формул (W2)")
+    # D1: иерархия Uses — отложенный проектный CapEx (строки 64-65 свободны)
+    REG.setdefault("DT.cbrc_planned", 64)
+    REG.setdefault("DT.capex_defer", 65)
     for key, label, note in [
         ("gate", "Гейт рынка срочного долга (1=открыт)", "new_debt=1, нет breach, ICR≥лимит, EBITDA>0"),
         ("new_term_raw", "Новый транш до гейта (capped)", "residual + term-out; pen_limit если >0"),
@@ -2843,6 +2866,8 @@ def build_debt(wb, cfg):
         ("vol_lt", "Добровольное: погашение LT", "(total−ST)/(1+prepay_premium)"),
         ("vol_lev_repay", "Добровольное по левериджу", "lev>target → vol_st+vol_lt"),
         ("excess_cash", "Избыточная касса (prev)", "MAX(0, cash_prev − max_cash)"),
+        ("cbrc_planned", "ДС до RC (плановый CapEx)", "cash_prev+CFO+CFF_no_RC−PP.capex_plan; ациклично"),
+        ("capex_defer", "Отложенный проектный CapEx (D1)", "MIN(plan×(1−maint), MAX(0, min_cash−cbrc_planned))"),
     ]:
         label_row(ws, REG[f"DT.{key}"], label, "mln", note)
 
@@ -2881,10 +2906,13 @@ def build_debt(wb, cfg):
         # Sources
         formula_cell(ws, REG["DT.su_oper_flow"], c_idx,
                      f"={ebitda_ref}-{tax_current}", FMT_MLN)
+        # D1: Uses от планового CapEx; отложение уменьшает проектную часть
+        capex_plan_ref = f"'{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}"
         formula_cell(ws, REG["DT.su_maint_capex"], c_idx,
-                     f"={capex_ref}*{cp_maint_share}", FMT_MLN)
+                     f"={capex_plan_ref}*{cp_maint_share}", FMT_MLN)
         formula_cell(ws, REG["DT.su_growth_capex"], c_idx,
-                     f"={capex_ref}*(1-{cp_maint_share})", FMT_MLN)
+                     f"=MAX(0,{capex_plan_ref}*(1-{cp_maint_share})"
+                     f"-{cl}{REG['DT.capex_defer']})", FMT_MLN)
         formula_cell(ws, REG["DT.su_delta_nwc"], c_idx,
                      f"=MAX(0,{wc_ref})", FMT_MLN)
         # su_mandatory ← term mandatory
@@ -2943,6 +2971,20 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.cash_before_rc"], c_idx,
                      f"={cash_prev}+{cfo_ref}+{cfi_ref}+{cff_no_rc_ref}", FMT_MLN)
 
+        # ── D1: плановый вариант (ацикличный) ──
+        # cbrc_planned = cash_prev + CFO + CFF_no_RC − PP.capex_plan
+        # (CFI фактический = −PP.capex_final; плановый вариант берёт plan напрямую —
+        #  PP.capex_plan не зависит от 17_Debt → цикла нет)
+        formula_cell(ws, REG["DT.cbrc_planned"], c_idx,
+                     f"={cash_prev}+{cfo_ref}+{cff_no_rc_ref}"
+                     f"-'{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}",
+                     FMT_MLN)
+        # Отложенный проектный CapEx: режем growth-первым, пока касса ≥ min_cash
+        formula_cell(ws, REG["DT.capex_defer"], c_idx,
+                     f"=MIN('{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}*(1-{cp_maint_share}),"
+                     f"MAX(0,{cp_min_cash}-{cl}{REG['DT.cbrc_planned']}))",
+                     FMT_MLN)
+
         # ── Covenant check ──
         cp_new_debt = f"'Control_Panel'!$C${REG.get('CP.new_debt_available', 70)}"
         cp_cov_nd = f"'Control_Panel'!$C${REG.get('CP.cov_nd_ebitda', 71)}"
@@ -2976,10 +3018,12 @@ def build_debt(wb, cfg):
         cp_penalty_rate = f"'Control_Panel'!$C${REG.get('CP.penalty_rate', 72)}"
         new_rate = f"IF({cl}{REG['DT.gate']}=1,{cl}{REG['DT.avg_rate']},{cp_penalty_rate})"
 
-        need_raw = f"MAX(0,{cp_min_cash}-{cbrc})"
+        need_raw = f"MAX(0,{cp_min_cash}-{cl}{REG['DT.cbrc_planned']})"
         need = f"{cl}{REG['DT.funding_need']}"
+        # D1: need после отложения проектного CapEx (defer уже вычтен из Uses)
         formula_cell(ws, REG["DT.funding_need"], c_idx,
-                     f"={need_raw}", FMT_MLN)
+                     f"=MAX(0,{need_raw}-{cl}{REG['DT.capex_defer']})",
+                     FMT_MLN)
 
         # Since synthetic term interest = 0 in issuance year,
         # net cash from new draw = draw amount (no interest deduction).
@@ -4653,6 +4697,12 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 365, FMT_INT)
     ws.cell(r, 10, "[НОРМ] Конвенция: 365 = календарный год").font = F_NOTE
     REG["CP.day_count"] = r; r += 1
+    # D4: скорость нормализации WC-дней (partial adjustment, λ по годам 1/2/3)
+    label_row(ws, r, "WC λ нормализации (год 1)", "x",
+              "days_t = prev + λ×(target−prev); год 2 = 1.5×λ, год 3+ = target")
+    input_cell(ws, r, 3, 0.6, FMT_RATIO)
+    ws.cell(r, 10, "[ПАР] Плавная нормализация DSO/DIH/DPO (D4)").font = F_NOTE
+    REG["CP.wc_lambda"] = r; r += 1
     r += 1
 
     # ── H. ДОЛГ ──
