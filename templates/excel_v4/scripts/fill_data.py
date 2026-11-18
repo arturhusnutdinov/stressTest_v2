@@ -2658,6 +2658,23 @@ def fill_all(company: str, model_path: str):
     print(f"\n2. Opening model: {model_file.name}")
     wb = openpyxl.load_workbook(str(model_file))
 
+    # REG из встроенного листа _Reg (раскладка ДАННОЙ книги) — иначе shared
+    # reg.json может содержать раскладку другой компании (сборка B между
+    # build A и fill A сдвигала CP-строки → corruption 18.11)
+    if "_Reg" in wb.sheetnames:
+        ws_reg = wb["_Reg"]
+        from collections import OrderedDict
+        reg_new = OrderedDict()
+        for row in ws_reg.iter_rows(min_row=2, values_only=True):
+            if row[0] is not None and row[1] is not None:
+                v = row[1]
+                reg_new[str(row[0])] = int(v) if float(v) == int(v) else float(v)
+        REG.clear()
+        REG.update(reg_new)
+        print(f"  REG: {len(REG)} keys loaded from embedded _Reg sheet")
+    else:
+        print("  REG: _Reg sheet not found, using shared reg.json (legacy)")
+
     # Discover CP parameter rows from built workbook
     discover_cp_rows(wb)
 

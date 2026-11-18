@@ -2807,6 +2807,17 @@ def build_debt(wb, cfg):
     label_row(ws, REG["DT.lt"], "Долгосрочный долг (LT)", "mln")
     label_row(ws, REG["DT.nd"], "Чистый долг (ND)", "mln")
     label_row(ws, REG["DT.nd_ebitda"], "ND / EBITDA", "x")
+    section_header(ws, REG["DT.gate"] - 1, "F2. HELPERS — разбивка длинных формул (W2)")
+    for key, label, note in [
+        ("gate", "Гейт рынка срочного долга (1=открыт)", "new_debt=1, нет breach, ICR≥лимит, EBITDA>0"),
+        ("new_term_raw", "Новый транш до гейта (capped)", "residual + term-out; pen_limit если >0"),
+        ("vol_total", "Добровольное: доступный объём", "MIN(liquidity×sweep, MAX(lev-driven, excess))"),
+        ("vol_st", "Добровольное: погашение ST", "MIN(total, ST balance prev) — без премии"),
+        ("vol_lt", "Добровольное: погашение LT", "(total−ST)/(1+prepay_premium)"),
+        ("vol_lev_repay", "Добровольное по левериджу", "lev>target → vol_st+vol_lt"),
+        ("excess_cash", "Избыточная касса (prev)", "MAX(0, cash_prev − max_cash)"),
+    ]:
+        label_row(ws, REG[f"DT.{key}"], label, "mln", note)
 
     # ══════════════ FORMULAS ══════════════
     # CP references (dynamic rows set by build_control_panel)
@@ -2929,11 +2940,14 @@ def build_debt(wb, cfg):
         cp_cov_icr = f"'Control_Panel'!$C${REG.get('CP.cov_icr', 78)}"
         prev_icr = f"IFERROR('{NAME['RA']}'!{prev}${REG['RA.icr']},{cp_sentinel})"
         gate = f"AND({cp_new_debt}=1,NOT({cov_breach}),{prev_icr}>={cp_cov_icr},{ebitda_ref}>0)"
+        # W2-helper: гейт рынка отдельной строкой (иначе формулы >300 символов)
+        formula_cell(ws, REG["DT.gate"], c_idx,
+                     f"=IF({gate},1,0)", FMT_INT)
         cp_pen_limit = f"'Control_Panel'!$C${REG.get('CP.penalty_limit', 73)}"
         cp_tax_rate = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
         # Rate for new debt: gate open → avg_rate, gate closed → penalty_rate
         cp_penalty_rate = f"'Control_Panel'!$C${REG.get('CP.penalty_rate', 72)}"
-        new_rate = f"IF({gate},{cl}{REG['DT.avg_rate']},{cp_penalty_rate})"
+        new_rate = f"IF({cl}{REG['DT.gate']}=1,{cl}{REG['DT.avg_rate']},{cp_penalty_rate})"
 
         need_raw = f"MAX(0,{cp_min_cash}-{cbrc})"
         need = f"{cl}{REG['DT.funding_need']}"
@@ -2960,13 +2974,17 @@ def build_debt(wb, cfg):
 
         # ── NEW TERM = residual + term_out ──
         full_need = f"({residual}+{term_out})"
-        # Penalty limit cap when gate closed
+        # Penalty limit cap — применяется ТОЛЬКО при закрытом гейте
         cp_pen_limit_val = f"IF({cp_pen_limit}>0,MIN({full_need},{cp_pen_limit}),{full_need})"
+        # W2-helper: сырой объём до гейта (capped-вариант для закрытого рынка)
+        formula_cell(ws, REG["DT.new_term_raw"], c_idx,
+                     f"={cp_pen_limit_val}", FMT_MLN)
         # Рынок срочного долга полностью закрыт при EBITDA ≤ 0 (verify_model:
         # «gate should be closed») — штрафной тракт тоже недоступен;
-        # при EBITDA > 0 закрытый гейт = штрафное привлечение в пределах pen_limit
+        # при EBITDA > 0 закрытый гейт = штрафное привлечение в пределах pen_limit (r58)
         formula_cell(ws, REG["DT.new_term"], c_idx,
-                     f"=IF({ebitda_ref}<=0,0,IFERROR(IF({gate},{full_need},{cp_pen_limit_val}),0))",
+                     f"=IF({ebitda_ref}<=0,0,IFERROR(IF({cl}{REG['DT.gate']}=1,"
+                     f"{full_need},{cl}{REG['DT.new_term_raw']}),0))",
                      FMT_MLN)
 
         # ── Voluntary term: leverage-driven + excess cash drain ──
@@ -2977,22 +2995,34 @@ def build_debt(wb, cfg):
         vol_max_lev = f"MAX(0,{est_nd}-{cp_target_lev}*ABS({ebitda_ref}))"
         # B. Excess cash drain: PREV year cash - max_cash (no circular)
         cp_max_cash = f"'Control_Panel'!$C${REG.get('CP.max_cash', 55)}"
-        excess_cash = f"MAX(0,{cash_prev}-{cp_max_cash})"
-        # Total: max of leverage-driven and excess cash
-        vol_total = f"MIN({vol_available}*{cp_sweep_pct},MAX({vol_max_lev},{excess_cash}))"
+        # W2-helpers: excess_cash / vol_total / vol_st / vol_lt / vol_lev_repay
+        formula_cell(ws, REG["DT.excess_cash"], c_idx,
+                     f"=MAX(0,{cash_prev}-{cp_max_cash})", FMT_MLN)
+        excess_cash = f"{cl}{REG['DT.excess_cash']}"
+        # Total: min(available×sweep, max(lev-driven, excess cash))
+        formula_cell(ws, REG["DT.vol_total"], c_idx,
+                     f"=MIN({vol_available}*{cp_sweep_pct},MAX({vol_max_lev},{excess_cash}))",
+                     FMT_MLN)
         # ST balance proxy: prev year ST debt (from DT.st)
         st_balance = f"IFERROR({prev}{REG['DT.st']},0)"
         # vol_st = MIN(total, ST balance) — repay ST first, no premium
-        vol_st = f"MIN({vol_total},{st_balance})"
+        formula_cell(ws, REG["DT.vol_st"], c_idx,
+                     f"=MIN({cl}{REG['DT.vol_total']},{st_balance})", FMT_MLN)
         # vol_lt = remaining × (1/(1+premium)) — LT with prepay cost
-        vol_lt = f"MAX(0,{vol_total}-{vol_st})/(1+{cp_prepay_prem})"
+        formula_cell(ws, REG["DT.vol_lt"], c_idx,
+                     f"=MAX(0,{cl}{REG['DT.vol_total']}-{cl}{REG['DT.vol_st']})/(1+{cp_prepay_prem})",
+                     FMT_MLN)
+        # lev-driven: ND/EBITDA > target → vol_st + vol_lt
+        formula_cell(ws, REG["DT.vol_lev_repay"], c_idx,
+                     f"=IF(IFERROR({est_nd}/ABS({ebitda_ref}),{cp_sentinel})>{cp_target_lev},"
+                     f"{cl}{REG['DT.vol_st']}+{cl}{REG['DT.vol_lt']},0)",
+                     FMT_MLN)
         # voluntary_term: leverage-driven OR excess cash drain
-        # Leverage repay: NI>0, no breach, overleveraged → vol_st + vol_lt
+        # Leverage repay: NI>0, no breach, overleveraged → vol_lev_repay
         # Excess cash: NI>0, no breach → excess (regardless of leverage)
-        lev_repay = f"IF(IFERROR({est_nd}/ABS({ebitda_ref}),{cp_sentinel})>{cp_target_lev},{vol_st}+{vol_lt},0)"
         formula_cell(ws, REG["DT.voluntary_term"], c_idx,
                      f"=IFERROR(IF(AND(IFERROR({ni_ref},0)>0,NOT({cov_breach})),"
-                     f"MAX({lev_repay},{excess_cash}),"
+                     f"MAX({cl}{REG['DT.vol_lev_repay']},{excess_cash}),"
                      f"0),0)",
                      FMT_MLN)
 
@@ -3037,7 +3067,7 @@ def build_debt(wb, cfg):
         # Penalty-financed portion = new_term attracted at penalty_rate
         # Gate open → 0; Gate closed → new_term (= capped by penalty_limit if set)
         formula_cell(ws, REG["DT.funding_gap"], c_idx,
-                     f"=IFERROR(IF({gate},0,{cl}{REG['DT.new_term']}),0)",
+                     f"=IFERROR(IF({cl}{REG['DT.gate']}=1,0,{cl}{REG['DT.new_term']}),0)",
                      FMT_MLN)
         # Accumulated = total outstanding penalty-rate debt
         formula_cell(ws, REG["DT.funding_gap_accum"], c_idx,
@@ -5343,6 +5373,20 @@ def build(company: str, output: str):
     # ── Save updated REG to reg.json (so fill_data sees runtime keys) ──
     reg_path = BASE_DIR / "reg.json"
     reg_path.write_text(json.dumps(REG, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # ── Embed REG into the workbook as hidden _Reg sheet ──
+    # fill_data reads layout from THIS sheet (book self-describing), not from
+    # shared reg.json — иначе сборка B между build A и fill A сдвигает CP-строки
+    # в reg.json и fill пишет значения по чужой раскладке ( corruption 18.11 ).
+    ws_reg = wb.create_sheet("_Reg")
+    ws_reg.cell(1, 1, "key").font = F_LABEL_B
+    ws_reg.cell(1, 2, "row").font = F_LABEL_B
+    for i, (k, v) in enumerate(sorted(REG.items()), start=2):
+        ws_reg.cell(i, 1, k)
+        if isinstance(v, (int, float)):
+            ws_reg.cell(i, 2, v)
+    ws_reg.sheet_state = "hidden"
+    print(f"  _Reg: {len(REG)} keys embedded (hidden sheet)")
 
     # ── Post-processing: Excel settings ──
     print("  Post-processing...")
