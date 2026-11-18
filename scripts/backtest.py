@@ -33,7 +33,10 @@ logger = logging.getLogger("backtest")
 
 # Метрики для MAPE: (имя, таблица_истории, ключ_истории, ключ_прогноза)
 # Для долга — агрегат STD+LT (ниже спец-обработка).
+# EBITDA: факт = ebitda_reported (книжное определение, METRICS_GLOSSARY.md),
+# прогноз = engine state.ebitda (та же база) — узкий ключ БД 'ebitda' НЕ использовать.
 IS_METRICS = ["revenue", "ebitda", "net_income"]
+HIST_KEY = {"revenue": "revenue", "ebitda": "ebitda_reported", "net_income": "net_income"}
 
 # Таблицы с year-колонкой, усечённые до END (look-ahead isolation)
 YEAR_TABLES = ["preprocess_metrics", "macro_factors", "macro_forecasts", "debt_schedule"]
@@ -176,7 +179,7 @@ def run_backtest(company: str, end_year: int, db_path: Path,
         cells = []
         for y in fc_years:
             f = _get_metric(fc, "forecast_is", company, scenario, y, metric)
-            a = _get_metric(orig, "history_is", company, scenario, y, metric)
+            a = _get_metric(orig, "history_is", company, scenario, y, HIST_KEY[metric])
             if f is None or a in (None, 0):
                 cells.append("n/a")
                 continue
@@ -212,12 +215,12 @@ def run_backtest(company: str, end_year: int, db_path: Path,
     lines.append("| Год | Revenue прогн/факт | EBITDA прогн/факт | NI прогн/факт | Debt прогн/факт |")
     lines.append("|---|---|---|---|---|")
     for y in fc_years:
-        def pf(f_tbl, h_tbl, m, getter=None):
+        def pf(f_tbl, h_tbl, m, getter=None, h_key=None):
             f = getter(fc, f_tbl, company, scenario, y) if getter else _get_metric(fc, f_tbl, company, scenario, y, m)
-            a = getter(orig, h_tbl, company, scenario, y) if getter else _get_metric(orig, h_tbl, company, scenario, y, m)
+            a = getter(orig, h_tbl, company, scenario, y) if getter else _get_metric(orig, h_tbl, company, scenario, y, h_key or m)
             fmt = lambda v: f"{v:,.0f}" if v is not None else "n/a"
             return f"{fmt(f)} / {fmt(a)}"
-        lines.append(f"| {y} | {pf('forecast_is','history_is','revenue')} | {pf('forecast_is','history_is','ebitda')} "
+        lines.append(f"| {y} | {pf('forecast_is','history_is','revenue')} | {pf('forecast_is','history_is','ebitda',h_key='ebitda_reported')} "
                      f"| {pf('forecast_is','history_is','net_income')} | {pf('forecast_bs','history_bs',None,_get_debt)} |")
     lines.append("")
     if result.warnings:
