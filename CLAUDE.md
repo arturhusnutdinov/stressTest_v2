@@ -224,6 +224,12 @@ Payment: US Steel=next_year, Rusal=current_year
 | `docs/Financial-Modeling-Guidelines.pdf` | CFI benchmark (94 стр.) |
 | `companies/nornickel/PROJECT_DIARY.md` | Дневник Норникеля |
 
+### excel_v4 (корпоративные Excel-модели RUSAL/Nornickel)
+- Сборка: `build_model.py --company X --output model/X_v4.xlsx` → `fill_data.py --company X --model model/X_v4.xlsx` → `finalize.py` (живой Excel recalc, ПОСЛЕДНИЙ шаг)
+- **reg.json race**: builder персистит CP-раскладку в shared reg.json; fill_data читает раскладку из встроенного листа `_Reg` (самоописывающаяся книга) — порядок build/fill между компаниями больше не критичен (фикс 18.11)
+- Гейты: `audit_corp_model.py` (E7 sanity bounds, H4 цвета), `sync_gate_corp.py --company rusal --book ...` (Nornickel — только с Vertex PG, иначе exit 2 штатно)
+- Backtest: `scripts/backtest.py --company rusal --end-year 2023` + `--backtest` флаги сборки/заполнения; определения метрик — `templates/excel_v4/docs/METRICS_GLOSSARY.md`
+
 ## Состояние данных (Sep 2026)
 
 ### Standalone SQLite (data_mart_v2.db)
