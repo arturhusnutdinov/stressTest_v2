@@ -1398,10 +1398,11 @@ def fill_debt_schedule(wb, data: dict, company: str):
         for yr_idx, yr in enumerate(fc_years):
             c_dt = COL_START + N_HIST_DISPLAY + yr_idx
             cl_dt = get_column_letter(c_dt)
-            # Model ST share vs historical — flag if deviation > 15 p.p.
+            # Model ST share vs historical — flag if deviation > tol (CP.st_drift_tol)
+            cp_tol = f"'Control_Panel'!$C${REG.get('CP.st_drift_tol', 84)}"
             formula_cell(ws_dt, REG["DT.cal_st_flag"], c_dt,
                          f"=IF(ABS({cl_dt}{REG['DT.st']}/MAX(1,{cl_dt}{REG['DT.close']})"
-                         f"-{get_column_letter(hc)}{REG['DT.cal_st_share']})>0.15,"
+                         f"-{get_column_letter(hc)}{REG['DT.cal_st_share']})>{cp_tol},"
                          f"\"⚠ ST ±15pp\",\"OK\")",
                          "")
 

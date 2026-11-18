@@ -3148,6 +3148,8 @@ def build_debt(wb, cfg):
                      f"+{penalty_int}",
                      FMT_MLN, bold=True)
         # Avg rate = total interest / total opening balance (from _Debt_Schedule)
+        # W5: fallback 0.08 → CP.avg_rate_fallback (литералы вне списка допустимых)
+        cp_avg_fb = f"'Control_Panel'!$C${REG.get('CP.avg_rate_fallback', 82)}"
         ds_total = REG.get("DS.total_row", 27)
         ds_yr_start = REG.get("DS.yr_start_col", 8)
         ds_cols_per = REG.get("DS.cols_per_year", 5)
@@ -3156,7 +3158,7 @@ def build_debt(wb, cfg):
         ds_int_col = get_column_letter(ds_yr_start + yr_idx * ds_cols_per + 3)   # Interest
         formula_cell(ws, REG["DT.avg_rate"], c_idx,
                      f"=IFERROR('{NAME['DS']}'!{ds_int_col}${ds_total}"
-                     f"/'{NAME['DS']}'!{ds_open_col}${ds_total},0.08)",
+                     f"/'{NAME['DS']}'!{ds_open_col}${ds_total},{cp_avg_fb})",
                      FMT_PCT)
 
         # ── F. ST/LT: mandatory next year + RC + covenant reclass ──
@@ -3173,8 +3175,9 @@ def build_debt(wb, cfg):
         # Last forecast year: avg ST share from prior 2 years × close (no 2029 col)
         if is_last_fc:
             prev2 = get_column_letter(c_idx - 2)
+            cp_st_fb = f"'Control_Panel'!$C${REG.get('CP.st_share_fallback', 83)}"
             avg_st_share = (f"IFERROR(({prev}{REG['DT.st']}/{prev}{REG['DT.close']}"
-                           f"+{prev2}{REG['DT.st']}/{prev2}{REG['DT.close']})/2,0.5)")
+                           f"+{prev2}{REG['DT.st']}/{prev2}{REG['DT.close']})/2,{cp_st_fb})")
             st_normal = f"{cl}{REG['DT.close']}*{avg_st_share}"
         else:
             st_mand = f"{next_cl}{REG['DT.mandatory']}"
@@ -3219,8 +3222,9 @@ def build_debt(wb, cfg):
             ref_cell(ws, REG["DT.interest_term"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
             ref_cell(ws, REG["DT.interest"], hc, f"=ABS('{NAME['HI']}'!{cl_h}${hi_int})", FMT_MLN)
         if hi_int and hi_st and hi_lt:
+            cp_avg_fb2 = f"'Control_Panel'!$C${REG.get('CP.avg_rate_fallback', 82)}"
             formula_cell(ws, REG["DT.avg_rate"], hc,
-                         f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_int})/({td}),0.08)", FMT_PCT)
+                         f"=IFERROR(ABS('{NAME['HI']}'!{cl_h}${hi_int})/({td}),{cp_avg_fb2})", FMT_PCT)
         input_cell(ws, REG["DT.rc_open"], hc, 0, FMT_MLN)
         input_cell(ws, REG["DT.rc_close"], hc, 0, FMT_MLN)
         ref_cell(ws, REG["DT.rc_limit"], hc, f"='Control_Panel'!$C${REG.get('CP.rc_limit',56)}", FMT_MLN)
@@ -4674,6 +4678,22 @@ def build_control_panel(wb, cfg):
     label_row(ws, r, "Refi % (банковский долг)", "%", "Сценарный параметр")
     input_cell(ws, r, 3, cfg.get("refi_pct_bank", 1.0), FMT_PCT)
     REG["CP.refi_pct_bank"] = r; r += 1
+
+    # W5: fallback-параметры 17_Debt (были литералами в формулах)
+    label_row(ws, r, "Fallback средней ставки долга", "%",
+              "[НОРМ] IFERROR default для avg_rate")
+    input_cell(ws, r, 3, 0.08, FMT_PCT)
+    REG["CP.avg_rate_fallback"] = r; r += 1
+
+    label_row(ws, r, "Fallback доли ST (справочно)", "%",
+              "[НОРМ] при отсутствии истории ST/LT")
+    input_cell(ws, r, 3, 0.50, FMT_PCT)
+    REG["CP.st_share_fallback"] = r; r += 1
+
+    label_row(ws, r, "Допуск drift ST/история ±", "п.п.",
+              "[НОРМ] порог флага калибровки ST")
+    input_cell(ws, r, 3, 0.15, FMT_PCT)
+    REG["CP.st_drift_tol"] = r; r += 1
 
     label_row(ws, r, "RC trigger (% лимита для нового транша)", "%")
     input_cell(ws, r, 3, 0.60, FMT_PCT)
