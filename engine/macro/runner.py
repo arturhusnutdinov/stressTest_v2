@@ -107,6 +107,20 @@ def run_macro(
             skip_factors=external_factors,
         )
 
+        # ── SSOT сценарии (config/macro_scenarios.yaml): base engine = base книг ──
+        # Перезаписывает пути факторов, есть в конфиге (C1: одна база для обоих движков).
+        if (scenario_name or "base").lower() == "base":
+            try:
+                from .scenario_config import apply_scenario_config
+                applied = apply_scenario_config(adapter, company_id, scenario_name="base")
+                for f in applied:
+                    if f not in result.factors_forecast:
+                        result.factors_forecast.append(f)
+                    result.methods_used[f] = "scenario_base(yaml)"
+                logger.info(f"  SSOT сценарии применены: {len(applied)} факторов")
+            except Exception as e:
+                logger.warning(f"  SSOT-сценарии не применены: {e}")
+
     except Exception as e:
         result.errors.append(str(e))
         logger.exception(f"Ошибка макро-модуля: {e}")
