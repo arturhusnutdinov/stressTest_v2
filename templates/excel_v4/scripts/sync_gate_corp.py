@@ -111,7 +111,8 @@ def main() -> int:
     print(f"{'метрика':<16}{'год':<6}{'Excel':>12}{'engine':>12}{'Δ':>10}  вердикт")
     print("-" * 62)
 
-    def line(name: str, yr: int, vx: float, ve: float, tol: float, hard: bool) -> None:
+    def line(name: str, yr: int, vx: float, ve: float, tol: float, hard: bool,
+             relative: bool = False) -> None:
         nonlocal fails
 
         def fmt(v):
@@ -120,12 +121,16 @@ def main() -> int:
         if vx is None or ve is None or not vx:
             print(f"{name:<16}{yr:<6}{vx!s:>12}{ve!s:>12}{'—':>10}  SKIP")
             return
-        diff = abs(ve - vx)
+        diff_abs = abs(ve - vx)
+        # P1 (19.11): уровни (mln) сравниваются ОТНОСИТЕЛЬНО доле от книги;
+        # структура (доли) — абсолютно в п.п. Было: abs(mln) <= 0.2 → всегда FAIL.
+        diff = diff_abs / max(abs(vx), 1e-9) if relative else diff_abs
         ok = diff <= tol
         tag = "ok" if ok else ("FAIL" if hard else "info")
         if not ok and hard:
-            fails.append(f"{name} {yr}: Δ={diff:.4f} > {tol}")
-        print(f"{name:<16}{yr:<6}{fmt(vx)}{fmt(ve)}{diff:>10.4f}  {tag}")
+            fails.append(f"{name} {yr}: Δ={diff:.4f} (> {tol}) abs={diff_abs:,.0f}")
+        d_show = f"{diff_abs:,.0f}" if relative else f"{diff:.4f}"
+        print(f"{name:<16}{yr:<6}{fmt(vx)}{fmt(ve)}{d_show:>10}  {tag}")
 
     for yr in fc_years:
         m_x, m_e = margins(xl[yr]), margins(eng[yr])
@@ -135,7 +140,8 @@ def main() -> int:
     level_struct_bad = bool(fails)
     for yr in fc_years:
         for key, label in (("revenue", "Revenue"), ("ebitda", "EBITDA"), ("net_income", "NI")):
-            line(label, yr, xl[yr][key], eng[yr][key], a.tol_level, hard=level_struct_bad)
+            line(label, yr, xl[yr][key], eng[yr][key], a.tol_level, hard=level_struct_bad,
+                 relative=True)
 
     print("-" * 62)
     if fails:

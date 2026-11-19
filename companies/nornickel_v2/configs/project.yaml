@@ -150,6 +150,7 @@ model:
           ewa_halflife: 4.0
           price_factors:
           - lme_ni_usd
+          price_beta: 1.0  # P1: конвенция книги 1:1
           volume_history:
             2015: 266.4
             2016: 235.7
@@ -180,6 +181,7 @@ model:
           ewa_halflife: 4.0
           price_factors:
           - lme_cu_usd
+          price_beta: 1.0  # P1: конвенция книги 1:1
           volume_history:
             2015: 369.4
             2016: 360.2
@@ -210,6 +212,7 @@ model:
           ewa_halflife: 4.0
           price_factors:
           - lme_pd_usd
+          price_beta: 1.0  # P1: конвенция книги 1:1
           volume_history:
             2015: 2689.0
             2016: 2618.0

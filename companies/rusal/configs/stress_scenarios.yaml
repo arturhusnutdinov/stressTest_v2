@@ -145,3 +145,20 @@ scenarios:
       dih_days:
         type: percentage
         value: 25.0
+
+  # ── Cost shock (P2, 19.11) ────────────────────────────────
+  # Класс риска «нормализация в обратную сторону» (бэктест 2025: COGS-рейт
+  # вырос на 6-7 п.п. vs EWA-базы). Через component-mode макро-шоки
+  # проходят в Material/Energy/Labour/Other автоматически.
+  cost_shock:
+    description: "Cost-push: PPI +12%, CPI +8%, power +30% (класс шока издержек 2024-25)"
+    macro_shocks:
+      ppi_ru:
+        type: percentage
+        value: 12.0
+      cpi_ru:
+        type: percentage
+        value: 8.0
+      russian_power_price:
+        type: percentage
+        value: 30.0

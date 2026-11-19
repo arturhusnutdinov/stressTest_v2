@@ -245,7 +245,15 @@ Payment: US Steel=next_year, Rusal=current_year
 - **D4 — WC partial adjustment**: DSO/DIH/DPO год 1 = prev+λ×(target−prev), год 2 = +2λ
   (cap 1), год 3 = target; λ = CP.wc_lambda (default 0.6)
 - Гейты: `audit_corp_model.py` (E7 sanity bounds, H4 цвета), `sync_gate_corp.py --company rusal --book ...` (структура ±3 п.п. жёстко, уровни ±20% мягко — движки считают РАЗНЫЕ макровходы by design; Nornickel — с Vertex PG `localhost:15432/vertex_db`)
-- **Sync-гейт 18.11**: после SSOT-макро уровни сблизились (engine rev 14.2 млрд vs книга 17.8 млрд — остаток = базис «other»-выручки: engine ~1.7 млрд vs книга ~4.0 млрд), но СТРУКТУРА FAIL: COGS% книга 67% (компонентная, глинозём 435) vs engine 81% (PPI-dampened ratio). **Следующая итерация (P1)**: конвергенция архитектуры COGS engine ↔ книга + унификация базиса other-выручки. Ковенанты engine (ND/EBITDA 6.65x) vs книга (1.9x) — следствие того же разрыва; кредитные выводы книги валидны (бэктест E1)
+- **Sync-гейт 19.11 (после P1)**: COGS%/EBITDA%/Revenue/EBITDA — все ок (Δ0.1-2.5%).
+  P1-пакет: recon-линия other-выручки (engine = книга 10_Revenue), COGS component-mode
+  (формулы книги 12_COGS: material = prod×(1.93×0.134×LME+377), purchases по LME,
+  energy/labour с fx_blend^0.7, other по PPI; БЕЗ mean-reversion), price_beta=1.0 +
+  price_anchor на LME-базисе (книга обнуляет премию: realized=LME-путь), история
+  lme_alumina в БД синхронизирована с YAML (349/459/353). Остаток (4 FAIL): NI
+  (ассоциаты engine 872 vs книга 666, проценты, эфф.ставка налога ~20 vs 25%) и
+  Net% 2027 (Δ3.5 п.п.) — различия саб-моделей ниже EBITDA, следующая итерация.
+  Баг гейта исправлен: уровни сравниваются относительно (abs(mln)<=0.2 → всегда FAIL)
 - Backtest: `scripts/backtest.py --company rusal --end-year 2023` (engine, temp-БД) +
   `--backtest` флаги сборки/заполнения (Excel-зеркало; для nornickel — только зеркало,
   данных нет в SQLite). Определения метрик — `templates/excel_v4/docs/METRICS_GLOSSARY.md`.

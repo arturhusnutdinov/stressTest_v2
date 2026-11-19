@@ -166,3 +166,13 @@ scenarios:
       dih_days:
         type: percentage
         value: 25.0
+
+  # ── Cost shock (P2, 19.11) ────────────────────────────────
+  # Класс «нормализация в обратную сторону» (бэктест 2024-25: COGS-рейт
+  # 43% → 50%). Ratio-модель COGS — шок через driver.
+  cost_shock:
+    description: "Cost-push: COGS ratio +6 п.п. (класс шока издержек 2024-25)"
+    driver_shocks:
+      cogs_pct:
+        type: pp
+        value: 6.0

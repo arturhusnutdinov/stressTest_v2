@@ -105,7 +105,44 @@ class ModelInputLoader:
                         model_config.forecast_end_year + 1,
                     ))
                     seg_forecasts = seg_model.forecast(forecast_years)
-                    model_config._segment_model = seg_model.total_revenue(seg_forecasts)
+                    seg_total = seg_model.total_revenue(seg_forecasts)
+                    # P1a: recon-линия как в книге (10_Revenue): прочая выручка
+                    # (VAP/foil/перепродажа) растёт пропорционально сегментам.
+                    # База = факт total − Σ сегментов базового года. Юниты engine:
+                    # vol(kt) × price(tUSD) = $ напрямую; истории — из конфигов
+                    # сегментов (sf.revenue покрывает только прогнозные годы).
+                    # Dummy-сегменты (volume ≈ 1, «other») книга держит ВНУТРИ recon:
+                    # исключаем их из Σseg и переносим их базу в recon — иначе их
+                    # EWA-рост (+4%/год) расходится с книжным ростом recon за сегментами.
+                    _hist_total = float(historic.is_data.get(historic.base_year, {}).get("revenue", 0) or 0)
+                    _seg_base = 0.0
+                    _folded_base = 0.0
+                    for _sname, _sc in rev_cfg.get("segments", {}).items():
+                        _vh = {int(k): float(v) for k, v in _sc.get("volume_history", {}).items()}
+                        _ph = {int(k): float(v) for k, v in _sc.get("price_history", {}).items()}
+                        if historic.base_year in _vh and historic.base_year in _ph:
+                            _rev_b = _vh[historic.base_year] * _ph[historic.base_year]
+                            if max(_vh.values()) <= 1.5:  # dummy-volume сегмент
+                                _folded_base += _rev_b
+                            else:
+                                _seg_base += _rev_b
+                    # Прогноз folded-сегментов вычитаем из seg_total (их рост = recon)
+                    for _sf in seg_forecasts:
+                        _sc = rev_cfg.get("segments", {}).get(_sf.name, {})
+                        _vh = {float(v) for v in _sc.get("volume_history", {}).values()}
+                        if _vh and max(_vh) <= 1.5:
+                            for yr in list(seg_total.keys()):
+                                seg_total[yr] = seg_total.get(yr, 0.0) - _sf.revenue.get(yr, 0.0)
+                    _recon_base = max(0.0, _hist_total - _seg_base)  # folded включён в разницу
+                    if _recon_base > 0 and _seg_base > 0:
+                        for yr in list(seg_total.keys()):
+                            seg_total[yr] = seg_total[yr] + _recon_base * seg_total[yr] / _seg_base
+                        logger.info(
+                            f"  Recon-линия (P1a): base {_recon_base/1e6:.0f}M = "
+                            f"total {_hist_total/1e6:.0f}M − Σseg {_seg_base/1e6:.0f}M "
+                            f"(folded other {_folded_base/1e6:.0f}M)"
+                        )
+                    model_config._segment_model = seg_total
                     # Store segment forecasts for later saving to DB
                     model_config._segment_forecasts = seg_forecasts
                     logger.info(

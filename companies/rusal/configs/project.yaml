@@ -186,6 +186,8 @@ model:
           price_method: macro
           price_factors:
           - lme_aluminium
+          price_beta: 1.0  # P1: конвенция книги — цена 1:1 к LME (без OLS-демпфинга)
+          price_anchor: 2561000  # P1: LME-базис 2025 (книга обнуляет премию: realized=LME-путь)
           ewa_halflife: 4.0
         alumina:
           volume_history:
@@ -209,7 +211,11 @@ model:
             2024: 849000
             2025: 537000
           volume_method: ewa
-          price_method: ewa
+          price_method: macro
+          price_factors:
+          - lme_alumina
+          price_beta: 1.0  # P1: realized = SSOT lme_alumina (книга 435.5/409/389)
+          price_anchor: 353000  # P1: LME-индекс 2025 (книга: realized = LME Al × 0.134)
           ewa_halflife: 4.0
         other:
           volume_history:
@@ -233,11 +239,30 @@ model:
           ewa_halflife: 3.0
     cogs:
       mode: component
+      # P1b (18.11): book-faithful компонентный режим (конвергенция с excel_v4 12_COGS).
+      # Чистая сумма компонент без mean-reversion re-anchoring.
+      component_mode: true
+      # $/t продукции, калибровка факт 2025 (книга 12_COGS, prod 3,918 kt):
+      material_usd_t: 1413.0        # alumina+raw (5,535M / 3,918 kt)
+      material_fixed_usd_t: 377.0   # неиндексируемая часть material
+      alumina_price_base: 537.0     # realized глинозём 2025 (AR)
+      alumina_lme_ratio: 0.134      # realized_t = ratio × LME Al (SSOT YAML)
+      alumina_intensity: 1.93       # t глинозёма / t Al
+      purchases_usd_t: 332.0        # перепродажа первички (1,300M), индекс LME
+      energy_usd_t: 791.0           # 3,097M: power × fx_blend
+      labour_usd_t: 255.0           # 1,000M: CPI × fx_blend
+      other_usd_t: 337.0            # 1,322M: PPI
+      fx_passthrough: 0.7           # доля FX-эффекта (CP книги)
+      lme_factor: lme_aluminium
+      energy_factor: russian_power_price
+      fx_factor: usd_rub
+      inflation_factor: cpi_ru
+      ppi_factor: ppi_ru
+      # legacy-параметры (dampened-режим, не используются при component_mode: true):
       alumina_share: 0.37
       energy_share: 0.27
       labour_share: 0.12
       other_share: 0.24
-      alumina_intensity: 1.93
       energy_kwh_per_t: 15500.0
       mean_reversion_dampening: 0.8
       clamp_sigma: 0.09

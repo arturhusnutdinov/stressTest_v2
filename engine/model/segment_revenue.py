@@ -54,6 +54,9 @@ class SegmentConfig:
     volume_factors: List[str] = field(default_factory=list)
     volume_growth:  Optional[float] = None  # фиксированный рост объёма (%/год)
     price_growth:   Optional[float] = None  # фиксированный рост цены (%/год)
+    price_beta:     Optional[float] = None  # P1: override OLS β (книга = 1.0, цена 1:1 к фактору)
+    price_anchor:   Optional[float] = None  # P1: стартовый якорь цены (LME-базис 2025) —
+                                            # книга обнуляет премию: realized_прогноз = LME-путь
     ewa_halflife:   float = 3.0
     max_volume_kt:  Optional[float] = None  # capacity cap (nameplate), kt
     use_production_for_volume: bool = False  # True = use production_kt, not sales_kt
@@ -70,6 +73,8 @@ class SegmentConfig:
             volume_factors=cfg.get("volume_factors", []),
             volume_growth =cfg.get("volume_growth"),
             price_growth  =cfg.get("price_growth"),
+            price_beta    =float(cfg["price_beta"]) if cfg.get("price_beta") is not None else None,
+            price_anchor  =float(cfg["price_anchor"]) if cfg.get("price_anchor") is not None else None,
             ewa_halflife  =float(cfg.get("ewa_halflife", 3.0)),
             max_volume_kt =float(cfg["max_volume_kt"]) if cfg.get("max_volume_kt") else None,
             use_production_for_volume=bool(cfg.get("use_production_for_volume", False)),
@@ -183,6 +188,8 @@ class SegmentRevenueModel:
                 factors=seg.price_factors,
                 fixed_growth=seg.price_growth,
                 halflife=seg.ewa_halflife,
+                beta_override=seg.price_beta,
+                anchor_override=seg.price_anchor,
             )
             rev_fc = {yr: vol_fc.get(yr, 0) * price_fc.get(yr, 0)
                       for yr in forecast_years}
@@ -220,6 +227,8 @@ class SegmentRevenueModel:
         factors: List[str],
         fixed_growth: Optional[float],
         halflife: float,
+        beta_override: Optional[float] = None,
+        anchor_override: Optional[float] = None,
     ) -> Dict[int, float]:
         """Прогнозирует один ряд (volume или price)."""
         if not history:
@@ -237,7 +246,9 @@ class SegmentRevenueModel:
             factor_name = factors[0]
             macro_series = self.macro_forecasts.get(factor_name, {})
             if len(macro_series) >= 3 and len(history) >= 3:
-                return self._ols_chainlink(history, macro_series, forecast_years)
+                return self._ols_chainlink(history, macro_series, forecast_years,
+                                           beta_override=beta_override,
+                                           anchor_override=anchor_override)
             logger.debug(f"  macro fallback → ewa: {factor_name} недостаточно данных")
 
         # EWA (дефолт)
@@ -290,34 +301,45 @@ class SegmentRevenueModel:
         history: Dict[int, float],
         macro_series: Dict[int, float],
         forecast_years: List[int],
+        beta_override: Optional[float] = None,
+        anchor_override: Optional[float] = None,
     ) -> Dict[int, float]:
-        """OLS: dln(series) ~ dln(macro) + chain-link от последней истории."""
+        """OLS: dln(series) ~ dln(macro) + chain-link от последней истории.
+
+        beta_override (P1): фиксированная эластичность вместо OLS-оценки —
+        конвергенция с книгой (excel_v4 price 1:1 к LME, β=1, α=0).
+        """
         common = sorted(set(history) & set(macro_series))
         if len(common) < 4:
             return self._ewa_forecast(history, forecast_years, 3.0)
 
-        dy, dx = [], []
-        for i in range(1, len(common)):
-            y0, y1 = common[i-1], common[i]
-            h0, h1 = history.get(y0, 0), history.get(y1, 0)
-            m0, m1 = macro_series.get(y0, 0), macro_series.get(y1, 0)
-            if h0 > 0 and h1 > 0 and m0 > 0 and m1 > 0:
-                dy.append(math.log(h1 / h0))
-                dx.append(math.log(m1 / m0))
+        if beta_override is not None:
+            beta = float(beta_override)
+            alpha = 0.0
+        else:
+            dy, dx = [], []
+            for i in range(1, len(common)):
+                y0, y1 = common[i-1], common[i]
+                h0, h1 = history.get(y0, 0), history.get(y1, 0)
+                m0, m1 = macro_series.get(y0, 0), macro_series.get(y1, 0)
+                if h0 > 0 and h1 > 0 and m0 > 0 and m1 > 0:
+                    dy.append(math.log(h1 / h0))
+                    dx.append(math.log(m1 / m0))
 
-        if not dx:
-            return self._ewa_forecast(history, forecast_years, 3.0)
+            if not dx:
+                return self._ewa_forecast(history, forecast_years, 3.0)
 
-        n  = len(dx)
-        mx = sum(dx) / n
-        my = sum(dy) / n
-        cov = sum((dx[i] - mx) * (dy[i] - my) for i in range(n))
-        var = sum((dx[i] - mx) ** 2 for i in range(n))
-        beta  = cov / var if var > 1e-12 else 0.0
-        alpha = my - beta * mx
+            n  = len(dx)
+            mx = sum(dx) / n
+            my = sum(dy) / n
+            cov = sum((dx[i] - mx) * (dy[i] - my) for i in range(n))
+            var = sum((dx[i] - mx) ** 2 for i in range(n))
+            beta  = cov / var if var > 1e-12 else 0.0
+            alpha = my - beta * mx
 
         last_hist_yr  = max(history.keys())
-        last_hist_val = history[last_hist_yr]
+        # P1 anchor_override: старт цепочки на LME-базисе (книга обнуляет премию)
+        last_hist_val = anchor_override if anchor_override is not None else history[last_hist_yr]
         last_macro = macro_series.get(last_hist_yr) or macro_series[max(macro_series.keys())]
 
         result = {}

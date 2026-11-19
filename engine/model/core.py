@@ -191,6 +191,18 @@ class ThreeStatementModel:
                     cogs_ratio_anchor=float(_cogs_anchor),
                     abs_clamp_min_factor=config.get_constraint("cogs", "abs_clamp_min_factor", 0.50),
                     abs_clamp_max_factor=config.get_constraint("cogs", "abs_clamp_max_factor", 1.50),
+                    # P1b: компонентный режим (конвергенция с книгой 12_COGS)
+                    component_mode=bool(_cogs_cfg.get('component_mode', False)),
+                    material_usd_t=float(_cogs_cfg.get('material_usd_t', 0.0)),
+                    material_fixed_usd_t=float(_cogs_cfg.get('material_fixed_usd_t', 0.0)),
+                    alumina_price_base=float(_cogs_cfg.get('alumina_price_base', 0.0)),
+                    alumina_lme_ratio=float(_cogs_cfg.get('alumina_lme_ratio', 0.134)),
+                    lme_factor=str(_cogs_cfg.get('lme_factor', 'lme_aluminium')),
+                    purchases_usd_t=float(_cogs_cfg.get('purchases_usd_t', 0.0)),
+                    energy_usd_t=float(_cogs_cfg.get('energy_usd_t', 0.0)),
+                    labour_usd_t=float(_cogs_cfg.get('labour_usd_t', 0.0)),
+                    other_usd_t=float(_cogs_cfg.get('other_usd_t', 0.0)),
+                    fx_passthrough=float(_cogs_cfg.get('fx_passthrough', 0.7)),
                 )
                 _base_yr = config.history_end_year
                 _macro_hist = {}

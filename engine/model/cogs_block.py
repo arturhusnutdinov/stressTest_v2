@@ -59,6 +59,21 @@ class CogsBlockConfig:
     # Preprocessor-calibrated COGS ratio (EWA, more stable than single-year)
     cogs_ratio_anchor: float = 0.0  # 0 = use base_cogs/base_revenue
 
+    # ── Режим "component" (конвергенция с книгой excel_v4, P1b) ──
+    # Чистая сумма компонент без mean-reversion re-anchoring. Формулы = книга 12_COGS.
+    component_mode: bool = False
+    # $/t продукции базового года (калибровка из факта 12_COGS):
+    material_usd_t: float = 0.0      # alumina+raw на тонну
+    material_fixed_usd_t: float = 0.0  # фикс. часть material (не индексируется глинозёмом)
+    alumina_price_base: float = 0.0  # realized база глинозёма $/t (AR: 537 для 2025)
+    alumina_lme_ratio: float = 0.134  # realized_t = ratio × LME Al (SSOT YAML)
+    lme_factor: str = "lme_aluminium"
+    purchases_usd_t: float = 0.0     # перепродажа алюминия, индекс LME
+    energy_usd_t: float = 0.0
+    labour_usd_t: float = 0.0
+    other_usd_t: float = 0.0
+    fx_passthrough: float = 0.7      # доля FX-эффекта в RUB-затратах (CP книги)
+
     # Absolute clamp factors (from constraints.cogs, defaults from constants.py)
     abs_clamp_min_factor: float = COGS_CLAMP_MIN_FACTOR
     abs_clamp_max_factor: float = COGS_CLAMP_MAX_FACTOR
@@ -128,6 +143,9 @@ class CogsBlock:
         """
         if self.cfg.base_cogs <= 0:
             return 0.0
+
+        if self.cfg.component_mode:
+            return self._compute_component(year, production_kt)
 
         # Production volume: use forecast or EWA from base
         prod_kt = production_kt or self.cfg.base_production_kt
@@ -200,4 +218,66 @@ class CogsBlock:
             total = max(self.cfg.base_cogs * self.cfg.abs_clamp_min_factor,
                        min(self.cfg.base_cogs * self.cfg.abs_clamp_max_factor, total))
 
+        return total
+
+    # ── Компонентный режим (P1b: конвергенция с книгой excel_v4) ──────────────
+
+    def _compute_component(self, year: int, production_kt: float) -> float:
+        """
+        Чистая сумма компонент по формулам книги 12_COGS (без re-anchoring).
+
+        Material  = prod × (norm × alumina_price_t + fixed), alumina_price_t = ratio × LME Al_t
+        Purchases = prod × purchases_$/t × (LME_t / LME_base)        (перепродажа по LME)
+        Energy    = base × power_index × fx_blend × vol_adj
+        Labour    = base × cpi_index  × fx_blend × vol_adj
+        Other     = base × ppi_index  × vol_adj
+        fx_blend  = (usdrub_base / usdrub_t) ^ fx_passthrough
+        """
+        cfg = self.cfg
+        prod_kt = production_kt or cfg.base_production_kt
+        # Единицы: prod_kt (kt) × $/t → k$; base_cogs в $. Переводим в тонны и доллары.
+        prod_t = prod_kt * 1000.0
+        base_t = cfg.base_production_kt * 1000.0
+        vol_adj = prod_kt / cfg.base_production_kt if cfg.base_production_kt > 0 else 1.0
+
+        # FX blend (RUB-затраты в USD)
+        usdrub = self._get_macro(cfg.fx_factor, year) or self._get_macro('fx_' + cfg.fx_factor, year)
+        if usdrub > 0 and self._usdrub_base > 0:
+            fx_blend = (self._usdrub_base / usdrub) ** cfg.fx_passthrough
+        else:
+            fx_blend = 1.0
+
+        # Material: связка realized-глинозём = ratio × LME Al (SSOT YAML)
+        lme_t = self._get_macro(cfg.lme_factor, year)
+        lme_base = (self.hist.get(cfg.lme_factor) or {}).get(cfg.base_year) or \
+                   self._get_macro(cfg.lme_factor, cfg.base_year)
+        alumina_t = cfg.alumina_lme_ratio * lme_t if lme_t > 0 else cfg.alumina_price_base
+        material = prod_t * (cfg.alumina_intensity * alumina_t + cfg.material_fixed_usd_t)
+
+        # Purchases: перепродажа первичного алюминия по LME
+        if lme_t > 0 and lme_base and lme_base > 0:
+            purchases = prod_t * cfg.purchases_usd_t * (lme_t / lme_base)
+        else:
+            purchases = prod_t * cfg.purchases_usd_t
+
+        # Energy: power index × fx blend
+        power = self._get_macro(cfg.energy_factor, year)
+        power_index = power / self._power_base if power > 0 and self._power_base > 0 else 1.0
+        energy = cfg.energy_usd_t * base_t * power_index * fx_blend * vol_adj
+
+        # Labour: CPI index × fx blend
+        cpi = self._get_macro(cfg.inflation_factor, year)
+        cpi_index = cpi / self._cpi_base if cpi > 0 and self._cpi_base > 0 else 1.0
+        labour = cfg.labour_usd_t * base_t * cpi_index * fx_blend * vol_adj
+
+        # Other: PPI index
+        ppi = self._get_macro(cfg.ppi_factor, year)
+        ppi_index = ppi / self._ppi_base if ppi > 0 and self._ppi_base > 0 else 1.0
+        other = cfg.other_usd_t * base_t * ppi_index * vol_adj
+
+        total = material + purchases + energy + labour + other
+
+        # Абсолютные предохранители (без re-anchoring к ratio)
+        total = max(cfg.base_cogs * cfg.abs_clamp_min_factor,
+                    min(cfg.base_cogs * cfg.abs_clamp_max_factor, total))
         return total
