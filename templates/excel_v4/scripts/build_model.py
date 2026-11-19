@@ -4646,18 +4646,61 @@ def build_rating_assign(wb, cfg):
     formula_cell(ws, rn + 2, 3, f"=IFERROR(MATCH(C{r_p3},{scale_sp},0),\"\")", FMT_INT)
     n1, n2, n3 = f"C{rn}", f"C{rn+1}", f"C{rn+2}"
 
+    # ── C. BUSINESS RISK PROFILE (четвёртая опора, P4) ──
+    # S&P-стиль: Business Risk Profile (страна/отрасль, конкурентная позиция,
+    # диверсификация, финполитика). Конфиг: config/business_risk.yaml — баллы
+    # 1-10 с обоснованиями [ОЦЕНКА]; корректировка итогового ±2 нотча.
+    import yaml as _yaml
+    _br_path = BASE_DIR / "config" / "business_risk.yaml"
+    _br = {}
+    if _br_path.exists():
+        _br = (_yaml.safe_load(_br_path.read_text(encoding="utf-8")) or {}).get(
+            cfg.get("_company", ""), {})
+    _br_dims = _br.get("dimensions", [])
+    _br_weights = _br.get("weights", {})
+    r_biz = rn + 4
+    section_header(ws, r_biz, "C. BUSINESS RISK PROFILE (четвёртая опора)")
+    ws.cell(r_biz + 1, 1, "Измерение").font = F_LABEL_B
+    ws.cell(r_biz + 1, 2, "Балл (1-10)").font = F_LABEL_B
+    ws.cell(r_biz + 1, 3, "Вес").font = F_LABEL_B
+    ws.cell(r_biz + 1, 4, "Обоснование [ОЦЕНКА]").font = F_LABEL_B
+    r_bd0 = r_biz + 2
+    for i, dim in enumerate(_br_dims):
+        rr = r_bd0 + i
+        label_row(ws, rr, str(dim.get("name", dim.get("key", ""))))
+        input_cell(ws, rr, 2, float(dim.get("score", 5)), FMT_RATIO1)
+        wcell = ws.cell(rr, 3, float(_br_weights.get(dim.get("key", ""), 0.25)))
+        wcell.font = F_INPUT
+        wcell.number_format = FMT_PCT
+        ws.cell(rr, 4, str(dim.get("justification", ""))[:110]).font = F_NOTE
+    r_biz_end = r_bd0 + max(len(_br_dims), 1)
+    label_row(ws, r_biz_end, "Бизнес-скор (0-100)", "", "Σ(балл×вес)×10; 55 = нейтраль")
+    if _br_dims:
+        _prod = "+".join(f"B{r_bd0+i}*C{r_bd0+i}" for i in range(len(_br_dims)))
+        formula_cell(ws, r_biz_end, 2, f"=({_prod})*10", FMT_RATIO1, bold=True)
+    else:
+        input_cell(ws, r_biz_end, 2, 55, FMT_RATIO1)
+    label_row(ws, r_biz_end + 1, "Корректировка итогового (нотчи)", "",
+              "CLAMP(ROUND((бизнес-скор−55)/15), −2, +2); + улучшает (сильный бизнес), − ухудшает")
+    formula_cell(ws, r_biz_end + 1, 2,
+                 f"=MAX(-2,MIN(2,ROUND((B{r_biz_end}-55)/15,0)))", FMT_INT, bold=True)
+    biz_adj = f"B{r_biz_end+1}"
+
     # ── D. ПРИСВОЕНИЕ ──
-    r_med = rn + 4
-    section_header(ws, r_med - 1, "C. ПРИСВОЕНИЕ")
-    label_row(ws, r_med, "Итоговый нотч (медиана П1, П2, П3)", "")
+    r_med = r_biz_end + 3
+    section_header(ws, r_med - 1, "D. ПРИСВОЕНИЕ")
+    label_row(ws, r_med, "Нотч медианы (П1, П2, П3)", "")
     formula_cell(ws, r_med, 3, f"=MEDIAN({n1},{n2},{n3})", FMT_INT, bold=True)
-    r_fin = r_med + 1
+    r_t0 = r_med + 1
+    label_row(ws, r_t0, "ИТОГОВЫЙ нотч (медиана ± бизнес)", "", "медиана − корректировка, в пределах 1..18")
+    formula_cell(ws, r_t0, 3, f"=MAX(1,MIN(18,C{r_med}-{biz_adj}))", FMT_INT, bold=True)
+    r_fin = r_t0 + 1
     label_row(ws, r_fin, "ИТОГОВЫЙ РЕЙТИНГ (S&P эквивалент)", "")
-    formula_cell(ws, r_fin, 3, f"=INDEX({scale_sp},C{r_med})", FMT_TEXT, bold=True)
+    formula_cell(ws, r_fin, 3, f"=INDEX({scale_sp},C{r_t0})", FMT_TEXT, bold=True)
     label_row(ws, r_fin + 1, "ИТОГОВЫЙ РЕЙТИНГ (национальная шкала)", "")
-    formula_cell(ws, r_fin + 1, 3, f"=INDEX({scale_ru},C{r_med})", FMT_TEXT, bold=True)
+    formula_cell(ws, r_fin + 1, 3, f"=INDEX({scale_ru},C{r_t0})", FMT_TEXT, bold=True)
     label_row(ws, r_fin + 3, "Headroom до дефолта (нотчей до D)", "")
-    formula_cell(ws, r_fin + 3, 3, f"={RT_SCALE_LAST}-C{r_med}", FMT_INT)
+    formula_cell(ws, r_fin + 3, 3, f"={RT_SCALE_LAST}-C{r_t0}", FMT_INT)
     label_row(ws, r_fin + 4, "Суверенный потолок (intl)", "", "РФ BBB+ — потолок международной шкалы")
     input_cell(ws, r_fin + 4, 3, "BBB+", FMT_TEXT)
 

@@ -1,0 +1,47 @@
+# Business Risk Profile — четвёртая опора итогового рейтинга (лист 34_Rating)
+# Оценки 1-10 по 4 измерениям S&P-стиля (аналог Business Risk Profile),
+# каждая с обоснованием [ОЦЕНКА]. Веса — методология (сумма = 1.0).
+# Агрегат: biz_score = Σ(w×score)×10 (0-100); корректировка к итоговому нотчу:
+#   adj = CLAMP(ROUND((biz_score − 55)/15, 0), −2, +2)
+# (55 = нейтраль; сильный бизнес-профиль улучшает итоговый на ≤2 нотча, слабый — ухудшает)
+# Винтаж: 2026-11-19. Обновлять при смене позиции компании.
+
+rusal:
+  weights: {country_industry: 0.25, competitive_position: 0.35, diversification: 0.20, financial_policy: 0.20}
+  dimensions:
+    - key: country_industry
+      name: "Страна / отрасль"
+      score: 6
+      justification: "РФ-риск и санкционный режим; алюминий — дефицитный металл (энергопереход), отрасль циклична"
+    - key: competitive_position
+      name: "Конкурентная позиция"
+      score: 8
+      justification: "Топ-2 мировой алюминий вне Китая (~6% мирового), Сибирские ГЭС — низкая себестоимость, вертикальная интеграция (бокситы→глинозём)"
+    - key: diversification
+      name: "Диверсификация"
+      score: 5
+      justification: "Продуктовая концентрация на алюминии/глинозёме; рынки — Азия/Турция/ЕС"
+    - key: financial_policy
+      name: "Финансовая политика"
+      score: 5
+      justification: "Дивиденды привязаны к левериджу (En+); рефинансирование в 2025-26 на рынке ОФЗ; формального целевого ND/EBITDA нет"
+
+nornickel:
+  weights: {country_industry: 0.25, competitive_position: 0.35, diversification: 0.20, financial_policy: 0.20}
+  dimensions:
+    - key: country_industry
+      name: "Страна / отрасль"
+      score: 6
+      justification: "РФ-риск и санкции; палладий/никель — стратегические металлы с дефицитом предложения"
+    - key: competitive_position
+      name: "Конкурентная позиция"
+      score: 9
+      justification: "Мировой лидер по палладию (~40%) и высокосортному никелю; уникальные месторождения, полная интеграция"
+    - key: diversification
+      name: "Диверсификация"
+      score: 7
+      justification: "4 металла (Ni/Cu/Pd/Pt) + побочные; рынки глобальные, но логистика РФ-зависима"
+    - key: financial_policy
+      name: "Финансовая политика"
+      score: 7
+      justification: "Консервативный леверидж (<1x ND/EBITDA), дивидендная политика 50%+ ЧП, стабильный рефинансинг"
