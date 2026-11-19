@@ -621,5 +621,6 @@
   "DT.cbrc_planned": 64,
   "DT.capex_defer": 65,
   "SG.w_pd": 21,
-  "SG.w_pt": 22
+  "SG.w_pt": 22,
+  "SN.snap_rating": 35
 }

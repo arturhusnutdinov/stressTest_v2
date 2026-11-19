@@ -60,6 +60,7 @@ SHEETS = [
     ("SC", "31_Score",       TAB_REPORT),
     ("CO", "32_Covenants",   TAB_REPORT),
     ("RS", "33_RevStress",   TAB_REPORT),
+    ("RT", "34_Rating",      TAB_REPORT),   # P3: итоговое присвоение рейтинга (3 опоры)
     ("VL", "35_Valuation",   TAB_REPORT),
     ("SN", "40_Scen",        TAB_REPORT),
     ("CK", "90_Checks",      TAB_CTRL),
@@ -104,6 +105,12 @@ def ref_col(code: str, key: str, col_idx: int) -> str:
     sheet = NAME.get(code, code)
     col_letter = get_column_letter(col_idx)
     return f"'{sheet}'!{col_letter}${row}"
+
+
+# ── 34_Rating: фиксированное расположение lookup-шкалы (P3) ────────────────
+# Шкала: B=SP, C=min score (refs на CP-пороги), D=нотч, E=RU. Строки 4..21.
+RT_SCALE_FIRST, RT_SCALE_LAST = 4, 21
+RT_SHEET = "34_Rating"
 
 
 # ── Company configs ──────────────────────────────────────────────────────────
@@ -4144,7 +4151,8 @@ def build_score(wb, cfg):
     r_lev = REG["SC.leverage"]
     label_row(ws, r_lev, "Leverage Score (ND/EBITDA) [35%]", "балл",
               "<0.5→80, 2→55, 3.5→33, >6→5")
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    # P3 (19.11): исторические колонки C:E тоже считаются → ТЕКУЩИЙ рейтинг по отчётности
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         nd_ebitda = f"'{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}"
         # F3 audit: scorecard coefficients from CP (not hardcoded)
@@ -4158,7 +4166,7 @@ def build_score(wb, cfg):
     r_cov = REG["SC.coverage"]
     label_row(ws, r_cov, "Coverage Score (EBITDA/Interest) [30%]", "балл",
               "1x→10, 3x→42, 5x→62, >10→88")
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         icr = f"'{NAME['RA']}'!{cl}${REG['RA.icr']}"
         # Д9: recalibrated — more resolution at low ICR
@@ -4173,7 +4181,7 @@ def build_score(wb, cfg):
     label_row(ws, r_prof, "Profitability Score (EBITDA margin TTC) [20%]", "балл",
               "Cycle avg from CP, cap 1.5×")
     cp_cycle = f"'Control_Panel'!$C${REG.get('CP.sc_cycle_margin', 103)}"
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         margin = f"'{NAME['RA']}'!{cl}${REG['RA.ebitda_margin']}"
         cp_prof_cap = f"'Control_Panel'!$C${REG.get('CP.sc_prof_cap', 114)}"
@@ -4185,7 +4193,7 @@ def build_score(wb, cfg):
     # Liquidity: Current ratio + Cash/Debt
     r_liq = REG["SC.liquidity"]
     label_row(ws, r_liq, "Liquidity Score (CR + Cash metrics) [15%]", "балл")
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         cr = f"'{NAME['RA']}'!{cl}${REG['RA.current']}"
         cp_liq_scale = f"'Control_Panel'!$C${REG.get('CP.sc_liq_scale', 117)}"
@@ -4202,7 +4210,7 @@ def build_score(wb, cfg):
     cp_wc = f"'Control_Panel'!$C${REG.get('CP.sc_w_cov', 99)}"
     cp_wp = f"'Control_Panel'!$C${REG.get('CP.sc_w_prof', 100)}"
     cp_wq = f"'Control_Panel'!$C${REG.get('CP.sc_w_liq', 101)}"
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         formula_cell(ws, r_base, c,
                      f"={cp_wl}*{cl}{r_lev}+{cp_wc}*{cl}{r_cov}+"
@@ -4227,30 +4235,21 @@ def build_score(wb, cfg):
 
     r_final = REG["SC.final"]
     label_row(ws, r_final, "Итоговый балл", "балл")
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
         formula_cell(ws, r_final, c,
                      f"=MAX(0,MIN(100,{cl}{r_base}+$C${r_ind}+$C${r_size}))", FMT_RATIO1, bold=True)
 
     r_rating = REG["SC.rating"]
     label_row(ws, r_rating, "Рейтинг (S&P эквивалент)", "")
-    for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+    # P3: лёгкий INDEX/MATCH по шкале 34_Rating (пороги — ссылки на CP-параметры;
+    # вложенный IF 608 символов убран — автотест «формулы ≤300» чист)
+    for c in range(3, 3 + n_hist + len(cfg["fc_years"])):
         cl = get_column_letter(c)
-        # Score → Rating lookup (17-step scale from CP thresholds)
-        grades = [
-            ("aaa", "AAA"), ("aap", "AA+"), ("aa", "AA"), ("aam", "AA-"),
-            ("ap", "A+"), ("a", "A"), ("am", "A-"),
-            ("bbbp", "BBB+"), ("bbb", "BBB"), ("bbbm", "BBB-"),
-            ("bbp", "BB+"), ("bb", "BB"), ("bbm", "BB-"),
-            ("bp", "B+"), ("b", "B"), ("bm", "B-"),
-            ("ccc", "CCC"),
-        ]
-        # Build nested IF: IF(score>=AAA,"AAA",IF(score>=AA+,"AA+",...,"D"))
-        formula = '"D"'
-        for key, label in reversed(grades):
-            cp_ref = f"'Control_Panel'!$C${REG.get(f'CP.sc_th_{key}', 120)}"
-            formula = f'IF({cl}{r_final}>={cp_ref},"{label}",{formula})'
-        formula_cell(ws, r_rating, c, f"={formula}", FMT_TEXT)
+        formula_cell(ws, r_rating, c,
+                     f"=INDEX('{RT_SHEET}'!$G${RT_SCALE_FIRST}:$G${RT_SCALE_LAST},"
+                     f"MATCH({cl}{r_final},'{RT_SHEET}'!$H${RT_SCALE_FIRST}:$H${RT_SCALE_LAST},-1))",
+                     FMT_TEXT)
 
 
 def build_covenants(wb, cfg):
@@ -4521,6 +4520,8 @@ def build_scenarios(wb, cfg):
         label_row(ws, r, label)
         for c in range(3, 3 + 9):  # 3 scenarios × 3 years
             input_cell(ws, r, c, "", "0.0")
+        if label == "Рейтинг":
+            REG["SN.snap_rating"] = r  # P3: строка снимков рейтинга (для 34_Rating)
         r += 1
     r += 1
 
@@ -4538,6 +4539,127 @@ def build_scenarios(wb, cfg):
         ref_cell(ws, r, 3 + i,
                  f"=IF('{NAME['RA']}'!{cl}${REG['RA.nd_ebitda']}>{cov_nd},\"НАРУШЕН\",\"OK\")",
                  "@")
+
+
+def build_rating_assign(wb, cfg):
+    """34_Rating — отдельный лист и методика ИТОГОВОГО присвоения рейтинга.
+
+    Три опоры:
+      П1 Текущий рейтинг    — скоркарта 31_Score по факту последней отчётности (2025)
+      П2 Прогнозный рейтинг — скоркарта по базе, худший год горизонта (консерватизм)
+      П3 Стрессовый рейтинг — рейтинг при сценарии «Стресс» (worst 2026-2028);
+                              Severe — проверка живучести, в присвоение не входит
+    Правило: ИТОГОВЫЙ = медиана нотчей (П1, П2, П3) — устойчиво к выбросу одной
+    опоры; национальная шкала — маппинг «ниже суверена» (соверен BBB+ → AAA(RU)),
+    как в engine/rating/core.py::intl_to_national.
+    """
+    ws = wb[RT_SHEET]
+    apply_col_widths(ws)
+    ws.cell(1, 1, f"{RT_SHEET} — {cfg['name']}").font = F_TITLE
+    ws.cell(2, 1, "Итоговое присвоение рейтинга: текущий (отчётность) + прогнозный (база) + стрессовый").font = F_SUBTITLE
+
+    # ── A. МЕТОДИКА ──
+    section_header(ws, 3, "A. МЕТОДИКА (правила присвоения)")
+    method = [
+        "П1 Текущий рейтинг: скоркарта 31_Score по факту последней отчётности (колонка 2025).",
+        "П2 Прогнозный рейтинг: скоркарта по базовому сценарию, ХУДШИЙ год горизонта 2026-2028.",
+        "П3 Стрессовый рейтинг: рейтинг при сценарии «Стресс» (LME −20%), худший год; Severe — проверка живучести, в присвоение не входит.",
+        "ИТОГОВЫЙ = медиана нотчей (П1, П2, П3): устойчиво к выбросу одной опоры.",
+        "Суверенный потолок: международная шкала ограничена сувереном РФ (BBB+); нац. шкала — маппинг «ниже суверена» (engine intl_to_national).",
+        "Пересмотр: с каждой годовой отчётностью и каждым винтажем макросценариев.",
+    ]
+    for i, mline in enumerate(method):
+        ws.cell(4 + i, 1, mline).font = F_NOTE
+
+    # ── B. ШКАЛА (lookup) — кол. G..J, строки RT_SCALE_FIRST..LAST ──
+    hdr_r = RT_SCALE_FIRST - 1
+    ws.cell(hdr_r, 7, "S&P").font = F_LABEL_B
+    ws.cell(hdr_r, 8, "min score").font = F_LABEL_B
+    ws.cell(hdr_r, 9, "notch").font = F_LABEL_B
+    ws.cell(hdr_r, 10, "RU").font = F_LABEL_B
+    grades = [
+        ("aaa", "AAA"), ("aap", "AA+"), ("aa", "AA"), ("aam", "AA-"),
+        ("ap", "A+"), ("a", "A"), ("am", "A-"),
+        ("bbbp", "BBB+"), ("bbb", "BBB"), ("bbbm", "BBB-"),
+        ("bbp", "BB+"), ("bb", "BB"), ("bbm", "BB-"),
+        ("bp", "B+"), ("b", "B"), ("bm", "B-"),
+        ("ccc", "CCC"), ("__d", "D"),
+    ]
+    # RU-маппинг по логике engine/rating/core.py::intl_to_national (соверен BBB+ = idx 6
+    # в 22-ступенчатой шкале; national = max(0, intl_idx − 6), потолок AAA(RU))
+    _SP22 = ["AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-",
+             "BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"]
+    _RU18 = ["AAA(RU)", "AA+(RU)", "AA(RU)", "AA-(RU)", "A+(RU)", "A(RU)", "A-(RU)",
+             "BBB+(RU)", "BBB(RU)", "BBB-(RU)", "BB+(RU)", "BB(RU)", "BB-(RU)",
+             "B+(RU)", "B(RU)", "B-(RU)", "CCC(RU)", "CC(RU)", "C(RU)", "D(RU)"]
+
+    def _ru(sp_label: str) -> str:
+        return _RU18[max(0, min(17, _SP22.index(sp_label) - 6))]
+
+    for i, (key, label) in enumerate(grades):
+        rr = RT_SCALE_FIRST + i
+        ws.cell(rr, 7, label).font = F_LABEL
+        if key == "__d":
+            c = ws.cell(rr, 8, -1)  # D — всегда ниже порога
+            c.font = F_NOTE
+            c.number_format = FMT_INT
+        else:
+            formula_cell(ws, rr, 8, f"='Control_Panel'!$C${REG.get(f'CP.sc_th_{key}', 120)}", FMT_RATIO1)
+        nc = ws.cell(rr, 9, i + 1)
+        nc.font = F_NOTE
+        nc.number_format = FMT_INT
+        ws.cell(rr, 10, _ru(label)).font = F_NOTE
+
+    scale_sp = f"$G${RT_SCALE_FIRST}:$G${RT_SCALE_LAST}"
+    scale_ru = f"$J${RT_SCALE_FIRST}:$J${RT_SCALE_LAST}"
+
+    # ── C. ТРИ ОПОРЫ ──
+    r = RT_SCALE_LAST + 2
+    section_header(ws, r, "B. ТРИ ОПОРЫ")
+    r_p1, r_p2, r_p3 = r + 1, r + 2, r + 3
+    sc_rating = REG["SC.rating"]
+    snap_r = REG.get("SN.snap_rating", 0)
+    label_row(ws, r_p1, "П1 Текущий рейтинг (отчётность 2025)", "", "скоркарта 31_Score, факт 2025")
+    formula_cell(ws, r_p1, 3, f"='{NAME['SC']}'!E${sc_rating}", FMT_TEXT, bold=True)
+    label_row(ws, r_p2, "П2 Прогнозный рейтинг (база, худший год)", "", "31_Score F:H, max нотча")
+    formula_cell(ws, r_p2, 3,
+                 f"=INDEX({scale_sp},MAX(MATCH('{NAME['SC']}'!F${sc_rating},{scale_sp},0),"
+                 f"MATCH('{NAME['SC']}'!G${sc_rating},{scale_sp},0),"
+                 f"MATCH('{NAME['SC']}'!H${sc_rating},{scale_sp},0)))", FMT_TEXT, bold=True)
+    label_row(ws, r_p3, "П3 Стрессовый рейтинг (Stress, худший год)", "", "40_Scen снимки, max нотча")
+    if snap_r:
+        formula_cell(ws, r_p3, 3,
+                     f"=IFERROR(INDEX({scale_sp},MAX(MATCH('{NAME['SN']}'!F${snap_r},{scale_sp},0),"
+                     f"MATCH('{NAME['SN']}'!G${snap_r},{scale_sp},0),"
+                     f"MATCH('{NAME['SN']}'!H${snap_r},{scale_sp},0))),\"n/a — запустить finalize\")",
+                     FMT_TEXT, bold=True)
+    else:
+        input_cell(ws, r_p3, 3, "n/a", FMT_TEXT)
+
+    # нотчи опор
+    rn = r_p3 + 2
+    label_row(ws, rn, "нотч П1", "")
+    formula_cell(ws, rn, 3, f"=MATCH(C{r_p1},{scale_sp},0)", FMT_INT)
+    label_row(ws, rn + 1, "нотч П2", "")
+    formula_cell(ws, rn + 1, 3, f"=MATCH(C{r_p2},{scale_sp},0)", FMT_INT)
+    label_row(ws, rn + 2, "нотч П3", "")
+    formula_cell(ws, rn + 2, 3, f"=IFERROR(MATCH(C{r_p3},{scale_sp},0),\"\")", FMT_INT)
+    n1, n2, n3 = f"C{rn}", f"C{rn+1}", f"C{rn+2}"
+
+    # ── D. ПРИСВОЕНИЕ ──
+    r_med = rn + 4
+    section_header(ws, r_med - 1, "C. ПРИСВОЕНИЕ")
+    label_row(ws, r_med, "Итоговый нотч (медиана П1, П2, П3)", "")
+    formula_cell(ws, r_med, 3, f"=MEDIAN({n1},{n2},{n3})", FMT_INT, bold=True)
+    r_fin = r_med + 1
+    label_row(ws, r_fin, "ИТОГОВЫЙ РЕЙТИНГ (S&P эквивалент)", "")
+    formula_cell(ws, r_fin, 3, f"=INDEX({scale_sp},C{r_med})", FMT_TEXT, bold=True)
+    label_row(ws, r_fin + 1, "ИТОГОВЫЙ РЕЙТИНГ (национальная шкала)", "")
+    formula_cell(ws, r_fin + 1, 3, f"=INDEX({scale_ru},C{r_med})", FMT_TEXT, bold=True)
+    label_row(ws, r_fin + 3, "Headroom до дефолта (нотчей до D)", "")
+    formula_cell(ws, r_fin + 3, 3, f"={RT_SCALE_LAST}-C{r_med}", FMT_INT)
+    label_row(ws, r_fin + 4, "Суверенный потолок (intl)", "", "РФ BBB+ — потолок международной шкалы")
+    input_cell(ws, r_fin + 4, 3, "BBB+", FMT_TEXT)
 
 
 def build_control_panel(wb, cfg):
@@ -5482,6 +5604,7 @@ def build(company: str, output: str, backtest_end: int | None = None):
         ("33_RevStress",    build_revstress),
         ("35_Valuation",    build_valuation),
         ("40_Scen",         build_scenarios),
+            ("34_Rating",       build_rating_assign),
         ("90_Checks",       build_checks),
         ("Model_Output",    build_model_output),
         ("_Debt_Schedule",  build_debt_schedule),
