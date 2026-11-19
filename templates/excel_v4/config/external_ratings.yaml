@@ -1,0 +1,28 @@
+# Внешние рейтинги российских агентств — для сверки на листе 34_Rating
+# Винтаж: 2026-11-19. Обновлять при смене рейтинга / годовой отчётности.
+# Примечание: АКРА «A(RU)» и Эксперт РА «ruA» — РАЗНЫЕ шкалы (таблица
+# соответствия АКРА↔Эксперт РА: AA+(RU) ≈ ruAA+); в модели шкала АКРА-типа.
+
+rusal:
+  - agency: "АКРА"
+    rating: "A+(RU)"
+    outlook: "Стабильный"
+    date: "2026"
+    source: "https://rusal.ru/investors/bonds/credit-ratings/"
+  - agency: "Эксперт РА"
+    rating: "ruA+"
+    outlook: "Стабильный"
+    date: "2026"
+    source: "https://rusal.ru/investors/bonds/credit-ratings/"
+  - agency: "Dagong (intl)"
+    rating: "iBBB+"
+    outlook: "Стабильный"
+    date: "2026"
+    source: "https://rusal.ru/investors/bonds/credit-ratings/"
+
+nornickel:
+  - agency: "НКР"
+    rating: "AAA.ru"
+    outlook: "Стабильный"
+    date: "2026-04-24"
+    source: "https://www.ratings.ru/ratings/press-releases/Nornickel-RA-240426/"

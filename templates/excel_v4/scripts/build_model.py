@@ -4661,6 +4661,65 @@ def build_rating_assign(wb, cfg):
     label_row(ws, r_fin + 4, "Суверенный потолок (intl)", "", "РФ BBB+ — потолок международной шкалы")
     input_cell(ws, r_fin + 4, 3, "BBB+", FMT_TEXT)
 
+    # ── E. СВЕРКА С ВНЕШНИМИ РЕЙТИНГАМИ (российские агентства) ──
+    # P3: модельный итоговый (RU) сопоставляется с фактическими рейтингами
+    # АКРА/НКР/Эксперт РА (config/external_ratings.yaml, [ДАННЫЕ] с источником).
+    # Отклонение > 0 — модель строже агентства; < 0 — мягче.
+    import yaml as _yaml
+    _er_path = BASE_DIR / "config" / "external_ratings.yaml"
+    _er = []
+    if _er_path.exists():
+        _er = (_yaml.safe_load(_er_path.read_text(encoding="utf-8")) or {}).get(
+            cfg.get("_company", "nornickel" if "Norn" in cfg["name"] else "rusal"), [])
+    r = r_fin + 6
+    section_header(ws, r, "D. СВЕРКА С ВНЕШНИМИ РЕЙТИНГАМИ (российские агентства)")
+    r += 1
+    ws.cell(r, 1, "Агентство").font = F_LABEL_B
+    ws.cell(r, 2, "Рейтинг").font = F_LABEL_B
+    ws.cell(r, 3, "Прогноз").font = F_LABEL_B
+    ws.cell(r, 4, "Дата").font = F_LABEL_B
+    ws.cell(r, 5, "Отклонение модели (нотчей)").font = F_LABEL_B
+    ws.cell(r, 6, "Источник").font = F_LABEL_B
+    r += 1
+    if not _er:
+        ws.cell(r, 1, "— нет данных в config/external_ratings.yaml —").font = F_NOTE
+        r += 1
+    for item in _er:
+        ws.cell(r, 1, str(item.get("agency", ""))).font = F_INPUT
+        ws.cell(r, 2, str(item.get("rating", ""))).font = F_INPUT
+        ws.cell(r, 3, str(item.get("outlook", ""))).font = F_INPUT
+        ws.cell(r, 4, str(item.get("date", ""))).font = F_INPUT
+        # Отклонение: RU-позиция итогового − RU-позиция агентства.
+        # Агентство: 'ruA+' → 'A+(RU)' (Эксперт РА ≈ шкала АКРА); 'iBBB+' → intl-колонка G;
+        # 'A+(RU)'/‘AAA.ru' → как есть. Допустимо ±2 нотча (см. примечания ниже).
+        _raw = str(item.get("rating", ""))
+        if _raw.startswith("i"):
+            _cmp_col, _val = "G", _raw[1:]
+        elif _raw.endswith(".ru"):            # НКР: 'AAA.ru' → 'AAA(RU)'
+            _cmp_col = "J"
+            _val = _raw[:-3] + "(RU)"
+        elif _raw.startswith("ru"):           # Эксперт РА: 'ruA+' → 'A+(RU)'
+            _cmp_col = "J"
+            _val = _raw[2:] + "(RU)"
+        else:
+            _cmp_col = "J"
+            _val = _raw if _raw.endswith("(RU)") else f"{_raw}(RU)"
+        formula_cell(ws, r, 5,
+                     f"=IFERROR(MATCH(C{r_fin+1},$J${RT_SCALE_FIRST}:$J${RT_SCALE_LAST},0)"
+                     f"-MATCH(\"{_val}\",${ _cmp_col }${RT_SCALE_FIRST}:${ _cmp_col }${RT_SCALE_LAST},0),\"шкала\")",
+                     FMT_INT)
+        ws.cell(r, 6, str(item.get("source", ""))[:80]).font = F_NOTE
+        r += 1
+    r += 1
+    for note in [
+        "Отклонение > 0 — модель СТРОЖЕ агентства; < 0 — мягче. Допустимо ±2 нотча (PIT-скоркарта vs TTC-взгляд агентств).",
+        "Причины системного расхождения: (1) модель — point-in-time по факту года, агентства — через цикл; (2) агентства учитывают масштаб/позицию/поддержку;",
+        "(3) пороги скоркарты (CP.sc_th_*) — внутренняя калибровка, не официальная методология агентства. S&P-эквивалент — внутренний конвент сопоставимости",
+        "(международные агентства отозвали рейтинги РФ в 2022), итоговый присвоенный рейтинг — на национальной шкале.",
+    ]:
+        ws.cell(r, 1, note).font = F_NOTE
+        r += 1
+
 
 def build_control_panel(wb, cfg):
     """Control_Panel — единая точка ввода 130+ параметров."""
@@ -5542,6 +5601,7 @@ def build(company: str, output: str, backtest_end: int | None = None):
         return
 
     cfg = dict(COMPANY_CONFIGS[company])
+    cfg["_company"] = company  # P3: slug для внешних рейтингов и конфигов
     if backtest_end:
         _fill_full = [y for y in cfg["_fill_hist_years"] if y <= backtest_end]
         cfg["_fill_hist_years"] = _fill_full
