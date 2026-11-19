@@ -242,17 +242,18 @@ model:
       # P1b (18.11): book-faithful компонентный режим (конвергенция с excel_v4 12_COGS).
       # Чистая сумма компонент без mean-reversion re-anchoring.
       component_mode: true
-      # $/t продукции, калибровка факт 2025 (книга 12_COGS, prod 3,918 kt):
-      material_usd_t: 1413.0        # alumina+raw (5,535M / 3,918 kt)
-      material_fixed_usd_t: 377.0   # неиндексируемая часть material
-      alumina_price_base: 537.0     # realized глинозём 2025 (AR)
-      alumina_lme_ratio: 0.134      # realized_t = ratio × LME Al (SSOT YAML)
-      alumina_intensity: 1.93       # t глинозёма / t Al
-      purchases_usd_t: 332.0        # перепродажа первички (1,300M), индекс LME
-      energy_usd_t: 791.0           # 3,097M: power × fx_blend
-      labour_usd_t: 255.0           # 1,000M: CPI × fx_blend
-      other_usd_t: 337.0            # 1,322M: PPI
-      fx_passthrough: 0.7           # доля FX-эффекта (CP книги)
+      # Доли компонент в COGS (книга 12_COGS note 6a, факт 2025). $/t выводятся
+      # автоматически: доля × base_cogs/prod_base — консистентно для любого
+      # базового года (бэктест-окна). Явные $/t не задаём намеренно.
+      material_share: 0.4517     # alumina+raw
+      purchases_share: 0.1061    # перепродажа первички (индекс LME)
+      energy_share_c: 0.2527     # power × fx_blend
+      labour_share_c: 0.0816     # CPI × fx_blend
+      other_share_c: 0.1079      # PPI
+      alumina_premium: 1.5214    # realized/LME-индекс (537/353) для split fixed/variable
+      alumina_lme_ratio: 0.134   # realized_t = ratio × LME Al (SSOT YAML)
+      alumina_intensity: 1.93    # t глинозёма / t Al
+      fx_passthrough: 0.7        # доля FX-эффекта (CP книги)
       lme_factor: lme_aluminium
       energy_factor: russian_power_price
       fx_factor: usd_rub

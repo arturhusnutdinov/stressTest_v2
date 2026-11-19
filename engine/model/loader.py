@@ -782,6 +782,31 @@ class ModelInputLoader:
 
             historic.debt_instruments.append(instrument)
 
+        # ── P1 (19.11): нормализация при отсутствии closing базового года ──
+        # Бэктест от окна < 2025: debt_schedule содержит closes только для годов,
+        # прошедших через fill (2025+), → fallback в сырой opening_balance с
+        # смешанными валютами/юнитами (RUB-тысячи) и суммой ~1e15 → optimizer
+        # взрывается (open gap AUDIT_ADEQUACY §3.3). Решение: если Σ opening
+        # расходится с фактическим итогом долга БС базового года >5× —
+        # масштабируем пропорционально (микс инструментов сохраняется, уровень
+        # приводится к известному BS-total).
+        _bs_year = historic.bs_data.get(historic.base_year, {})
+        if _bs_year and not base_year_close:
+            _hist_total = abs(
+                (_bs_year.get("long_term_debt") or 0) + (_bs_year.get("short_term_debt") or 0)
+            )
+            _s = sum(i.opening_balance or 0 for i in historic.debt_instruments
+                     if "lease" not in (i.db_type or "").lower())
+            if _s > 0 and _hist_total > 0 and (_s > 5 * _hist_total or _s < 0.2 * _hist_total):
+                _k = _hist_total / _s
+                for i in historic.debt_instruments:
+                    if "lease" not in (i.db_type or "").lower() and i.opening_balance:
+                        i.opening_balance *= _k
+                logger.warning(
+                    f"  Debt openings normalized ×{_k:.2e}: Σ {_s/1e6:,.0f}M → "
+                    f"BS total {_hist_total/1e6:,.0f}M (нет closes {historic.base_year} в debt_schedule)"
+                )
+
         logger.info(f"Долговых инструментов: {len(historic.debt_instruments)}")
 
     # ── макро-прогнозы ────────────────────────────────────────────────────────

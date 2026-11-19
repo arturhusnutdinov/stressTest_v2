@@ -62,10 +62,20 @@ class CogsBlockConfig:
     # ── Режим "component" (конвергенция с книгой excel_v4, P1b) ──
     # Чистая сумма компонент без mean-reversion re-anchoring. Формулы = книга 12_COGS.
     component_mode: bool = False
-    # $/t продукции базового года (калибровка из факта 12_COGS):
+    # Доли компонент в COGS базового года (книга 12_COGS, note 6a 2025):
+    # material 45.17%, purchases 10.61%, energy 25.27%, labour 8.16%, other 10.79%.
+    # $/t выводятся из долей × base_cogs/prod_base — консистентно для ЛЮБОГО
+    # базового года (бэктест-окна), а не только 2025.
+    material_share: float = 0.4517
+    purchases_share: float = 0.1061
+    energy_share_c: float = 0.2527   # component-режим (книга 12_COGS note 6a)
+    labour_share_c: float = 0.0816
+    other_share_c: float = 0.1079
+    # $/t продукции базового года — ЯВНЫЙ override (если > 0, побеждает доли):
     material_usd_t: float = 0.0      # alumina+raw на тонну
     material_fixed_usd_t: float = 0.0  # фикс. часть material (не индексируется глинозёмом)
-    alumina_price_base: float = 0.0  # realized база глинозёма $/t (AR: 537 для 2025)
+    alumina_price_base: float = 0.0  # realized база глинозёма $/t (0 = авто: hist×premium)
+    alumina_premium: float = 1.5214  # realized/LME-индекс (537/353, факт 2025)
     alumina_lme_ratio: float = 0.134  # realized_t = ratio × LME Al (SSOT YAML)
     lme_factor: str = "lme_aluminium"
     purchases_usd_t: float = 0.0     # перепродажа алюминия, индекс LME
@@ -125,6 +135,31 @@ class CogsBlock:
         self._usdrub_base = _base(config.fx_factor) or _base('fx_' + config.fx_factor)
         self._cpi_base = _base(config.inflation_factor)
         self._ppi_base = _base(config.ppi_factor)
+
+        # Component-режим: вывод $/t из долей × факты базового года (P1, 19.11).
+        # Явные $/t в YAML побеждают. Консистентно для любого базового года
+        # (бэктест-окна) — иначе калибровка 2025 применялась к окну 2023 и
+        # раздувала COGS-рейт до 95% → отрицательный EBITDA в бэктесте.
+        if config.component_mode and config.base_production_kt > 0 and config.base_cogs > 0:
+            c = config
+            _base_t = c.base_production_kt * 1000.0
+            if c.material_usd_t <= 0:
+                c.material_usd_t = c.material_share * c.base_cogs / _base_t
+            if c.purchases_usd_t <= 0:
+                c.purchases_usd_t = c.purchases_share * c.base_cogs / _base_t
+            if c.energy_usd_t <= 0:
+                c.energy_usd_t = c.energy_share_c * c.base_cogs / _base_t
+            if c.labour_usd_t <= 0:
+                c.labour_usd_t = c.labour_share_c * c.base_cogs / _base_t
+            if c.other_usd_t <= 0:
+                c.other_usd_t = c.other_share_c * c.base_cogs / _base_t
+            # realized база глинозёма: LME-индекс базового года × премия (537/353)
+            if c.alumina_price_base <= 0:
+                _al_lme = (self.hist.get('lme_alumina') or {}).get(c.base_year) or \
+                          self._get_macro('lme_alumina', c.base_year)
+                c.alumina_price_base = _al_lme * c.alumina_premium if _al_lme > 0 else 537.0
+            if c.material_fixed_usd_t <= 0:
+                c.material_fixed_usd_t = c.material_usd_t - c.alumina_intensity * c.alumina_price_base
 
     def _get_macro(self, factor: str, year: int) -> float:
         """Get macro value from forecasts or history."""
