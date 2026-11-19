@@ -255,10 +255,13 @@ Payment: US Steel=next_year, Rusal=current_year
   Net% 2027 (Δ3.5 п.п.) — различия саб-моделей ниже EBITDA, следующая итерация.
   Баг гейта исправлен: уровни сравниваются относительно (abs(mln)<=0.2 → всегда FAIL).
   **19.11 финал: гейт PASS** — ассоциаты method: last (666 как книга, без EWA-роста до 872).
-  Мягкий остаток: engine interest flat 826 (переценка флоатеров есть в DebtOptimizer
-  (ШАГ 5: spread+cbr_key_rate), но в выход не доходит — инструменты грузятся из
-  base_year_close расписания, отладка optimizer-state отдельная задача); NI Δ208-453
-  (проценты + эфф. налог ниже EBITDA) — уровни soft, структура ок
+  19.11 проценты ИСПРАВЛЕНЫ: корень — конвертер DebtInstrument→DebtInstrumentOpen
+  не передавал rate_type → все 8 CBR-флоатеров были fixed, переценка не работала
+  (interest flat 826). Фикс в _build_instruments_open_from_raw; Euribor-флоатер
+  остаётся fixed (solver поддерживает только cbr_key_rate). Interest теперь
+  872→861→854 по траектории ЦБ 14.6→11.5→9.0. Мягкий остаток: NI Δ186-426
+  (2027 info: классификация прочих финансовых/процентного дохода) — уровни soft,
+  структура ок, гейт PASS
 - Backtest: `scripts/backtest.py --company rusal --end-year 2023` (engine, temp-БД) +
   `--backtest` флаги сборки/заполнения (Excel-зеркало; для nornickel — только зеркало,
   данных нет в SQLite). Определения метрик — `templates/excel_v4/docs/METRICS_GLOSSARY.md`.

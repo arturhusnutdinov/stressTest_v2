@@ -1552,6 +1552,15 @@ class ThreeStatementModel:
                 priority=0,
                 classification="LT" if kind not in (InstrumentKind.RC,) else "ST",
                 callable_flag=bool(getattr(inst, 'callable_flag', False)),
+                # P1 (19.11): флоатеры теряли rate_type → переценка CBR не работала
+                # (interest flat). Передаём; Euribor-флоатер solver не поддерживает
+                # (только cbr_key_rate) → держим fixed при базисе euribor_6m.
+                rate_type=(
+                    "floating"
+                    if getattr(inst, "rate_type", "fixed") == "floating"
+                    and (getattr(inst, "base_rate_factor", "") or "") != "euribor_6m"
+                    else "fixed"
+                ),
             ))
 
         # ── Reconciliation instrument ─────────────────────────────────────────
