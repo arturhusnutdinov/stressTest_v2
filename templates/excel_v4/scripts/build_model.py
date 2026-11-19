@@ -2990,13 +2990,17 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.cash_before_rc"], c_idx,
                      f"={cash_prev}+{cfo_ref}+{cfi_ref}+{cff_no_rc_ref}", FMT_MLN)
 
-        # ── D1: плановый вариант (ацикличный) ──
-        # cbrc_planned = cash_prev + CFO + CFF_no_RC − PP.capex_plan
-        # (CFI фактический = −PP.capex_final; плановый вариант берёт plan напрямую —
-        #  PP.capex_plan не зависит от 17_Debt → цикла нет)
+        # ── D1: плановый вариант (ациклично) ──
+        # cbrc_planned = cash_prev + CFO + CFF_no_RC − PP.capex_plan, где CFO
+        # пересобран с отложенным налогом ЛАГОМ: def(t) → def(t−1).
+        # Иначе цикл: defer→capex→налбаза ОС→DTL→налог→NI→CFO→defer
+        # (дефолтный налог года t неизвестен при планировании CapEx года t —
+        #  лаг методологически корректен и разрывает кольцо по времени).
+        cf_def_ref = f"'{NAME['CF']}'!{cl}${REG.get('CF.deferred_tax', 10)}"
+        cf_def_prev = f"'{NAME['CF']}'!{prev}${REG.get('CF.deferred_tax', 10)}"
         formula_cell(ws, REG["DT.cbrc_planned"], c_idx,
-                     f"={cash_prev}+{cfo_ref}+{cff_no_rc_ref}"
-                     f"-'{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}",
+                     f"={cash_prev}+{cfo_ref}-IFERROR({cf_def_ref},0)+IFERROR({cf_def_prev},0)"
+                     f"+{cff_no_rc_ref}-'{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}",
                      FMT_MLN)
         # Отложенный проектный CapEx: режем growth-первым, пока касса ≥ min_cash
         formula_cell(ws, REG["DT.capex_defer"], c_idx,
@@ -3917,7 +3921,13 @@ def build_tax(wb, cfg):
 
 
 def build_valuation(wb, cfg):
-    """35_Valuation — DCF + SOTP + Sensitivity (full formulas)."""
+    """35_Valuation — DCF + SOTP + Sensitivity (full formulas).
+
+    Layout — ПОСЛЕДОВАТЕЛЬНЫЙ от row 17 (WACC-параметры REG VL.* в rows 7-15 —
+    на них ссылаются sensitivity-формулы). Раньше EV/ND/Equity/SOTP/sensitivity
+    писались по устаревшим REG-строкам (28-30/33/38) и ПЕРЕЗАПИСЫВАЛИ
+    последовательный FCFF-блок — лист был хаосом наложенных разметок (19.11).
+    """
     ws = wb["35_Valuation"]
     apply_col_widths(ws)
     ws.cell(1, 1, f"35_Valuation — {cfg['name']}").font = F_TITLE
@@ -3925,18 +3935,20 @@ def build_valuation(wb, cfg):
 
     fc = cfg["fc_years"]
     n_fc = len(fc)
+    n_hist_vl = len(cfg["hist_years"][-3:])
+    fc0 = 3 + n_hist_vl                    # F
+    last_fc_col = get_column_letter(fc0 + n_fc - 1)  # H
+    cp_tax_vl = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
 
-    # ── A. WACC ──
+    # ── A. WACC (rows 6-15, REG — стабильные, без коллизий) ──
     section_header(ws, 6, "A. WACC (Cost of Capital: CAPM)")
-    # WACC params: reference Control_Panel (single source of truth)
-    wacc_params = [
+    for key, label, cp_key in [
         ("rf", "Risk-free rate (Rf)", "CP.wacc_rf"),
         ("beta", "Beta (отрасль)", "CP.wacc_beta"),
         ("erp", "Equity Risk Premium (ERP)", "CP.wacc_erp"),
         ("crp", "Country Risk Premium (CRP)", "CP.wacc_crp"),
         ("scp", "Size/Company Premium (SCP)", "CP.wacc_scp"),
-    ]
-    for key, label, cp_key in wacc_params:
+    ]:
         r = REG[f"VL.{key}"]
         label_row(ws, r, label, "%" if key != "beta" else "x")
         cp_row = REG.get(cp_key)
@@ -3944,33 +3956,24 @@ def build_valuation(wb, cfg):
             ref_cell(ws, r, 3, f"='Control_Panel'!$C${cp_row}",
                      FMT_PCT2 if key != "beta" else FMT_RATIO)
         else:
-            # Fallback: local input
             defaults = {"rf": 0.10, "beta": 1.1, "erp": 0.07, "crp": 0.04, "scp": 0.01}
             input_cell(ws, r, 3, defaults[key], FMT_PCT2 if key != "beta" else FMT_RATIO)
 
     r_wacc = REG["VL.wacc"]
-    # True WACC = Ke × we + Kd × (1-t) × wd
-    # Ke = Rf + β×ERP + SCP (no CRP if Rf is local currency)
-    # Kd = avg debt rate, wd = D/(D+E), we = 1-wd
-    label_row(ws, r_wacc, "WACC = Ke×we + Kd×(1-t)×wd", "%", "True WACC for FCFF")
+    label_row(ws, r_wacc, "WACC = Ke×we + Kd×(1-t)×wd", "%", "Ke = Rf + β×ERP + SCP")
     ke = (f"$C${REG['VL.rf']}+$C${REG['VL.beta']}*$C${REG['VL.erp']}"
-          f"+$C${REG['VL.scp']}")  # No CRP on top of local Rf
-    cp_tax_vl = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
-    n_hist_vl = len(cfg["hist_years"][-3:])
-    lfc = get_column_letter(3 + n_hist_vl + len(fc) - 1)  # last forecast col
-    kd = f"'{NAME['DT']}'!{lfc}${REG['DT.avg_rate']}"
-    debt_ref = f"'{NAME['DT']}'!{lfc}${REG['DT.close']}"
-    equity_ref = f"'{NAME['BS']}'!{lfc}${REG['BS.te']}"
+          f"+$C${REG['VL.scp']}")
+    kd = f"'{NAME['DT']}'!{last_fc_col}${REG['DT.avg_rate']}"
+    debt_ref = f"'{NAME['DT']}'!{last_fc_col}${REG['DT.close']}"
+    equity_ref = f"'{NAME['BS']}'!{last_fc_col}${REG['BS.te']}"
     wd = f"IFERROR({debt_ref}/MAX(1,{debt_ref}+ABS({equity_ref})),0.5)"
     formula_cell(ws, r_wacc, 3,
                  f"=({ke})*(1-{wd})+{kd}*(1-{cp_tax_vl})*{wd}",
                  FMT_PCT2, bold=True)
 
-    # ── B. TERMINAL VALUE ──
+    # ── B. TERMINAL VALUE PARAMETERS (rows 13-15) ──
     section_header(ws, REG["VL.tg"] - 1, "B. TERMINAL VALUE PARAMETERS")
-    # Terminal params: reference CP (single source of truth)
-    cp_tg = REG.get("CP.terminal_g")
-    cp_tm = REG.get("CP.terminal_mult")
+    cp_tg, cp_tm = REG.get("CP.terminal_g"), REG.get("CP.terminal_mult")
     label_row(ws, REG["VL.tg"], "Terminal growth rate (g)", "%", "Долгосрочный рост ~ ном. ВВП")
     if cp_tg:
         ref_cell(ws, REG["VL.tg"], 3, f"='Control_Panel'!$C${cp_tg}", FMT_PCT)
@@ -3982,52 +3985,32 @@ def build_valuation(wb, cfg):
     else:
         input_cell(ws, REG["VL.tm"], 3, 6.0, FMT_MULT)
 
-    # ── C. DCF — FCFF CALCULATION ──
-    r = REG["VL.ev"] - 8  # space for FCFF rows
+    # ── C. FCFF (последовательные строки 17-27, колонки F:H) ──
+    r = 17
     section_header(ws, r, "C. DCF: FREE CASH FLOW TO FIRM (FCFF)")
     r += 1
-    # Заголовок лет — в КОЛОНКАХ ДАННЫХ (F:H), иначе сетка C:E ломает
-    # годовые проверки скалярных блоков ниже (E2) и визуально расходится с данными
-    year_headers(ws, r, [], fc, col_start=3 + n_hist_vl)
+    year_headers(ws, r, [], fc, col_start=fc0)
     r += 1
-
-    # FCFF rows
     fcff_items = [
-        ("EBIT", f"'{NAME['PL']}'!{{cl}}${REG['PL.ebit']}"),
-        ("Tax rate", f"'{NAME['TX']}'!{{cl}}${REG['TX.eff_rate']}"),
-        ("NOPAT = EBIT × (1 − tax)", None),
-        ("D&A (add back)", f"'{NAME['PP']}'!{{cl}}${REG['PP.dep_charge']}"),
-        ("CapEx", f"'{NAME['PP']}'!{{cl}}${REG['PP.capex']}"),
-        ("ΔWC", f"'{NAME['WC']}'!{{cl}}${REG['WC.delta_nwc']}"),
-        ("FCFF = NOPAT + D&A − CapEx − ΔWC", None),
-        ("Discount factor: 1/(1+WACC)^t", None),
-        ("PV of FCFF", None),
+        "EBIT", "Tax rate", "NOPAT = EBIT × (1 − tax)", "D&A (add back)",
+        "CapEx", "ΔWC", "FCFF = NOPAT + D&A − CapEx − ΔWC",
+        "Discount factor: 1/(1+WACC)^t", "PV of FCFF",
     ]
-
     fcff_start_r = r
-    for label, _ in fcff_items:
-        label_row(ws, r, label, "mln" if "rate" not in label.lower() and "factor" not in label.lower() else "")
+    for label in fcff_items:
+        is_aux = "rate" in label.lower() or "factor" in label.lower()
+        label_row(ws, r, label, "" if is_aux else "mln")
         r += 1
+    ebit_r = fcff_start_r
+    tax_r, nopat_r = fcff_start_r + 1, fcff_start_r + 2
+    da_r, capex_r, dwc_r = fcff_start_r + 3, fcff_start_r + 4, fcff_start_r + 5
+    fcff_r, df_r, pvfcff_r = fcff_start_r + 6, fcff_start_r + 7, fcff_start_r + 8
 
-    # FCFF formulas per forecast year — use SAME columns as model (F, G, H)
-    n_hist_vl = len(cfg["hist_years"][-3:])
     for i, yr in enumerate(fc):
-        c = 3 + n_hist_vl + i  # F=6, G=7, H=8 (matching model layout)
+        c = fc0 + i
         cl = get_column_letter(c)
-        t = i + 1  # discount period
-        ebit_r = fcff_start_r
-        tax_r = fcff_start_r + 1
-        nopat_r = fcff_start_r + 2
-        da_r = fcff_start_r + 3
-        capex_r = fcff_start_r + 4
-        dwc_r = fcff_start_r + 5
-        fcff_r = fcff_start_r + 6
-        df_r = fcff_start_r + 7
-        pvfcff_r = fcff_start_r + 8
-
+        t = i + 1
         ref_cell(ws, ebit_r, c, f"='{NAME['PL']}'!{cl}${REG['PL.ebit']}", FMT_MLN)
-        # Tax rate: statutory (not effective — effective can be negative)
-        cp_tax_vl = f"'Control_Panel'!$C${REG.get('CP.tax_rate', 80)}"
         ref_cell(ws, tax_r, c, f"={cp_tax_vl}", FMT_PCT)
         formula_cell(ws, nopat_r, c, f"={cl}{ebit_r}*(1-{cl}{tax_r})", FMT_MLN, bold=True)
         ref_cell(ws, da_r, c, f"='{NAME['PP']}'!{cl}${REG['PP.dep_charge']}", FMT_MLN)
@@ -4038,103 +4021,92 @@ def build_valuation(wb, cfg):
         formula_cell(ws, df_r, c, f"=1/(1+$C${r_wacc})^{t}", FMT_RATIO)
         formula_cell(ws, pvfcff_r, c, f"={cl}{fcff_r}*{cl}{df_r}", FMT_MLN)
 
+    # ── D. DCF RESULT (последовательные строки 28-37) ──
     r = pvfcff_r + 2
-
-    # Terminal value & DCF result
     section_header(ws, r, "D. DCF RESULT")
     r += 1
     tv_r = r
     label_row(ws, r, "Terminal Value (EV/EBITDA)", "mln", "EBITDA_last × multiple")
-    last_fc_col = get_column_letter(3 + n_hist_vl + n_fc - 1)  # H (last forecast)
     formula_cell(ws, r, 3,
                  f"='{NAME['PL']}'!{last_fc_col}${REG['PL.ebitda']}*$C${REG['VL.tm']}", FMT_MLN)
     r += 1
     tv_perp_r = r
-    label_row(ws, r, "Terminal Value (Perpetuity)", "mln", "FCFF_last × (1+g) / (WACC-g)")
+    label_row(ws, r, "Terminal Value (Perpetuity)", "mln", "FCFF_last × (1+g) / (WACC−g)")
     formula_cell(ws, r, 3,
-                 f"=IFERROR({last_fc_col}{fcff_start_r + 6}*(1+$C${REG['VL.tg']})"
+                 f"=IFERROR({last_fc_col}{fcff_r}*(1+$C${REG['VL.tg']})"
                  f"/($C${r_wacc}-$C${REG['VL.tg']}),0)", FMT_MLN)
     r += 1
     pv_tv_r = r
-    label_row(ws, r, "PV of Terminal Value", "mln")
+    label_row(ws, r, "PV of Terminal Value (avg обоих TV)", "mln")
     formula_cell(ws, r, 3,
                  f"=($C${tv_r}+$C${tv_perp_r})/2/(1+$C${r_wacc})^{n_fc}", FMT_MLN)
     r += 1
     npv_r = r
     label_row(ws, r, "NPV of FCFF", "mln")
-    pv_cols = [f"{get_column_letter(3+n_hist_vl+i)}{pvfcff_r}" for i in range(n_fc)]
+    pv_cols = [f"{get_column_letter(fc0+i)}{pvfcff_r}" for i in range(n_fc)]
     formula_cell(ws, r, 3, "=" + "+".join(pv_cols), FMT_MLN)
     r += 1
-
-    # EV, ND, Equity
-    r_ev = REG["VL.ev"]
-    r_nd = REG["VL.nd"]
-    r_eq = REG["VL.eq_value"]
-    label_row(ws, r_ev, "Enterprise Value (MAX of DCF, SOTP)", "mln")
-    formula_cell(ws, r_ev, 3,
-                 f"=MAX($C${npv_r}+$C${pv_tv_r},$C${REG['VL.sotp_total']})",
-                 FMT_MLN, bold=True)
+    r_ev = r
+    label_row(ws, r_ev, "Enterprise Value = MAX(DCF, SOTP)", "mln")
+    # SOTP ещё не записан (ниже) — ссылка на его итоговую ячейку r_sotp_total
+    r += 1
+    r_nd = r
     label_row(ws, r_nd, "Net Debt (последний прогнозный год)", "mln")
     ref_cell(ws, r_nd, 3, f"='{NAME['DT']}'!{last_fc_col}${REG['DT.nd']}", FMT_MLN)
+    r += 1
+    r_eq = r
     label_row(ws, r_eq, "Equity Value = EV − Net Debt", "mln")
     formula_cell(ws, r_eq, 3, f"=$C${r_ev}-$C${r_nd}", FMT_MLN, bold=True)
+    r_ev_placeholder = r_ev
 
-    # ── E. SOTP ──
-    r_sotp = REG["VL.sotp_total"]
-    section_header(ws, r_sotp - 2, "E. SOTP (Sum of the Parts)")
-    label_row(ws, r_sotp - 1, "Сегмент | Revenue(last) × EV/Rev multiple", "mln")
-    label_row(ws, r_sotp, "SOTP Enterprise Value (сумма)", "mln")
-    # Per-segment SOTP (from Revenue sheet)
+    # ── E. SOTP (после EV-блока) ──
+    r = r_eq + 2
+    section_header(ws, r, "E. SOTP (Sum of the Parts)")
+    r += 1
+    label_row(ws, r, "Сегмент | Revenue(last) × EV/Rev multiple", "mln")
+    r += 1
+    r_sotp_total = r
+    label_row(ws, r, "SOTP Enterprise Value (сумма)", "mln")
+    seg_mults = {"seg1": 0.8, "seg2": 0.5, "seg3": 0.4}  # Al > Alumina > Other [ОЦЕНКА]
     for i, seg in enumerate(cfg["segments"]):
-        sr = r_sotp + 1 + i
+        sr = r_sotp_total + 1 + i
         label_row(ws, sr, seg["name"], "mln")
         rev_r = REG.get(f"RV.{seg['key']}_rev", 10)
-        # Different multiples per segment (audit: 0.7 for all is wrong)
-        seg_mults = {"seg1": 0.8, "seg2": 0.5, "seg3": 0.4}  # Al > Alumina > Other
         input_cell(ws, sr, 11, seg_mults.get(seg["key"], 0.7), FMT_MULT)
         ws.cell(sr, 12, "EV/Rev →").font = F_NOTE
         formula_cell(ws, sr, 3,
                      f"='{NAME['RV']}'!{last_fc_col}${rev_r}*$K${sr}", FMT_MLN)
-    # Total SOTP
-    seg_rows = [f"$C${r_sotp + 1 + i}" for i in range(len(cfg["segments"]))]
-    formula_cell(ws, r_sotp, 3, "=" + "+".join(seg_rows), FMT_MLN, bold=True)
+    seg_rows = [f"$C${r_sotp_total + 1 + i}" for i in range(len(cfg["segments"]))]
+    formula_cell(ws, r_sotp_total, 3, "=" + "+".join(seg_rows), FMT_MLN, bold=True)
+    # EV = MAX(DCF, SOTP) — теперь SOTP-ячейка известна
+    formula_cell(ws, r_ev_placeholder, 3,
+                 f"=MAX($C${npv_r}+$C${pv_tv_r},$C${r_sotp_total})", FMT_MLN, bold=True)
+    formula_cell(ws, r_eq, 3, f"=$C${r_ev_placeholder}-$C${r_nd}", FMT_MLN, bold=True)
 
-    # ── F. SENSITIVITY ──
-    sens_r = REG["VL.sens_matrix"]
-    section_header(ws, sens_r - 2, "F. SENSITIVITY: Equity Value = f(WACC, Terminal Growth)")
+    # ── F. SENSITIVITY (после SOTP) ──
+    r = r_sotp_total + len(cfg["segments"]) + 2
+    section_header(ws, r, "F. SENSITIVITY: Equity Value = f(WACC, Terminal Growth)")
+    sens_r = r + 2
     label_row(ws, sens_r - 1, "WACC ↓ \\ g →", "")
-    # 5×5 matrix: offsets written to headers, body reads from headers (no literals)
     wacc_offsets = [-0.04, -0.02, 0.0, 0.02, 0.04]
     g_offsets = [-0.02, -0.01, 0.0, 0.01, 0.02]
-
-    # Header row (g values) — absolute g values
     for j, dg in enumerate(g_offsets):
         c = 3 + j
         formula_cell(ws, sens_r - 1, c, f"=$C${REG['VL.tg']}+{dg}", FMT_PCT)
         ws.cell(sens_r - 1, c).font = F_YEAR
-
-    # WACC labels in col B — absolute WACC values
     for i, dw in enumerate(wacc_offsets):
         rr = sens_r + i
         formula_cell(ws, rr, 2, f"=$C${r_wacc}+{dw}", FMT_PCT)
         ws.cell(rr, 2).font = F_YEAR
-
-    # Matrix body — reads WACC from col B, g from header row (NO literals in formulas)
     for i in range(len(wacc_offsets)):
         rr = sens_r + i
         for j in range(len(g_offsets)):
             c = 3 + j
             cl_g = get_column_letter(c)
-            # WACC from $B${rr}, g from ${cl_g}${sens_r-1}
-            wacc_ref = f"$B${rr}"
-            g_ref = f"{cl_g}${sens_r - 1}"
             formula_cell(ws, rr, c,
-                         f"=IFERROR($C${npv_r}+{last_fc_col}{fcff_start_r + 6}*(1+{g_ref})"
-                         f"/({wacc_ref}-{g_ref})/(1+{wacc_ref})^{n_fc}-$C${r_nd},0)",
-                         FMT_MLN0)
-            if wacc_offsets[i] == 0 and g_offsets[j] == 0:
-                ws.cell(rr, c).fill = FILL_RESULT
-
+                         f"=IFERROR($C${npv_r}+{last_fc_col}{fcff_r}*(1+{cl_g}${sens_r - 1})"
+                         f"/($B${rr}-{cl_g}${sens_r - 1})/(1+$B${rr})^{n_fc}"
+                         f"-$C${r_nd},0)", FMT_MLN0)
 
 def build_score(wb, cfg):
     """31_Score — S&P 4-factor rating scorecard with formulas."""

@@ -27,11 +27,24 @@ def finalize(xlsx_path: str) -> bool:
 
     # AppleScript: open → recalculate → save scenario snapshots → close
     # Runs 3 scenarios: set CP!C5=1/2/3, recalculate, read outputs, paste to 40_Scen
+    # 19.11: pkill перед сборкой оставляет Excel с панелью Document Recovery —
+    # AppleScript молча прерывался, книга оставалась в openpyxl-состоянии
+    # (без кэшей). Корректный quit ДО открытия обязателен.
+    import subprocess
+    subprocess.run(
+        ["osascript", "-e", 'tell application "Microsoft Excel" to quit saving no'],
+        capture_output=True, timeout=30,
+    )
+    import time
+    time.sleep(3)
+
     script = f'''
     tell application "Microsoft Excel"
         activate
         open "{path}"
         delay 8
+        calculate
+        delay 4
 
         set wb to active workbook
         set cpSheet to worksheet "Control_Panel" of wb
@@ -73,6 +86,8 @@ def finalize(xlsx_path: str) -> bool:
         -- Reset to scenario 1
         set value of cell "C5" of cpSheet to 1
         delay 5
+        calculate
+        delay 3
 
         -- Save
         tell wb to save
