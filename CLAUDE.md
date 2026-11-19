@@ -253,7 +253,12 @@ Payment: US Steel=next_year, Rusal=current_year
   lme_alumina в БД синхронизирована с YAML (349/459/353). Остаток (4 FAIL): NI
   (ассоциаты engine 872 vs книга 666, проценты, эфф.ставка налога ~20 vs 25%) и
   Net% 2027 (Δ3.5 п.п.) — различия саб-моделей ниже EBITDA, следующая итерация.
-  Баг гейта исправлен: уровни сравниваются относительно (abs(mln)<=0.2 → всегда FAIL)
+  Баг гейта исправлен: уровни сравниваются относительно (abs(mln)<=0.2 → всегда FAIL).
+  **19.11 финал: гейт PASS** — ассоциаты method: last (666 как книга, без EWA-роста до 872).
+  Мягкий остаток: engine interest flat 826 (переценка флоатеров есть в DebtOptimizer
+  (ШАГ 5: spread+cbr_key_rate), но в выход не доходит — инструменты грузятся из
+  base_year_close расписания, отладка optimizer-state отдельная задача); NI Δ208-453
+  (проценты + эфф. налог ниже EBITDA) — уровни soft, структура ок
 - Backtest: `scripts/backtest.py --company rusal --end-year 2023` (engine, temp-БД) +
   `--backtest` флаги сборки/заполнения (Excel-зеркало; для nornickel — только зеркало,
   данных нет в SQLite). Определения метрик — `templates/excel_v4/docs/METRICS_GLOSSARY.md`.

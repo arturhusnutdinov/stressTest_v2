@@ -351,8 +351,7 @@ forecast_methods:
     restructuring:
       method: zero
     earnings_from_investees:
-      method: ewa
-      ewa_halflife_years: 3
+      method: last  # P1: как книга — доля ассоциатов = последний факт (666), без EWA-роста
     interest_income:
       method: ewa
       ewa_halflife_years: 2
