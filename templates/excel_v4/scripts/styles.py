@@ -181,16 +181,14 @@ def postprocess_xlsx(path):
                 data = zin.read(item.filename)
                 if item.filename == "xl/workbook.xml":
                     text = data.decode("utf-8")
-                    # Remove iterate settings (0 cycles → not needed)
-                    import re
-                    text = re.sub(
-                        r'\s*iterate="[^"]*"', '', text)
-                    text = re.sub(
-                        r'\s*iterateCount="[^"]*"', '', text)
-                    text = re.sub(
-                        r'\s*iterateDelta="[^"]*"', '', text)
+                    # 19.11: итерационный расчёт ВКЛЮЧЁН (банковская конвенция:
+                    # iterate=1, 100 проходов, допуск 0.001 — как в bank_model).
+                    # openpyxl не пишет iterateCount/Delta → дописываем явно.
                     if "fullCalcOnLoad" not in text:
                         text = text.replace('calcId=', 'fullCalcOnLoad="1" calcId=')
+                    if 'iterate="1"' in text and 'iterateCount' not in text:
+                        text = text.replace('iterate="1"',
+                                            'iterate="1" iterateCount="100" iterateDelta="0.001"')
                     data = text.encode("utf-8")
                 if item.filename.startswith("xl/worksheets/"):
                     text = data.decode("utf-8")
@@ -202,4 +200,4 @@ def postprocess_xlsx(path):
     shutil.move(tmp, path)
     if empty_v_count:
         print(f"  Stripped {empty_v_count} empty <v></v> nodes")
-    print(f"  Post-process: fullCalcOnLoad=1, iterate removed")
+    print(f"  Post-process: fullCalcOnLoad=1, iterate ON (bank convention)")

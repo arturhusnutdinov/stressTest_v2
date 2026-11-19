@@ -5756,13 +5756,15 @@ def build(company: str, output: str, backtest_end: int | None = None):
     # ── Post-processing: Excel settings ──
     print("  Post-processing...")
 
-    # Enable Iterative Calculation (for circular: Debt ↔ Interest ↔ Cash)
-    # Enable Iterative Calculation (safe: 0 cells in cycles, converges in 1 pass)
+    # Enable Iterative Calculation (банковская конвенция; указание 19.11:
+    # режим итераций — норма сборки; архитектура DAG-формул сходится за 1 проход,
+    # а намеренные кольца (как в bank_model) решаются без предупреждений Excel)
     if wb.calculation is None:
         from openpyxl.workbook.properties import CalcProperties
         wb.calculation = CalcProperties()
-    # No iteration needed (0 cells in cycles — pure DAG)
-    wb.calculation.iterate = False
+    wb.calculation.iterate = True
+    wb.calculation.iterateCount = 100
+    wb.calculation.iterateDelta = 0.001
     # fullCalcOnLoad=True — recalc on open (audit requires cold start = warm start)
     wb.calculation.fullCalcOnLoad = True
 
