@@ -93,6 +93,7 @@ class DebtInstrumentOpen:
     classification: str = "LT"
     callable_flag:  bool = False
     rate_type:      str  = "fixed"   # "fixed" | "floating" — floating rates adjust with macro
+    base_rate_factor: str = ""       # "cbr_key_rate" | "euribor_6m" | ... — базис флоатера
 
     def __post_init__(self):
         # Нормализация ставки: если > 1.0 → в процентах, делим на 100
@@ -214,6 +215,7 @@ class DebtOptimizer:
         covenant_breach_instruments: Optional[set] = None,
         max_voluntary_repay: Optional[float] = None,  # cap on total voluntary repayment
         cbr_key_rate: float = 0.0,  # base rate added to floating instrument spreads
+        euribor_rate: float = 0.0,  # P2 (19.11): Euribor-базис для EUR-флоатеров
         avg_rate_default: float = DEBT_AVG_RATE_DEFAULT,  # fallback rate for new money
         min_st_debt_pct: float = 0.20,  # minimum ST as % of total debt (WC funding floor)
     ) -> DebtSolveResult:
@@ -425,10 +427,15 @@ class DebtOptimizer:
                 continue
             open_after_refi = inst.opening + refi_draws[idx]
             closing = max(0.0, open_after_refi + draws[idx] - repays[idx])
-            # Floating: all-in = spread + base rate (e.g. CBR key rate)
+            # Floating: all-in = spread + base rate (P2: базис из base_rate_factor)
             effective_rate = _nz(inst.rate)
-            if inst.rate_type == "floating" and cbr_key_rate > 0:
-                effective_rate = inst.rate + cbr_key_rate
+            if inst.rate_type == "floating":
+                _base = getattr(inst, "base_rate_factor", "") or "cbr_key_rate"
+                if _base == "euribor_6m":
+                    if euribor_rate > 0:
+                        effective_rate = inst.rate + euribor_rate
+                elif cbr_key_rate > 0:
+                    effective_rate = inst.rate + cbr_key_rate
             interest = _avg(open_after_refi, closing) * effective_rate
             interests[idx] = interest
             total_interest += interest

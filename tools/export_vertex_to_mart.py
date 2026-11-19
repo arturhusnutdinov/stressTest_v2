@@ -129,7 +129,10 @@ def export(company: str) -> None:
             (r["instrument_id"], company, r["instrument_name"], r["instrument_type"] or "term_loan",
              r["currency"] or "USD", float(r["outstanding"] or 0), None,
              str(r["maturity_date"] or ""), rate,
-             "fixed" if r["is_fixed_rate"] else "floating", None,
+             "fixed" if r["is_fixed_rate"] else "floating",
+             # P2: базис флоатеров (RUB→ЦБ, EUR→Euribor; USD-SOFR — не поддержан, fixed)
+             (None if r["is_fixed_rate"]
+              else ("euribor_6m" if (r["currency"] or "") == "EUR" else "cbr_key_rate")),
              "semi_annual", r["amortization_type"] or "bullet", 0, None, "vertex", now,
              y1, r["instrument_type"] or "", None))
         n += 1

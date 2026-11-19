@@ -88,6 +88,7 @@ model:
       default_discount_rate: 0.05
     debt:
       mode: optimizer
+      cbr_key_rate_forecast: {2026: 0.14, 2027: 0.11, 2028: 0.09}  # P2: SSOT ЦБ 23.10.2026
       target_pct_revenue: 0.8
       version: v2_solver
       interest_treatment: separate_line
@@ -216,8 +217,10 @@ model:
           ewa_halflife: 4.0
           price_factors:
           - lme_pd_usd
-          price_beta: 1.0  # P1: конвенция книги 1:1
-          price_anchor: 1017000  # P1: Pd 2025 = 1 017 (книга: realized = LME-путь)
+          - lme_pt_usd
+          price_mix_weights: [0.72, 0.28]  # P1: PGM-микс как в книге (11_Segments C21/C22)
+          price_beta: 1.0
+          price_anchor: 960000  # PGM realized 2025 = 960 (книга: chain-link микса)
           volume_history:
             2015: 2689.0
             2016: 2618.0
@@ -276,6 +279,7 @@ model:
       expansion_capex_pct_of_rev_growth: 0.05
     debt:
       mode: optimizer
+      cbr_key_rate_forecast: {2026: 0.14, 2027: 0.11, 2028: 0.09}  # P2: SSOT ЦБ 23.10.2026
       target_net_debt_ebitda: 1.5
       max_voluntary_prepay_pct_fcf: 0.3
       refinancing:

@@ -1559,14 +1559,14 @@ class ThreeStatementModel:
                 classification="LT" if kind not in (InstrumentKind.RC,) else "ST",
                 callable_flag=bool(getattr(inst, 'callable_flag', False)),
                 # P1 (19.11): флоатеры теряли rate_type → переценка CBR не работала
-                # (interest flat). Передаём; Euribor-флоатер solver не поддерживает
-                # (только cbr_key_rate) → держим fixed при базисе euribor_6m.
+                # (interest flat). Передаём rate_type + базис (P2: solver выбирает
+                # CBR/Euribor по base_rate_factor).
                 rate_type=(
                     "floating"
                     if getattr(inst, "rate_type", "fixed") == "floating"
-                    and (getattr(inst, "base_rate_factor", "") or "") != "euribor_6m"
                     else "fixed"
                 ),
+                base_rate_factor=getattr(inst, "base_rate_factor", "") or "",
             ))
 
         # ── Reconciliation instrument ─────────────────────────────────────────
@@ -1709,6 +1709,10 @@ class ThreeStatementModel:
             cbr_key_rate=(cfg.cbr_key_rate_forecast or {}).get(
                 state.year, list((cfg.cbr_key_rate_forecast or {}).values())[-1]
                 if cfg.cbr_key_rate_forecast else 0.0
+            ),
+            euribor_rate=(self._h.macro_forecasts.get("euribor_6m") or {}).get(
+                state.year, list((self._h.macro_forecasts.get("euribor_6m") or {}).values())[-1]
+                if self._h.macro_forecasts.get("euribor_6m") else 0.0
             ),
             avg_rate_default=self._c.get_constraint("debt", "avg_rate_default", DEBT_AVG_RATE_DEFAULT),
             min_st_debt_pct=self._c.get_constraint("debt", "min_st_debt_pct", 0.20),

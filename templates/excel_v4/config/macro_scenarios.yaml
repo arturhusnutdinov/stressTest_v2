@@ -87,6 +87,9 @@ nornickel:
     2025: {"LME Nickel": 16070, "LME Copper": 9590, "LME Palladium": 1017, "LME Platinum": 990, "USD/RUB": 83.8, "Brent": 69.1}
   # PGM-микс для сегмента (доля Pd в PGM-корзине по выручке, факт 2023-2025)
   pgm_mix: {pd: 0.72, pt: 0.28, source: "Доля Pd в PGM-выручке Норникеля (факт 2023-2025)", tag: "[ДАННЫЕ]"}
+  # Факторы только для engine (euribor — для EUR-флоатеров долга, P2)
+  engine:
+    euribor_6m: {values: [2.6, 2.6, 2.3], source: "ECB staff proj Sep-26 (как rusal)", tag: "[ОЦЕНКА]"}
   scenarios:
     base:
       "LME Nickel": {values: [16000, 17000, 18000],

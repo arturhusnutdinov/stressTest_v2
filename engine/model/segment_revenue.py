@@ -51,6 +51,7 @@ class SegmentConfig:
     volume_method:  str = "ewa"       # ewa | macro | fixed_growth
     price_method:   str = "macro"     # ewa | macro | fixed_growth
     price_factors:  List[str] = field(default_factory=list)
+    price_mix_weights: List[float] = field(default_factory=list)  # P1: веса для микса 2 факторов (PGM Pd+Pt)
     volume_factors: List[str] = field(default_factory=list)
     volume_growth:  Optional[float] = None  # фиксированный рост объёма (%/год)
     price_growth:   Optional[float] = None  # фиксированный рост цены (%/год)
@@ -70,6 +71,7 @@ class SegmentConfig:
             volume_method =cfg.get("volume_method", "ewa"),
             price_method  =cfg.get("price_method",  "macro"),
             price_factors =cfg.get("price_factors", []),
+            price_mix_weights=[float(w) for w in cfg.get("price_mix_weights", [])],
             volume_factors=cfg.get("volume_factors", []),
             volume_growth =cfg.get("volume_growth"),
             price_growth  =cfg.get("price_growth"),
@@ -182,10 +184,38 @@ class SegmentRevenueModel:
                         if vol_fc[yr] > demand_cap and demand_cap > 0:
                             logger.info(f"  {seg.name} {yr}: volume {vol_fc[yr]:.0f}kt → demand cap {demand_cap:.0f}kt (GDP {gdp_growth*100:+.1f}%)")
                             vol_fc[yr] = demand_cap
+            # P1: микс из 2 факторов (PGM = w_pd×Pd + w_pt×Pt): blended уровень → chain-link
+            _price_factors = seg.price_factors
+            if len(seg.price_factors) == 2 and len(seg.price_mix_weights) == 2:
+                _f1, _f2 = seg.price_factors
+                _w1, _w2 = seg.price_mix_weights
+                _s1 = {**self.macro_history.get(_f1, {}), **self.macro_forecasts.get(_f1, {})}
+                _s2 = {**self.macro_history.get(_f2, {}), **self.macro_forecasts.get(_f2, {})}
+                _blend = {y: _w1 * _s1[y] + _w2 * _s2[y]
+                          for y in set(_s1) & set(_s2) if _s1.get(y) and _s2.get(y)}
+                if len(_blend) >= 4:
+                    import copy as _copy
+                    _seg_blend = _copy.copy(seg)
+                    _seg_blend.price_factors = ["__mix__"]
+                    # ВСЕ годы бленда в одной серии: chain-link найдёт common с
+                    # price_history (история) и дойдёт до прогнозных лет
+                    self.macro_forecasts["__mix__"] = dict(_blend)
+                    price_fc = self._forecast_series(
+                        seg.price_history, forecast_years,
+                        method="macro",
+                        factors=["__mix__"],
+                        fixed_growth=None,
+                        halflife=seg.ewa_halflife,
+                        beta_override=1.0,
+                        anchor_override=seg.price_anchor,
+                    )
+                    rev_fc = {yr: vol_fc.get(yr, 0) * price_fc.get(yr, 0) for yr in forecast_years}
+                    results.append(SegmentForecast(name=seg.name, volume=vol_fc, price=price_fc, revenue=rev_fc))
+                    continue
             price_fc = self._forecast_series(
                 seg.price_history, forecast_years,
                 method=seg.price_method,
-                factors=seg.price_factors,
+                factors=_price_factors,
                 fixed_growth=seg.price_growth,
                 halflife=seg.ewa_halflife,
                 beta_override=seg.price_beta,
