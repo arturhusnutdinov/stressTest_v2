@@ -1266,10 +1266,11 @@ def build_segments(wb, cfg):
             elif seg.get("pgm_mix"):
                 # D2: PGM (Pd+Pt) — chain-link от микса LME Pd/Pt
                 # PGM_t = PGM_{t-1} × (w_pd×Pd_t + w_pt×Pt_t) / (w_pd×Pd_{t-1} + w_pt×Pt_{t-1})
+                # Веса — из хелпер-строк этого листа (fill_data пишет из YAML; H1-аудит)
                 r_pd = REG.get("MA.act_lme_pd")
                 r_pt = REG.get("MA.act_lme_pt")
-                mix = MC.load_macro_config().get("nornickel", {}).get("pgm_mix", {})
-                w_pd, w_pt = float(mix.get("pd", 0.72)), float(mix.get("pt", 0.28))
+                w_pd = f"$C${REG.get('SG.w_pd', 21)}"
+                w_pt = f"$C${REG.get('SG.w_pt', 22)}"
                 ma = NAME['MA']
                 mix_t = f"({w_pd}*'{ma}'!{cl}${r_pd}+{w_pt}*'{ma}'!{cl}${r_pt})"
                 mix_p = f"({w_pd}*'{ma}'!{prev}${r_pd}+{w_pt}*'{ma}'!{prev}${r_pt})"
@@ -1286,6 +1287,16 @@ def build_segments(wb, cfg):
                          f"={cl}{REG[f'SG.{key}_vol']}*{cl}{REG[f'SG.{key}_price']}/1000",
                          FMT_MLN, bold=True)
         r += 2
+
+    # D2: веса PGM-микса (SSOT = YAML pgm_mix; перезапись в fill_data)
+    if any(s.get("pgm_mix") for s in cfg["segments"]):
+        REG.setdefault("SG.w_pd", 21)
+        REG.setdefault("SG.w_pt", 22)
+        mix = MC.load_macro_config().get(cfg.get("_company", "nornickel"), {}).get("pgm_mix", {})
+        label_row(ws, REG["SG.w_pd"], "PGM вес Pd", "x", "Доля Pd в PGM-корзине (факт 2023-2025)")
+        input_cell(ws, REG["SG.w_pd"], 3, float(mix.get("pd", 0.72)), FMT_RATIO)
+        label_row(ws, REG["SG.w_pt"], "PGM вес Pt", "x", "1 − w_pd")
+        input_cell(ws, REG["SG.w_pt"], 3, float(mix.get("pt", 0.28)), FMT_RATIO)
 
 
 def build_revenue(wb, cfg):
@@ -1351,8 +1362,9 @@ def build_revenue(wb, cfg):
             elif seg.get("pgm_mix"):
                 r_pd = REG.get("MA.act_lme_pd")
                 r_pt = REG.get("MA.act_lme_pt")
-                mix = MC.load_macro_config().get("nornickel", {}).get("pgm_mix", {})
-                w_pd, w_pt = float(mix.get("pd", 0.72)), float(mix.get("pt", 0.28))
+                # Веса — из хелпер-строк 11_Segments (SSOT = YAML, пишет fill_data)
+                w_pd = f"'{NAME['SG']}'!$C${REG.get('SG.w_pd', 21)}"
+                w_pt = f"'{NAME['SG']}'!$C${REG.get('SG.w_pt', 22)}"
                 ma = NAME['MA']
                 mix_t = f"({w_pd}*'{ma}'!{col_l}${r_pd}+{w_pt}*'{ma}'!{col_l}${r_pt})"
                 mix_p = f"({w_pd}*'{ma}'!{prev_col}${r_pd}+{w_pt}*'{ma}'!{prev_col}${r_pt})"

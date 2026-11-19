@@ -66,7 +66,7 @@ rusal:
     severe:
       "LME Aluminium": {values: [1950, 1830, 1740], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
       "USD/RUB": {values: [110, 124, 129], source: "Base +30%", tag: "[ОЦЕНКА]"}
-      "USD/CNY": {values: [7.0, 6.9, 6.8], source: "= Base (чисто ценовой шок)", tag: "[ОЦЕНКА]"}
+      "USD/CNY": {values: [7.0, 6.9, 6.8], source: "как Base (чисто ценовой шок)", tag: "[ОЦЕНКА]"}
       "Brent": {values: [45, 43, 42], source: "Уровень отсечения Минфина $50 с дисконтом", tag: "[ОЦЕНКА]"}
       "CPI RU": {values: [0.120, 0.100, 0.080], source: "Base +5 п.п.", tag: "[ОЦЕНКА]"}
       "PPI RU": {values: [0.085, 0.070, 0.060], source: "Base +4 п.п.", tag: "[ОЦЕНКА]"}
@@ -114,7 +114,7 @@ nornickel:
       "LME Palladium": {values: [600, 630, 660], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
       "LME Platinum": {values: [870, 888, 900], source: "Base × (1−40%)", tag: "[ОЦЕНКА]"}
       "USD/RUB": {values: [110, 124, 129], source: "Base +30%", tag: "[ОЦЕНКА]"}
-      "Brent": {values: [45, 43, 42], source: "= rusal severe", tag: "[ОЦЕНКА]"}
+      "Brent": {values: [45, 43, 42], source: "как rusal severe", tag: "[ОЦЕНКА]"}
       "GDP World": {values: [0.010, 0.015, 0.020], source: "Глобальная рецессия", tag: "[ОЦЕНКА]"}
 
 # Номинальные годовые средние для OLS-блока книг (2018-2025, источники: LME/Westmetall/StatMuse)

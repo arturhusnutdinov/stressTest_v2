@@ -227,8 +227,31 @@ Payment: US Steel=next_year, Rusal=current_year
 ### excel_v4 (корпоративные Excel-модели RUSAL/Nornickel)
 - Сборка: `build_model.py --company X --output model/X_v4.xlsx` → `fill_data.py --company X --model model/X_v4.xlsx` → `finalize.py` (живой Excel recalc, ПОСЛЕДНИЙ шаг)
 - **reg.json race**: builder персистит CP-раскладку в shared reg.json; fill_data читает раскладку из встроенного листа `_Reg` (самоописывающаяся книга) — порядок build/fill между компаниями больше не критичен (фикс 18.11)
-- Гейты: `audit_corp_model.py` (E7 sanity bounds, H4 цвета), `sync_gate_corp.py --company rusal --book ...` (Nornickel — только с Vertex PG, иначе exit 2 штатно)
-- Backtest: `scripts/backtest.py --company rusal --end-year 2023` + `--backtest` флаги сборки/заполнения; определения метрик — `templates/excel_v4/docs/METRICS_GLOSSARY.md`
+- **Макро-SSOT (18.11)**: `templates/excel_v4/config/macro_scenarios.yaml` — единый источник
+  стартовых точек сценариев для книг И engine (base/stress/severe, у каждого фактора
+  source+tag; винтаж 2026-11-18: LME Al 3 250/3 050/2 900 — YTD-2026 ≈ 3 270 Westmetall;
+  Cu 12 000; ЦБ 14.6/11.5/9.0; USD/RUB 85/95/99). Книги читают через `scripts/macro_config.py`
+  (fill_data пишет источники в 01_Macro кол. J/K); engine — `engine/macro/scenario_config.py`
+  (apply в runner после VECM/external/fallback, только base; CPI/PPI: доли→индексы base=100;
+  lme_alumina = LME Al × CP.alumina_lme_ratio 0.134 — факт 2025)
+- **История LME Al исправлена (18.11)**: номинальные годовые средние (Westmetall) 1990-2025
+  в БД + YAML `lme_al_history`; был занижен ~20-25%. Инструмент: `tools/fix_lme_history.py`
+- **D1 — иерархия Uses в 17_Debt**: PP.capex_plan (план) → DT.cbrc_planned (ДС до RC от
+  планового CapEx, ациклично) → DT.capex_defer = MIN(plan×(1−maint), MAX(0, min_cash−
+  cbrc_planned)) → PP.capex = plan − defer (CF/PPE от фактического). funding_need после
+  defer. Строки: PP.capex_plan=23, DT.cbrc_planned=64, DT.capex_defer=65
+- **D2 — PGM-микс Норникеля**: цена сегмента = chain-link 0.72×Pd+0.28×Pt (11_Segments +
+  10_Revenue; веса в YAML `pgm_mix`, hist Pd/Pt 2023-25 в hist_actuals)
+- **D4 — WC partial adjustment**: DSO/DIH/DPO год 1 = prev+λ×(target−prev), год 2 = +2λ
+  (cap 1), год 3 = target; λ = CP.wc_lambda (default 0.6)
+- Гейты: `audit_corp_model.py` (E7 sanity bounds, H4 цвета), `sync_gate_corp.py --company rusal --book ...` (структура ±3 п.п. жёстко, уровни ±20% мягко — движки считают РАЗНЫЕ макровходы by design; Nornickel — с Vertex PG `localhost:15432/vertex_db`)
+- **Sync-гейт 18.11**: после SSOT-макро уровни сблизились (engine rev 14.2 млрд vs книга 17.8 млрд — остаток = базис «other»-выручки: engine ~1.7 млрд vs книга ~4.0 млрд), но СТРУКТУРА FAIL: COGS% книга 67% (компонентная, глинозём 435) vs engine 81% (PPI-dampened ratio). **Следующая итерация (P1)**: конвергенция архитектуры COGS engine ↔ книга + унификация базиса other-выручки. Ковенанты engine (ND/EBITDA 6.65x) vs книга (1.9x) — следствие того же разрыва; кредитные выводы книги валидны (бэктест E1)
+- Backtest: `scripts/backtest.py --company rusal --end-year 2023` (engine, temp-БД) +
+  `--backtest` флаги сборки/заполнения (Excel-зеркало; для nornickel — только зеркало,
+  данных нет в SQLite). Определения метрик — `templates/excel_v4/docs/METRICS_GLOSSARY.md`.
+  Результаты 18.11: rusal Excel Rev 14.4/8.3%, EBITDA 1.8/26.4%; nornickel Rev 0.0/7.6%
+  (факт-макро) — см. `audit/backtest_*.md`. Ограничение: ratio-COGS не предсказывает
+  cost shocks (класс: RUSAL-2025, Nornickel-2024/25)
 
 ## Состояние данных (Sep 2026)
 

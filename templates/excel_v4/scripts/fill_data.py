@@ -2551,8 +2551,11 @@ def fill_macro_forecasts(wb, data: dict, company: str):
                     ws.cell(r, c).number_format = '#,##0.00' if abs(v) < 100 else '#,##0'
                     scenario_filled += 1
                 # Источник и тег в книгу (аудит: у каждого прогноза есть источник)
+                # Страж: ведущий '=' превратил бы строку в формулу (порча XML, recovery Excel)
                 if fdata.get("source"):
-                    ws.cell(r, 10, str(fdata["source"])[:120]).font = F_NOTE   # J = Источник
+                    src_str = str(fdata["source"])[:120]
+                    assert not src_str.lstrip().startswith("="), f"source похож на формулу: {src_str[:40]}"
+                    ws.cell(r, 10, src_str).font = F_NOTE   # J = Источник
                 if fdata.get("tag"):
                     ws.cell(r, 11, str(fdata["tag"])).font = F_NOTE             # K = Роль/тег
 
@@ -2562,6 +2565,22 @@ def fill_macro_forecasts(wb, data: dict, company: str):
         if cp_al_r:
             ws_cp = wb["Control_Panel"]
             ws_cp.cell(cp_al_r, 3, MC.get_alumina_lme_ratio()).font = F_INPUT
+    # D2: веса PGM из SSOT (11_Segments C21/C22)
+    if company == "nornickel":
+        mix = MC.load_macro_config().get("nornickel", {}).get("pgm_mix", {})
+        ws_sg = wb["11_Segments"]
+        for key, row in (("pd", REG.get("SG.w_pd")), ("pt", REG.get("SG.w_pt"))):
+            if row and key in mix:
+                ws_sg.cell(row, 3, float(mix[key])).font = F_INPUT
+    # Источник для формульной строки LME Alumina (в книге = LME Al × CP-отношение)
+    # ВАЖНО: без ведущего '=' — иначе openpyxl запишет строку как формулу (порча XML)
+    if company == "rusal":
+        for r_chk in range(8, 8 + n_f + 1):
+            lbl_ch = ws.cell(r_chk, 1).value
+            if lbl_ch and "Alumina" in str(lbl_ch):
+                ws.cell(r_chk, 10, f"LME Al × CP.alumina_lme_ratio ({MC.get_alumina_lme_ratio():.3f}, факт 2025)").font = F_NOTE
+                ws.cell(r_chk, 11, "[ОЦЕНКА]").font = F_NOTE
+                break
 
     print(f"    Macro forecasts: {filled} historical + {scenario_filled} scenario cells")
 

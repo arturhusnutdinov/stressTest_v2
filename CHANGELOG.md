@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.4.0] — 2026-11-18 (макро-SSOT и согласованность прогноза с рынком)
+
+### Added
+- **`templates/excel_v4/config/macro_scenarios.yaml`** — единый SSOT макросценариев
+  (books + engine): base/stress/severe × факторы, у каждого source+tag, винтаж 2026-11-18
+- **`templates/excel_v4/scripts/macro_config.py`** — загрузчик YAML для книг
+- **`engine/macro/scenario_config.py`** — apply SSOT к macro_forecasts (base engine = base
+  книг; маппинг с дедупликацией рядов; CPI/PPI доли→индексы base=100; lme_alumina = LME Al × 0.134)
+- **`tools/fix_lme_history.py`** — номинальная история LME Al 1990-2025 в БД (Westmetall)
+- **D1: иерархия Uses в 17_Debt** — отложенный проектный CapEx: PP.capex_plan →
+  DT.cbrc_planned → DT.capex_defer → PP.capex (финальный); funding_need после defer
+- **D2: PGM-микс Норникеля** — цена сегмента = chain-link 0.72×Pd + 0.28×Pt
+- **D4: WC partial adjustment** — CP.wc_lambda (0.6): days_t = prev+λ×(target−prev)
+- **Engine-only факторы в YAML**: cbr_key_rate/policy (ЦБ 23.10.2026), euribor_6m (ECB),
+  gdp_ru (номинал +5%/год)
+- **Backtest Норникеля**: Excel-зеркало + декомпозиция YAML-макро vs факт-макро
+  (`audit/backtest_nornickel_2026-11-18.md`)
+
+### Changed
+- **Макровинтаж 2026-11-18** (источники: ЦБ, Минфин, WB CMO окт-26, LME/Westmetall,
+  ECB staff, IMF WEO): LME Al base 2 800→3 250/3 050/2 900 (2026 YTD ≈ 3 270);
+  Cu 9 500→12 000/11 500/11 000; Pt 1 000→1 450/1 480/1 500; alumina ratio 0.203→0.134
+  (факт 2025 = 353/2561); Brent 72/70/68; USD/RUB 85/95/99
+- **История LME Al в БД**: номинал (2021: 1 783→2 484; 2025: 2 106→2 561) — было
+  занижено ~20-25% (драйвер MR-равновесия и OLS)
+- Engine base-прогнозы flat заменены путями из YAML (usd_rub 89.1 flat→85/95/99;
+  brent 63.6 flat→72/70/68; euribor 0.03-0.04→2.6/2.6/2.3; cbr 11.4/8.8/7.6→14.6/11.5/9.0)
+- Источники макро пишутся в книгу (01_Macro кол. J/K)
+
+### Fixed
+- Дублирующиеся FX-ряды engine (USD/RUB пишется в usd_rub и fx_usdrub одинаково)
+- LME Alumina engine:явный путь = LME Al × 0.134 (был MR 336/354/367 от заниженной истории)
+
 ## [2.2.0] — 2026-08-24
 
 ### Added
