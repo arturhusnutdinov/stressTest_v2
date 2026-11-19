@@ -59,6 +59,8 @@ model:
       ewa_halflife_years: 3
     margins:
       ebitda_margin_default: 0.41
+      cogs_pct: 0.583  # P1: incl-DA ставка: книга 48% ex-DA + DA/rev 10.3% (engine вычитает DA при da_in_cogs=false)
+      sga_pct: 0.035  # P1: net-опекс: SGA 11.3% − прочий операционный ДОХОД 7.8% (книга 21_PL)
       tax_rate_delta_pct: 0.0
     capex_policy:
       method: sustaining_plus_growth
@@ -151,6 +153,7 @@ model:
           price_factors:
           - lme_ni_usd
           price_beta: 1.0  # P1: конвенция книги 1:1
+          price_anchor: 16070000  # P1: Ni LME 2025 = 16 070 (книга: realized = LME-путь)
           volume_history:
             2015: 266.4
             2016: 235.7
@@ -182,6 +185,7 @@ model:
           price_factors:
           - lme_cu_usd
           price_beta: 1.0  # P1: конвенция книги 1:1
+          price_anchor: 9590000  # P1: Cu LME 2025 = 9 590 (книга: realized = LME-путь)
           volume_history:
             2015: 369.4
             2016: 360.2
@@ -213,6 +217,7 @@ model:
           price_factors:
           - lme_pd_usd
           price_beta: 1.0  # P1: конвенция книги 1:1
+          price_anchor: 1017000  # P1: Pd 2025 = 1 017 (книга: realized = LME-путь)
           volume_history:
             2015: 2689.0
             2016: 2618.0

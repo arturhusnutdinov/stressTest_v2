@@ -314,6 +314,7 @@ class ModelInputLoader:
             db_unit=company_cfg.get("db_unit", "tUSD"),
             # Drivers (могут быть переопределены в YAML)
             cogs_pct=_safe_float(mode_cfg.get("margins", {}).get("cogs_pct")),
+            sga_pct=_safe_float(mode_cfg.get("margins", {}).get("sga_pct")),
             tax_rate=_tax_rate_yaml,
             min_cash=float(features.get("min_cash", 0.0)),
             target_net_debt_ebitda=float(

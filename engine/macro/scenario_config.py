@@ -29,6 +29,11 @@ BOOK_TO_ENGINE = {
     "CPI RU": ["cpi_ru"],
     "PPI RU": ["ppi_ru"],
     "GDP World": ["gdp_world"],
+    # Nornickel (19.11): факторы только в Vertex-экспорте, book = SSOT для них
+    "LME Nickel": ["lme_ni_usd"],
+    "LME Copper": ["lme_cu_usd"],
+    "LME Palladium": ["lme_pd_usd"],
+    "LME Platinum": ["lme_pt_usd"],
 }
 
 
