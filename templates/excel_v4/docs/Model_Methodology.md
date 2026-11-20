@@ -72,7 +72,16 @@ Cash = cash_open + CFO + CFI + CFF = min_cash             (EXACT, one pass)
 - Все проценты от OPENING balance (не avg)
 - CFF_base исключает RC и new_term
 - CFO зависит от NI → interest → но interest от opening → детерминировано
-- One-pass solution, iterations не нужны
+- One-pass solution, итерации для сходимости не нужны
+
+### 3.3a Итерационный режим и seed-механика (20.11)
+Итерационный расчёт в книге **включён** (`calcPr iterate=1`, 1000/1e-4 — банковская конвенция): DAG его не использует, но он (а) страхует от случайных колец при правках, (б) поддерживает защиту холодного старта. Кольцевая зона (17_Debt/21_PL/23_CF/19_Tax/15_PPE/20_BS/14_OtherIS) обёрнута:
+```
+=IFERROR((1-ω)·X + ω·(формула), seed)     ω = Control_Panel!L2 (default 0.3)
+```
+- `seed` — значение Python engine из скрытого SEED-блока 17_Debt (r105+, self-describing «лист:ключ», заполняет fill_data из data_mart_v2.db, base) — при холодном старте Excel кольцевые ячейки иначе стартуют с нулей и #DIV/0! замораживается
+- релаксация не меняет неподвижную точку: X* = (1−ω)X* + ω·g(X*) ⟺ X* = g(X*)
+Проценты synthetic-транша начинаются с года после выпуска; ставка транша = avg_rate прошлого года + спред (репрайсинг с лагом 1Y — same-year rate↔avg_rate давал сингулярность и расходимость e+265, эксперимент 20.11). Циклический solver — в Python engine (solve loop), сверка sync-гейтом.
 
 ### 3.4 fullCalcOnLoad = True
 Холодный старт (raw XML) = тёплый (пересчитанный). Гарантировано тем, что:

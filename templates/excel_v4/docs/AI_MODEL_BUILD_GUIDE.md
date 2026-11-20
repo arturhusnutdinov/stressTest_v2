@@ -181,13 +181,16 @@ model_{company}.xlsx
 cd stressTest_v2/templates/excel_v4
 
 # КРИТИЧЕСКИ ВАЖНО: python3 -B (без bytecode cache)
-python3 -B scripts/build_model.py --company {company}
+python3 -B scripts/build_model.py --company {company} --output model/{company}_v4.xlsx
 
-# Одноразовая загрузка данных из source → модель
-python3 -B scripts/fill_data.py --company {company} --model model/model_v4.xlsx
+# Одноразовая загрузка данных из source → модель (+ SEED-блок engine-значений,
+# CP.cash_rate; читает раскладку из встроенного листа _Reg)
+python3 -B scripts/fill_data.py --company {company} --model model/{company}_v4.xlsx
 
-# Копия для Excel
-cp model/model_v4.xlsx model/model_{company}.xlsx
+# ПОСЛЕДНИЙ шаг: живой Excel recalc → кэши значений + снимки сценариев 40_Scen.
+# Без него все ~1800 формул без <v> — файл неверифицируем. Скрипт сам закрывает
+# чужие книги (app-resume) и адресует workbook по имени.
+python3 scripts/finalize.py model/{company}_v4.xlsx
 ```
 
 **После fill_data модель самодостаточна.** Все данные внутри Excel:
@@ -196,6 +199,7 @@ cp model/model_v4.xlsx model/model_{company}.xlsx
 - 11_Segments: vol/price/rev
 - 01_Macro: сценарии
 - Control_Panel: параметры
+- 17_Debt r105+: скрытый SEED-блок (engine base, заполняет fill_data)
 
 ---
 
