@@ -1087,8 +1087,10 @@ def fill_debt_schedule(wb, data: dict, company: str):
             else:
                 rate_ref = f"$F${r}"  # fixed contract rate
 
+            # CFI-конвенция (19.11): проценты на СРЕДНИЙ остаток AVG(open, close).
+            # Для базовых инструментов close не зависит от процентов → кольца нет.
             formula_cell(ws, r, bc + 3,
-                         f"={cl_open}{r}*{rate_ref}", FMT_MLN)  # opening only (no circular)
+                         f"=AVERAGE({cl_open}{r},{cl_close}{r})*{rate_ref}", FMT_MLN)
 
             # Close = Open - Mandatory + Refi
             formula_cell(ws, r, bc + 4,
@@ -1238,8 +1240,10 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws, r_synth, bc + 2, "=0", FMT_MLN)  # no refi
         cl_open_s = get_column_letter(bc)
         cl_close_s = get_column_letter(bc + 4)
-        # Interest = 0 in year of issuance (breaks circular: new_term → interest → NI → CF → need)
-        # Interest starts NEXT year from opening balance (= closing of issuance year)
+        # Ацикличность (как CFI Amazon model: iterate ON, но формулы без колец):
+        # процент с года, СЛЕДУЮЩЕГО за выпуском (кольцо new_term→interest→NI→CF→need
+        # при холодном старте Excel итераций даёт неустранимый #DIV/0! — 20.11).
+        # Кольца решаются в Python engine (solve loop), книга — DAG.
         formula_cell(ws, r_synth, bc + 3, "=0", FMT_MLN)
         formula_cell(ws, r_synth, bc + 4,
                      f"={cl_open_s}{r_synth}", FMT_MLN)  # bullet: close = open
@@ -1253,7 +1257,6 @@ def fill_debt_schedule(wb, data: dict, company: str):
             formula_cell(ws, r_synth, fut_bc, f"={prev_close_col}{r_synth}", FMT_MLN)
             formula_cell(ws, r_synth, fut_bc + 1, "=0", FMT_MLN)  # no maturity within horizon
             formula_cell(ws, r_synth, fut_bc + 2, "=0", FMT_MLN)
-            # Interest from opening only (no circular)
             formula_cell(ws, r_synth, fut_bc + 3,
                          f"={cl_open_f}{r_synth}*$F${r_synth}",
                          FMT_MLN)

@@ -13,8 +13,10 @@ from pathlib import Path
 import openpyxl
 import pytest
 
+# 20.11: корректный парсер (опциональный лист + обязательная ячейка).
+# Прежний пропускал внутрилистные ссылки (=F45+F46) — кольца не находились.
 CELL_RE = re.compile(
-    r"(?:'([^']+)'|([A-Za-z0-9_\.]+))!?\$?([A-Z]{1,3})\$?([0-9]{1,5})"
+    r"(?:(?:'([^']+)'|([A-Za-z_][A-Za-z0-9_\.]*))!)?\$?([A-Z]{1,3})\$?([0-9]{1,5})(?![0-9A-Za-z_(])"
 )
 MODEL_DIR = Path(__file__).resolve().parents[3] / "templates" / "excel_v4" / "model"
 
@@ -72,13 +74,36 @@ def _find_scc(path: Path):
     return result
 
 
+# 19.11 (CFI-конвенция): намеренные кольца разрешены — проценты на средние
+# остатки (AVG(open, close)) создают кольца interest↔debt↔cash и
+# cash↔int_income↔NI↔CF; решаются итерациями Excel (calcPr iterate=1),
+# как в Python engine. Гейт: (1) iterate включён, (2) ВСЕ циклы — только в
+# «зоне процентов» (17_Debt / 21_PL / 23_CF / 20_BS / _Debt_Schedule),
+# случайные кольца в прочих листах = FAIL.
+# 20.11 (банковская конвенция): намеренные корпоративные кольца —
+# interest↔funding↔налог (как в bank_model). Решаются итерациями Excel
+# (calcPr iterate=1), как в Python engine (solve loop, snapshot-restore).
+RING_SHEETS = {"17_Debt", "21_PL", "23_CF", "20_BS", "_Debt_Schedule",
+               "19_Tax", "15_PPE", "14_OtherIS"}
+
+
 @pytest.mark.parametrize("book", ["rusal_v4.xlsx", "nornickel_v4.xlsx"])
-def test_book_is_dag(book):
+def test_book_cycles_only_intentional(book):
     path = MODEL_DIR / book
     if not path.exists():
         pytest.skip(f"{book} не собран")
-    comps = _find_scc(path)
-    assert not comps, (
-        f"Циклические ссылки в {book}: "
-        + "; ".join(f"{c[0][0]}!{c[0][1]} (n={len(c)})" for c in comps[:5])
+    import zipfile, re
+    with zipfile.ZipFile(path) as zf:
+        xml = zf.read("xl/workbook.xml").decode()
+    calcpr = re.search(r"<calcPr[^>]*>", xml)
+    assert calcpr and 'iterate="1"' in calcpr.group(0), (
+        f"Итерационный расчёт ВЫКЛЮЧЁН в {book}: {calcpr.group(0) if calcpr else 'no calcPr'}"
     )
+    comps = _find_scc(path)
+    stray = [c for c in comps if not all(cell[0] in RING_SHEETS for cell in c)]
+    assert not stray, (
+        f"Случайные циклы вне зоны процентов в {book}: "
+        + "; ".join(f"{c[0][0]}!{c[0][1]} (n={len(c)})" for c in stray[:5])
+    )
+    # намеренных колец должно быть разумное число (по одному на год-поток)
+    assert len(comps) <= 9, f"Подозрительно много колец: {len(comps)}"

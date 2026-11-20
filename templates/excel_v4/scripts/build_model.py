@@ -2990,17 +2990,16 @@ def build_debt(wb, cfg):
         formula_cell(ws, REG["DT.cash_before_rc"], c_idx,
                      f"={cash_prev}+{cfo_ref}+{cfi_ref}+{cff_no_rc_ref}", FMT_MLN)
 
-        # ── D1: плановый вариант (ациклично) ──
-        # cbrc_planned = cash_prev + CFO + CFF_no_RC − PP.capex_plan, где CFO
-        # пересобран с отложенным налогом ЛАГОМ: def(t) → def(t−1).
-        # Иначе цикл: defer→capex→налбаза ОС→DTL→налог→NI→CFO→defer
-        # (дефолтный налог года t неизвестен при планировании CapEx года t —
-        #  лаг методологически корректен и разрывает кольцо по времени).
-        cf_def_ref = f"'{NAME['CF']}'!{cl}${REG.get('CF.deferred_tax', 10)}"
-        cf_def_prev = f"'{NAME['CF']}'!{prev}${REG.get('CF.deferred_tax', 10)}"
+        # ── D1: плановый вариант ──
+        # cbrc_planned = cash_prev + CFO + CFF_no_RC − PP.capex_plan.
+        # Отложенный налог в CFO «смывается» (расход в NI + addback) — зависимости
+        # нет. Кольца (interest↔funding↔налог) — НАМЕРЕННЫЕ, банковская
+        # конвенция 20.11: решаются итерациями Excel (calcPr iterate=1), как в
+        # Python engine (solve loop, snapshot-restore). Открытие-остатки +
+        # средние балансы = та же математика, что и итерационное ядро engine.
         formula_cell(ws, REG["DT.cbrc_planned"], c_idx,
-                     f"={cash_prev}+{cfo_ref}-IFERROR({cf_def_ref},0)+IFERROR({cf_def_prev},0)"
-                     f"+{cff_no_rc_ref}-'{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}",
+                     f"={cash_prev}+{cfo_ref}+{cff_no_rc_ref}"
+                     f"-'{NAME['PP']}'!{cl}${REG.get('PP.capex_plan', 23)}",
                      FMT_MLN)
         # Отложенный проектный CapEx: режем growth-первым, пока касса ≥ min_cash
         formula_cell(ws, REG["DT.capex_defer"], c_idx,
@@ -3203,10 +3202,11 @@ def build_debt(wb, cfg):
                      FMT_MLN, bold=True)
 
         # ── E. INTEREST ──
-        # Term interest: from _Debt_Schedule total (fill_data overrides)
-        # Default: OPENING × avg_rate (not avg — avoids circular)
+        # Term interest: from _Debt_Schedule total (fill_data overrides).
+        # Default (если schedule нет): AVG(open, close) — CFI-конвенция 19.11;
+        # сознательное кольцо решается итерациями (calcPr iterate=1).
         formula_cell(ws, REG["DT.interest_term"], c_idx,
-                     f"={cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']}",
+                     f"=AVERAGE({cl}{REG['DT.term_open']},{cl}{REG['DT.term_close']})*{cl}{REG['DT.avg_rate']}",
                      FMT_MLN)
         # RC interest: opening × (KeyRate + RC spread from CP)
         # KeyRate from Raw_IFRS for each forecast year
@@ -4018,7 +4018,8 @@ def build_valuation(wb, cfg):
         ref_cell(ws, dwc_r, c, f"='{NAME['WC']}'!{cl}${REG['WC.delta_nwc']}", FMT_MLN)
         formula_cell(ws, fcff_r, c,
                      f"={cl}{nopat_r}+{cl}{da_r}-{cl}{capex_r}-{cl}{dwc_r}", FMT_MLN, bold=True)
-        formula_cell(ws, df_r, c, f"=1/(1+$C${r_wacc})^{t}", FMT_RATIO)
+        cp_mid = f"'Control_Panel'!$C${REG.get('CP.mid_year', 147)}"
+        formula_cell(ws, df_r, c, f"=1/(1+$C${r_wacc})^({t}-0.5*{cp_mid})", FMT_RATIO)
         formula_cell(ws, pvfcff_r, c, f"={cl}{fcff_r}*{cl}{df_r}", FMT_MLN)
 
     # ── D. DCF RESULT (последовательные строки 28-37) ──
@@ -4939,6 +4940,11 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.6, FMT_RATIO)
     ws.cell(r, 10, "[ПАР] Плавная нормализация DSO/DIH/DPO (D4)").font = F_NOTE
     REG["CP.wc_lambda"] = r; r += 1
+    # Mid-year конвенция DCF (как CFI Amazon model)
+    label_row(ws, r, "Mid-year конвенция DCF (1=да)", "0/1", "DF = 1/(1+WACC)^(t−0.5)")
+    input_cell(ws, r, 3, 1, FMT_INT)
+    ws.cell(r, 10, "[НОРМ] Среднегодовое дисконтирование явного периода").font = F_NOTE
+    REG["CP.mid_year"] = r; r += 1
     r += 1
 
     # ── H. ДОЛГ ──
@@ -5603,7 +5609,8 @@ def build_other_is(wb, cfg):
         # History: input (fill_data fills)
         for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_MLN)
-        # Forecast: carry forward from last history (not empty)
+        # Forecast: carry forward from last history (interest_income — литералы из fill;
+        # кольцо cash↔int_income при холодном старте Excel-итераций даёт #DIV/0! — 20.11)
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             prev = get_column_letter(c - 1)
             formula_cell(ws, r, c, f"={prev}{r}", FMT_MLN)
