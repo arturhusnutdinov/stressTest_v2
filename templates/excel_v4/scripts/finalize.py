@@ -41,12 +41,18 @@ def finalize(xlsx_path: str) -> bool:
     script = f'''
     tell application "Microsoft Excel"
         activate
+        -- закрыть чужие/восстановленные книги (app-resume), иначе active workbook
+        -- может указывать не на наш файл → -10006 при доступе к листам
+        try
+            close every workbook saving no
+        end try
+        delay 2
         open "{path}"
         delay 8
         calculate
         delay 4
 
-        set wb to active workbook
+        set wb to workbook "{path.name}"
         set cpSheet to worksheet "Control_Panel" of wb
         set scenSheet to worksheet "40_Scen" of wb
 

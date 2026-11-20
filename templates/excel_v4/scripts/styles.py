@@ -188,7 +188,7 @@ def postprocess_xlsx(path):
                         text = text.replace('calcId=', 'fullCalcOnLoad="1" calcId=')
                     if 'iterate="1"' in text and 'iterateCount' not in text:
                         text = text.replace('iterate="1"',
-                                            'iterate="1" iterateCount="100" iterateDelta="0.001"')
+                                            'iterate="1" iterateCount="1000" iterateDelta="0.0001"')
                     data = text.encode("utf-8")
                 if item.filename.startswith("xl/worksheets/"):
                     text = data.decode("utf-8")

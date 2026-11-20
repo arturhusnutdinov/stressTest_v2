@@ -268,6 +268,23 @@ Payment: US Steel=next_year, Rusal=current_year
   Результаты 18.11: rusal Excel Rev 14.4/8.3%, EBITDA 1.8/26.4%; nornickel Rev 0.0/7.6%
   (факт-макро) — см. `audit/backtest_*.md`. Ограничение: ratio-COGS не предсказывает
   cost shocks (класс: RUSAL-2025, Nornickel-2024/25)
+- **Seed-механика колец (20.11)**: кольца interest↔funding↔налог в Excel-якоби
+  расходятся (e+265) — контур new_term→DS-synth-int→NI→CF→cbrc→need→new_term
+  с min_cash/defer-кinks имеет эффективный gain ≫1; релаксация не лечит
+  (сингулярность rate↔avg_rate + кinks). Итоговая архитектура: **книга = DAG**
+  (как CFI Amazon), циклический solver — в Python engine; calcPr iterate=1
+  сохранён (банковская конвенция). Механика: SEED-блок 17_Debt r105+ (скрыт,
+  self-describing «лист:ключ») — fill пишет 78 значений engine base из
+  data_mart_v2.db; кольцевая зона обёрнута IFERROR+релаксация (CP!L2 ω=0.3,
+  X=(1−ω)·X+ω·g(X) — неподвижная точка та же). Ставка synthetic-транша =
+  avg_rate лаг 1Y + спред (репрайсинг по итогам года, иначе сингулярность);
+  проценты транша — с года после выпуска; DT.interest_term = term_open×avg_rate
+  (open-balance). _Reg эмбеддит и строки (SEEDMET) — fill парсит строки обратно.
+  finalize.py: закрывает чужие книги (app-resume) и адресует workbook по имени
+  (фикс -10006). Чек it_res с порогом rc_draw>0.01 (float-остаток ~1e-18);
+  E2-гейт аудита: whitelist параметровых строк (SG!C21/C22 PGM-веса).
+  Финал 20.11: аудит 27 PASS ×2 (0 FAIL), pytest 91/91, sync-гейты PASS ×2,
+  книги: 0 ошибок Excel, BS identity = 0 все годы, S&U/CF/Equity тождества = 0
 
 ## Состояние данных (Sep 2026)
 

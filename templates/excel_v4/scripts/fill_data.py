@@ -1197,6 +1197,12 @@ def fill_debt_schedule(wb, data: dict, company: str):
         bc = yr_start + yr_idx * cols_per
         c_dt = COL_START + N_HIST_DISPLAY + yr_idx
         cl_dt = get_column_letter(c_dt)
+        # Репрайсинг с лагом 1Y: avg_rate текущего года = f(interest текущего
+        # года) → одногодичный контур rate↔avg_rate СИНГУЛЯРЕН (подстановка
+        # даёт тождество; итерации дрейфуют в ∞ — релаксация не лечит).
+        # Ставка транша = avg_rate ПРОШЛОГО года + спред (как маржинальный
+        # ковенант: переоценка по итогам года). Для 2026 — факт 2025 (кол. E).
+        cl_dt_lag = get_column_letter(c_dt - 1)
 
         ws.cell(r_synth, 2, f"New Term {yr}").font = F_LABEL
         # Maturity = yr + tenor
@@ -1213,9 +1219,9 @@ def fill_debt_schedule(wb, data: dict, company: str):
             capex_tenor = 7  # default, CP overrides at runtime
         ws.cell(r_synth, 7, f"{yr + capex_tenor}").font = F_LABEL
 
-        # Rate = leverage-dependent: avg_rate + spread_base + spread_step × MAX(0, ND/EBITDA - target)
+        # Rate = leverage-dependent: avg_rate(lag 1Y) + spread_base + spread_step × MAX(0, ND/EBITDA - target)
         if cp_spread_base and cp_spread_step and cp_target_lev:
-            rate_formula = (f"='17_Debt'!{cl_dt}${REG['DT.avg_rate']}"
+            rate_formula = (f"='17_Debt'!{cl_dt_lag}${REG['DT.avg_rate']}"
                            f"+'Control_Panel'!$C${cp_spread_base}"
                            f"+'Control_Panel'!$C${cp_spread_step}"
                            f"*MAX(0,IFERROR('17_Debt'!{cl_dt}${REG['DT.nd_ebitda']},0)"
@@ -1240,10 +1246,13 @@ def fill_debt_schedule(wb, data: dict, company: str):
         formula_cell(ws, r_synth, bc + 2, "=0", FMT_MLN)  # no refi
         cl_open_s = get_column_letter(bc)
         cl_close_s = get_column_letter(bc + 4)
-        # Ацикличность (как CFI Amazon model: iterate ON, но формулы без колец):
-        # процент с года, СЛЕДУЮЩЕГО за выпуском (кольцо new_term→interest→NI→CF→need
-        # при холодном старте Excel итераций даёт неустранимый #DIV/0! — 20.11).
-        # Кольца решаются в Python engine (solve loop), книга — DAG.
+        # Проценты с года, СЛЕДУЮЩЕГО за выпуском (engine-конвенция).
+        # CFI AVG(open,close) с года выпуска создаёт кольцо new_term→interest→
+        # NI→CF→cbrc→need→new_term; с min_cash/defer-кinks якоби-итерации
+        # Excel расходятся (e+265, эксперимент 20.11) — релаксация не лечит,
+        # т.к. расходимость идёт через кinks, а не через линейный gain.
+        # Кольца решаются в Python engine (solve loop); книга — DAG при
+        # включённом итерационном режиме (calcPr iterate=1, банковская конвенция).
         formula_cell(ws, r_synth, bc + 3, "=0", FMT_MLN)
         formula_cell(ws, r_synth, bc + 4,
                      f"={cl_open_s}{r_synth}", FMT_MLN)  # bullet: close = open
@@ -1258,7 +1267,8 @@ def fill_debt_schedule(wb, data: dict, company: str):
             formula_cell(ws, r_synth, fut_bc + 1, "=0", FMT_MLN)  # no maturity within horizon
             formula_cell(ws, r_synth, fut_bc + 2, "=0", FMT_MLN)
             formula_cell(ws, r_synth, fut_bc + 3,
-                         f"={cl_open_f}{r_synth}*$F${r_synth}",
+                         f"=IFERROR(AVERAGE({cl_open_f}{r_synth},{cl_close_f}{r_synth})*$F${r_synth},"
+                         f"{cl_open_f}{r_synth}*$F${r_synth})",
                          FMT_MLN)
             formula_cell(ws, r_synth, fut_bc + 4,
                          f"={cl_open_f}{r_synth}", FMT_MLN)
@@ -2575,6 +2585,54 @@ def fill_macro_forecasts(wb, data: dict, company: str):
         for key, row in (("pd", REG.get("SG.w_pd")), ("pt", REG.get("SG.w_pt"))):
             if row and key in mix:
                 ws_sg.cell(row, 3, float(mix[key])).font = F_INPUT
+    # CFI seed-механика (20.11): SEED-блок 17_Debt заполняем значениями engine
+    # (base, свежий прогон) — кольца Excel стартуют из решения движка
+    import sqlite3 as _sq
+    _db = _sq.connect(SV2_ROOT / "data_mart_v2.db")
+    _scen = _db.execute("SELECT scenario_id FROM scenarios WHERE company_id=? AND name='base'", (company,)).fetchone()
+    _eng = {}
+    if _scen:
+        _q = ("SELECT p.year, m.metric, m.value FROM {tbl} m "
+              "JOIN periods p ON p.period_id=m.period_id "
+              "WHERE m.company_id=? AND m.scenario_id=? AND p.year BETWEEN ? AND ?")
+        for tbl in ("forecast_is", "forecast_bs", "forecast_cf"):
+            for r_ in _db.execute(_q.format(tbl=tbl),
+                                  (company, _scen[0], min(src["fc_years"]), max(src["fc_years"]))):
+                _eng.setdefault(r_[1], {})[r_[0]] = r_[2] / 1e6
+    _db.close()
+    ws_dt = wb["17_Debt"]
+    _seeds = 0
+    for key, row in REG.items():
+        if not key.startswith("SEEDROW."):
+            continue
+        _, sheet, rrow = key.split(".", 2)
+        metric = REG.get(f"SEEDMET.{sheet}.{rrow}", "")
+        if not metric or metric not in _eng:
+            continue
+        for i, yr in enumerate(src["fc_years"]):
+            v = _eng[metric].get(yr)
+            if v is not None:
+                ws_dt.cell(row, 3 + N_HIST_DISPLAY + i, round(v, 1)).font = F_INPUT
+                ws_dt.cell(row, 3 + N_HIST_DISPLAY + i).number_format = FMT_MLN
+                _seeds += 1
+    if _seeds:
+        print(f"    SEED-block: {_seeds} значений engine ({len(_eng)} метрик)")
+
+    cr_row = REG.get("CP.cash_rate")
+    if cr_row:
+        ws_cp = wb["Control_Panel"]
+        is_d = data.get("is", {}); bs_d2 = data.get("bs", {})
+        ii = {int(k): float(v) for k, v in is_d.get("interest_income", {}).items()}
+        cz = {int(k): float(v) for k, v in bs_d2.get("cash", {}).items()}
+        yrs = sorted(set(ii) & set(cz))
+        rate = 0.05
+        if yrs:
+            num = sum(ii[y] for y in yrs[-3:])
+            den = sum((cz.get(y, 0) + cz.get(y - 1, cz[y])) / 2 for y in yrs[-3:])
+            if den > 0 and num > 0:
+                rate = min(0.12, max(0.001, num / den))
+        ws_cp.cell(cr_row, 3, round(rate, 4)).font = F_INPUT
+        print(f"    CP.cash_rate = {rate:.3%} (hist int_income/avg cash)")
     # Источник для формульной строки LME Alumina (в книге = LME Al × CP-отношение)
     # ВАЖНО: без ведущего '=' — иначе openpyxl запишет строку как формулу (порча XML)
     if company == "rusal":
@@ -2639,9 +2697,16 @@ def fill_all(company: str, model_path: str, backtest_end: int | None = None):
         from collections import OrderedDict
         reg_new = OrderedDict()
         for row in ws_reg.iter_rows(min_row=2, values_only=True):
-            if row[0] is not None and row[1] is not None:
-                v = row[1]
-                reg_new[str(row[0])] = int(v) if float(v) == int(v) else float(v)
+            if row[0] is None or row[1] is None:
+                continue
+            k, v = str(row[0]), row[1]
+            if isinstance(v, str):
+                reg_new[k] = v  # SEEDMET.* — строковые метрики engine
+                continue
+            try:
+                reg_new[k] = int(v) if float(v) == int(v) else float(v)
+            except (TypeError, ValueError):
+                reg_new[k] = v
         REG.clear()
         REG.update(reg_new)
         print(f"  REG: {len(REG)} keys loaded from embedded _Reg sheet")

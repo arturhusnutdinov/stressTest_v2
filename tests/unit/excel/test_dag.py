@@ -100,10 +100,14 @@ def test_book_cycles_only_intentional(book):
         f"Итерационный расчёт ВЫКЛЮЧЁН в {book}: {calcpr.group(0) if calcpr else 'no calcPr'}"
     )
     comps = _find_scc(path)
-    stray = [c for c in comps if not all(cell[0] in RING_SHEETS for cell in c)]
+    # Self-обёртки релаксации (CP!L2, wrap_ring_cells) — не «кольца», а
+    # демпфирование: X = (1-ω)·X + ω·g(X), неподвижная точка та же, что у
+    # чистой формулы. В счёт намеренных колец не включаем (иначе 150+ шт).
+    nontrivial = [c for c in comps if len(c) > 1]
+    stray = [c for c in nontrivial if not all(cell[0] in RING_SHEETS for cell in c)]
     assert not stray, (
         f"Случайные циклы вне зоны процентов в {book}: "
         + "; ".join(f"{c[0][0]}!{c[0][1]} (n={len(c)})" for c in stray[:5])
     )
     # намеренных колец должно быть разумное число (по одному на год-поток)
-    assert len(comps) <= 9, f"Подозрительно много колец: {len(comps)}"
+    assert len(nontrivial) <= 9, f"Подозрительно много колец: {len(nontrivial)}"

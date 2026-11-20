@@ -955,6 +955,9 @@ def check_group_e(wbf, wbv) -> list:
         return headers_cache[sheet]
 
     issues = []
+    # Параметры вне годовой сетки (статичные веса/константы, живущие в колонке
+    # исторической сетки) — не годовые ссылки, эвристику заголовков обходим
+    PARAM_ROWS = {("11_Segments", 21), ("11_Segments", 22)}  # PGM mix w_pd/w_pt
     for ws in wbf.worksheets:
         if ws.title in skip_src:
             continue
@@ -974,6 +977,8 @@ def check_group_e(wbf, wbv) -> list:
                         continue
                     tgt_col = col_to_idx(m.group(3)) + 1
                     tgt_row = int(m.group(4))
+                    if (sh, tgt_row) in PARAM_ROWS:
+                        continue  # статичный параметр вне годовой сетки
                     tgt_year = _year_at(_headers(sh), tgt_col, tgt_row)
                     if tgt_year is None:
                         continue

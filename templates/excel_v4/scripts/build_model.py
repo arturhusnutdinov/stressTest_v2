@@ -2286,8 +2286,10 @@ def build_checks(wb, cfg):
         # стресса (флаг), а не ошибка книги. Сам разрыв виден в cash < min_cash.
         cp_min = f"'Control_Panel'!$C${REG.get('CP.min_cash', 54)}"
         cur_ebitda = f"'{NAME['PL']}'!{cl}${REG['PL.ebitda']}"
+        # Порог rc_draw > 0.01: при точном сходе need = 0 с float-остатком
+        # (~1e-18) → rc_draw эпсилон-положителен, а флаг должен молчать
         formula_cell(ws, REG["CK.it_res"], c_idx,
-                     f"=IF(AND('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0,{cur_ebitda}>0),"
+                     f"=IF(AND('{NAME['DT']}'!{cl}${REG['DT.rc_draw']}>0.01,{cur_ebitda}>0),"
                      f"ABS('{NAME['BS']}'!{cl}${REG['BS.cash']}-{cp_min}),0)",
                      FMT_RATIO)
 
@@ -3202,11 +3204,14 @@ def build_debt(wb, cfg):
                      FMT_MLN, bold=True)
 
         # ── E. INTEREST ──
-        # Term interest: from _Debt_Schedule total (fill_data overrides).
-        # Default (если schedule нет): AVG(open, close) — CFI-конвенция 19.11;
-        # сознательное кольцо решается итерациями (calcPr iterate=1).
+        # Term interest: проценты по OPENING-балансу (engine-конвенция).
+        # CFI AVG(open,close) давал намеренное кольцо, но контур
+        # interest↔new_term через min_cash/defer-кinks имеет эффективный
+        # gain ≫1 — якоби+релаксация расходятся (эксперимент 20.11: e+265).
+        # Open-balance: interest_G = f(term_close_F) → ациклично внутри года.
+        # Кольцо остаётся только в synthetic-траншах (gain ~0.11, устойчиво).
         formula_cell(ws, REG["DT.interest_term"], c_idx,
-                     f"=AVERAGE({cl}{REG['DT.term_open']},{cl}{REG['DT.term_close']})*{cl}{REG['DT.avg_rate']}",
+                     f"={cl}{REG['DT.term_open']}*{cl}{REG['DT.avg_rate']}",
                      FMT_MLN)
         # RC interest: opening × (KeyRate + RC spread from CP)
         # KeyRate from Raw_IFRS for each forecast year
@@ -4940,6 +4945,11 @@ def build_control_panel(wb, cfg):
     input_cell(ws, r, 3, 0.6, FMT_RATIO)
     ws.cell(r, 10, "[ПАР] Плавная нормализация DSO/DIH/DPO (D4)").font = F_NOTE
     REG["CP.wc_lambda"] = r; r += 1
+    # CFI (20.11): ставка дохода на остатки кэша; fill пишет rate из истории
+    label_row(ws, r, "Ставка на остатки кэша", "%", "Процентный доход = rate × AVG(cash(t−1), cash(t))")
+    input_cell(ws, r, 3, 0.05, FMT_PCT)
+    ws.cell(r, 10, "[ПАР] CFI: interest income на средний кэш (IFERROR-seed)").font = F_NOTE
+    REG["CP.cash_rate"] = r; r += 1
     # Mid-year конвенция DCF (как CFI Amazon model)
     label_row(ws, r, "Mid-year конвенция DCF (1=да)", "0/1", "DF = 1/(1+WACC)^(t−0.5)")
     input_cell(ws, r, 3, 1, FMT_INT)
@@ -5609,11 +5619,18 @@ def build_other_is(wb, cfg):
         # History: input (fill_data fills)
         for c in range(3, 3 + n_hist):
             input_cell(ws, r, c, 0, FMT_MLN)
-        # Forecast: carry forward from last history (interest_income — литералы из fill;
-        # кольцо cash↔int_income при холодном старте Excel-итераций даёт #DIV/0! — 20.11)
+        # Forecast: interest_income — CFI-кольцо (20.11): CP.cash_rate × AVG(cash(t−1), cash(t)).
+        # IFERROR-обёртка = seed из допущений: при ошибке итерации — значение прошлого года.
+        cp_cash_rate = f"'Control_Panel'!$C${REG.get('CP.cash_rate', 145)}"
         for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
             prev = get_column_letter(c - 1)
-            formula_cell(ws, r, c, f"={prev}{r}", FMT_MLN)
+            cl = get_column_letter(c)
+            if key == "interest_income":
+                formula_cell(ws, r, c,
+                             f"=IFERROR({cp_cash_rate}*AVERAGE('{NAME['BS']}'!{prev}${REG['BS.cash']},"
+                             f"'{NAME['BS']}'!{cl}${REG['BS.cash']}),{prev}{r})", FMT_MLN)
+            else:
+                formula_cell(ws, r, c, f"={prev}{r}", FMT_MLN)
 
 
 def build_changelog(wb, cfg):
@@ -5639,6 +5656,129 @@ def build_changelog(wb, cfg):
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN BUILD
 # ══════════════════════════════════════════════════════════════════════════════
+
+
+# Кольцевая зона и метрики engine для семян (sheet → {reg_key: metric})
+RING_ZONE = {
+    "17_Debt": {
+        "DT.su_oper_flow": "ebitda", "DT.su_interest": "interest_expense",
+        "DT.interest_term": "interest_expense", "DT.interest": "interest_expense",
+        "DT.open": "total_debt", "DT.close": "total_debt", "DT.nd": "net_debt",
+        "DT.new_term": None, "DT.term_close": "total_debt",
+        "DT.funding_need": None, "DT.capex_defer": None, "DT.cbrc_planned": None,
+        "DT.avg_rate": None, "DT.su_growth_capex": None, "DT.su_maint_capex": None,
+        "DT.su_delta_nwc": None, "DT.su_mandatory": None, "DT.su_dividends": None,
+        "DT.su_total_uses": None, "DT.su_total_sources": None, "DT.su_gap": None,
+        "DT.rc_draw": None, "DT.rc_close": None, "DT.interest_rc": None, "DT.commit_fee": None,
+    },
+    "21_PL": {"PL.ebitda": "ebitda", "PL.da": "total_da", "PL.ebit": "ebit",
+              "PL.interest": "interest_expense", "PL.interest_income": "interest_income",
+              "PL.ebt": "ebt", "PL.tax": "tax_expense", "PL.ni": "net_income"},
+    "23_CF": {"CF.cfo_total": "cfo_total", "CF.cfi_total": "cfi_total",
+              "CF.cff_total": "cff_total", "CF.cash_close": "cash_ending"},
+    "19_Tax": {"TX.current": "current_tax_expense", "TX.ebt": "ebt",
+               "TX.deferred": "deferred_tax_expense", "TX.total": "tax_expense"},
+    "15_PPE": {"PP.capex": "capex", "PP.dep_charge": "dep_charge", "PP.capex_plan": None},
+    "20_BS": {"BS.cash": "cash", "BS.ta": "total_assets", "BS.te": "total_equity"},
+    "14_OtherIS": {"OI.interest_income": "interest_income"},
+    "24_Equity": {"EQ.re": "retained_earnings"},
+}
+SEED_BASE_ROW = 105  # скрытые строки 17_Debt (r95-96 заняты Raw_IFRS-ссылками)
+
+
+def build_seed_block(wb, cfg):
+    """Скрытый SEED-блок (17_Debt rows 95+): значения Python engine по годам.
+    Заполняет fill_data из forecast_is/bs/cf (base). Семена = 'значения с
+    допущений движка' — кольцо Excel стартует из решения engine и сходится
+    за несколько итераций (иначе Excel с нулевого старта замораживает #DIV/0!).
+    """
+    ws = wb["17_Debt"]
+    n_hist = len(cfg["hist_years"][-3:])
+    r = SEED_BASE_ROW
+    # Заголовка нет намеренно: r104 гарантированно занят «ИТОГО» блока
+    # инструментов fill (min(15,…) → r_total_inst=104 всегда). Строки
+    # self-describing: кол. A = «лист:ключ».
+    for sheet, metrics in RING_ZONE.items():
+        for reg_key, metric in metrics.items():
+            row = REG.get(reg_key)
+            if not row:
+                continue
+            ws.cell(r, 1, f"{sheet}:{reg_key}").font = F_NOTE
+            for c in range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"])):
+                input_cell(ws, r, c, 0, FMT_MLN)
+            REG[f"SEEDROW.{sheet}.{row}"] = r
+            REG[f"SEEDMET.{sheet}.{row}"] = metric or ""
+            r += 1
+    ws.row_dimensions.group(start=SEED_BASE_ROW, end=r, hidden=True)
+
+
+def _seed_row_for(sheet: str, row: int):
+    """Строка SEED-блока для (лист, строка) — прямой lookup."""
+    return REG.get(f"SEEDROW.{sheet}.{row}")
+
+
+def wrap_ring_cells(wb, cfg):
+    """CFI seed-механика (20.11): обёртка кольцевых ячеек с релаксацией.
+
+    Две проблемы холодного старта Excel (calcPr iterate=1):
+    1) Кольцевые ячейки стартуют с нулей → деление на ноль рождает #DIV/0!,
+       который Excel ЗАМОРАЖИВАЕТ (последующие итерации не очищают).
+       Лечение: IFERROR(формула, seed) — seed = значение engine из SEED-блока.
+    2) Якоби-итерации Excel (simultaneous update) расходятся, если gain контура
+       >1 (наблюдено: 2027-28 → e+255 при знакочередовании). Неподвижная точка
+       при этом одна — engine её находит (последовательный solve), Excel нет.
+       Лечение: релаксация (CP!L2 = ω):
+         X_{k+1} = (1-ω)·X_k + ω·g(X_k)
+       Самоссылка X_k = значение ячейки на прошлой итерации (круговая ссылка
+       допустима при iterate=1). Неподвижная точка та же: X* = g(X*).
+       При ω=0.3 сходимость устойчива для |λ|<~5; ω можно крутить в CP.
+    """
+    n_hist = len(cfg["hist_years"][-3:])
+    fc_cols = range(3 + n_hist, 3 + n_hist + len(cfg["fc_years"]))
+    RELAX = "'Control_Panel'!$L$2"
+    # (лист, строки) — кольцевая зона interest↔funding↔налог↔кэш
+    RING = {
+        "17_Debt": [REG.get(k) for k in (
+            "DT.su_oper_flow","DT.su_maint_capex","DT.su_growth_capex","DT.su_delta_nwc",
+            "DT.su_mandatory","DT.su_interest","DT.su_dividends","DT.su_total_uses",
+            "DT.su_total_sources","DT.su_gap","DT.funding_need","DT.new_term","DT.term_close",
+            "DT.rc_draw","DT.rc_close","DT.open","DT.close","DT.interest_term","DT.interest_rc",
+            "DT.commit_fee","DT.interest","DT.avg_rate","DT.nd","DT.cbrc_planned","DT.capex_defer",
+        ) if REG.get(k)],
+        "21_PL": [REG.get(k) for k in (
+            "PL.ebitda","PL.da","PL.ebit","PL.interest","PL.interest_income","PL.other_fin",
+            "PL.ebt","PL.tax","PL.ni",
+        ) if REG.get(k)],
+        "23_CF": [7, 8, 10, 11, 12, 13, 15, 18, 27, 29],
+        "19_Tax": [7, 13, 14, 15, 16, 22, 25, 26, 27, 30, 32, 33, 35, 36, 37, 38, 41],
+        "15_PPE": [REG.get("PP.gross_open"), REG.get("PP.capex"), REG.get("PP.disp_gross"),
+                   REG.get("PP.gross_close"), REG.get("PP.dep_open"), REG.get("PP.dep_charge"),
+                   REG.get("PP.dep_close"), REG.get("PP.net_close"), REG.get("PP.capex_plan")],
+        "20_BS": [7, 11, 12, 13, 16, 20, 37, 41],
+        "14_OtherIS": [8, 11, 12],
+    }
+    wrapped = 0
+    for sheet, rows in RING.items():
+        if sheet not in wb.sheetnames:
+            continue
+        ws = wb[sheet]
+        for r in rows:
+            if not r:
+                continue
+            for c in fc_cols:
+                cell = ws.cell(r, c)
+                v = cell.value
+                if isinstance(v, str) and v.startswith("=") and "IFERROR" not in v.upper():
+                    seed_r = _seed_row_for(sheet, r)
+                    if seed_r:
+                        seed = f"'{NAME['DT']}'!{get_column_letter(c)}${seed_r}"
+                    else:
+                        seed = f"{get_column_letter(c - 1)}{r}"
+                    coord = f"{get_column_letter(c)}{r}"
+                    cell.value = (f"=IFERROR((1-{RELAX})*{coord}"
+                                  f"+{RELAX}*({v[1:]}),{seed})")
+                    wrapped += 1
+    print(f"  Ring seed-wrap: {wrapped} cells (IFERROR + relax ω=CP!L2 → engine seeds)")
 
 def build(company: str, output: str, backtest_end: int | None = None):
     """Build complete workbook.
@@ -5724,6 +5864,13 @@ def build(company: str, output: str, backtest_end: int | None = None):
         print(f"  {name}...")
         builder(wb, cfg)
 
+
+
+
+    # CFI seed-механика (после builders, ДО embed _Reg — fill читает SEEDROW)
+    build_seed_block(wb, cfg)
+    wrap_ring_cells(wb, cfg)
+
     # ── Save updated REG to reg.json (so fill_data sees runtime keys) ──
     reg_path = BASE_DIR / "reg.json"
     reg_path.write_text(json.dumps(REG, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -5757,6 +5904,8 @@ def build(company: str, output: str, backtest_end: int | None = None):
         ws_reg.cell(i, 1, k)
         if isinstance(v, (int, float)):
             ws_reg.cell(i, 2, v)
+        elif isinstance(v, str) and v:
+            ws_reg.cell(i, 2, v)  # SEEDMET.* — метрики engine для seed-блока
     ws_reg.sheet_state = "hidden"
     print(f"  _Reg: {len(REG)} keys embedded (hidden sheet)")
 
@@ -5770,8 +5919,8 @@ def build(company: str, output: str, backtest_end: int | None = None):
         from openpyxl.workbook.properties import CalcProperties
         wb.calculation = CalcProperties()
     wb.calculation.iterate = True
-    wb.calculation.iterateCount = 100
-    wb.calculation.iterateDelta = 0.001
+    wb.calculation.iterateCount = 1000
+    wb.calculation.iterateDelta = 0.0001
     # fullCalcOnLoad=True — recalc on open (audit requires cold start = warm start)
     wb.calculation.fullCalcOnLoad = True
 
@@ -5784,7 +5933,7 @@ def build(company: str, output: str, backtest_end: int | None = None):
     ws_cp.cell(1, 11).font = F_NOTE
     ws_cp.cell(1, 12, "calc_reset: 0=iterate, 1=seed").font = F_NOTE
     ws_cp.cell(2, 11, "relax (демпфирование)").font = F_NOTE
-    ws_cp.cell(2, 12, 1.0).font = F_INPUT
+    ws_cp.cell(2, 12, 0.3).font = F_INPUT
     ws_cp.cell(2, 12).number_format = FMT_RATIO
     dn = DefinedName("calc_reset", attr_text="'Control_Panel'!$K$1")
     wb.defined_names.add(dn)
@@ -5906,14 +6055,14 @@ def build(company: str, output: str, backtest_end: int | None = None):
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(str(output_path))
 
-    # Post-process: strip <v></v>, remove iterate, add fullCalcOnLoad
+    # Post-process: strip <v></v>, iterate ON (bank convention), fullCalcOnLoad
     postprocess_xlsx(output_path)
 
     print(f"\n✓ Saved: {output_path}")
     print(f"  Sheets: {len(wb.sheetnames)}")
     print(f"  Formulas: {total_f}")
     print(f"  Company: {cfg['name']}")
-    print(f"  Iterative Calc: OFF (0 cycles, pure DAG)")
+    print(f"  Iterative Calc: ON (1000 iter, 1e-4) + ring seed-wraps (IFERROR → engine seeds)")
     print(f"  Freeze panes: 12 sheets")
 
 
